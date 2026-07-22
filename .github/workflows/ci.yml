@@ -2,9 +2,9 @@ name: CI & CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   check:
@@ -24,7 +24,7 @@ jobs:
         run: bun run check
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: check
     runs-on: ubuntu-latest
     
@@ -40,7 +40,7 @@ jobs:
             # TODO: Ganti path di bawah dengan lokasi project aslimu di server
             cd ~/narko
             
-            git pull origin main --ff
+            git pull origin master
             bun install
             bun run db:migrate
             bun run build
