@@ -29,11 +29,8 @@
     <img
       src="/logo.png"
       alt="Logo"
-      width={dims.box}
-      height={dims.box}
-      class="shrink-0 object-contain"
+      class="h-20 md:h-24 w-auto "
     />
-    <span>Narko</span>
   </span>
 {/snippet}
 
