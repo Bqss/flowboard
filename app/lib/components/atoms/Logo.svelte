@@ -26,24 +26,13 @@
   <span
     class="inline-flex items-center {dims.gap} font-display font-semibold tracking-tight text-ink {dims.text} {klass}"
   >
-    <svg
+    <img
+      src="/logo.png"
+      alt="Logo"
       width={dims.box}
       height={dims.box}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      class="shrink-0"
-    >
-      <defs>
-        <linearGradient id="narko-mark" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#ff5757" />
-          <stop offset="1" stop-color="#a1131a" />
-        </linearGradient>
-      </defs>
-      <path d="M4 19 L10 5" stroke="url(#narko-mark)" stroke-width="3.2" stroke-linecap="round" />
-      <path d="M11 19 L17 5" stroke="url(#narko-mark)" stroke-width="3.2" stroke-linecap="round" opacity="0.7" />
-      <path d="M18 19 L24 5" stroke="url(#narko-mark)" stroke-width="3.2" stroke-linecap="round" opacity="0.4" />
-    </svg>
+      class="shrink-0 object-contain"
+    />
     <span>Narko</span>
   </span>
 {/snippet}
