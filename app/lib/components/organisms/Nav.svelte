@@ -18,8 +18,7 @@
   const links = [
     { href: '#features', label: 'Features' },
     { href: '#architecture', label: 'Architecture' },
-    { href: '#stack', label: 'Stack' },
-    { href: '#pricing', label: 'Pricing' }
+    { href: '#stack', label: 'Stack' }
   ];
 
   let scrolled = $state(false);
