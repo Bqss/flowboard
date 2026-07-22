@@ -38,13 +38,16 @@ jobs:
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 22
           script: |
-            # TODO: Ganti path di bawah dengan lokasi project aslimu di server
             cd ~/narko
             
             git pull origin master
+            
+            # Export PATH untuk bun (karena SSH non-interactive kadang tidak meload .bashrc)
+            export BUN_INSTALL="$HOME/.bun"
+            export PATH="$BUN_INSTALL/bin:$PATH"
+            
             bun install
             bun run db:migrate
             bun run build
             
-            # TODO: Sesuaikan dengan command untuk merestart server kamu (misal PM2)
             bunx --bun pm2 reload narko-app
