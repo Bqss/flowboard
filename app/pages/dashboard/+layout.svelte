@@ -86,10 +86,11 @@
               onclick={() => showDropdown = false} 
               role="dialog"
               aria-label="Close dropdown"
+              tabindex="-1"
             ></div>
             <div class="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-md border border-hairline bg-surface shadow-2xl z-20">
               <div class="border-b border-hairline px-4 py-3">
-                <p class="truncate text-[14px] font-medium text-ink">{data.user?.username || data.user?.name || 'User'}</p>
+                <p class="truncate text-[14px] font-medium text-ink">{data.user?.name || 'User'}</p>
                 <p class="truncate text-[13px] text-mute">{data.user?.email || 'user@example.com'}</p>
               </div>
               <div class="py-1">

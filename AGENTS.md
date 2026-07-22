@@ -69,14 +69,15 @@ Run `bun run db:generate` and `bun run db:migrate` after changing schema.
 ## Build/Test
 
 ```bash
-npm run dev          # Dev server (Vite)
-npm run build        # Production build
-npm run start        # Run production server
+bun run dev          # Dev server (Vite)
+bun run build        # Production build
+bun run start        # Run production server
+bun run check        # Typecheck & Svelte check
 ```
 
 ## Tooling
 
 | Command | Purpose |
 |---|---|
-| `npm run check` | Typecheck |
+| `bun run check` | Typecheck & Svelte check |
 | `bun run scripts/codemap.ts` | Regenerate `CODEMAP.md` |

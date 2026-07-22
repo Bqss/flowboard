@@ -7,7 +7,7 @@
   let { data }: { data: PageData } = $props();
 
   let loading = $state(false);
-  let name = $state(data.user?.name || data.user?.username || '');
+  let name = $state(data.user?.name || '');
   let email = $state(data.user?.email || '');
   
   let currentPassword = $state('');
@@ -79,7 +79,7 @@
           <img src={data.user.avatarUrl} alt="Avatar" class="h-20 w-20 rounded-full object-cover border border-hairline" />
         {:else}
           <div class="flex h-20 w-20 items-center justify-center rounded-full bg-accent-blue/20 text-3xl font-semibold text-accent-blue">
-            {data.user?.name?.charAt(0).toUpperCase() || data.user?.username?.charAt(0).toUpperCase() || 'U'}
+            {data.user?.name?.charAt(0).toUpperCase() || 'U'}
           </div>
         {/if}
         <div>
