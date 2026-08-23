@@ -1,64 +1,501 @@
 <script lang="ts">
-  import Badge from '$lib/components/atoms/Badge.svelte';
-  import StatCard from '$lib/components/molecules/StatCard.svelte';
-  import type { PageData } from './$types';
+  import { goto } from '$app/navigation';
+  import {
+    api,
+    ApiError,
+    type ApiWorkflow,
+    type ApiDashboardStats,
+    type ApiWorkspaceMember,
+    type ApiWaitingActionCard
+  } from '$lib/api/client';
+  import {
+    Badge,
+    Button,
+    Avatar,
+    Input,
+    Skeleton,
+    Checkbox
+  } from '$lib/components/atoms/index.js';
+  import {
+    StatCard,
+    EmptyStateBlock,
+    FormField
+  } from '$lib/components/molecules/index.js';
+  import { Dialog } from '$lib/components/organisms/index.js';
+  import { HugeiconsIcon } from '@hugeicons/svelte';
+  import {
+    Add01Icon,
+    WorkflowSquare01Icon,
+    Alert02Icon,
+    UserGroupIcon,
+    Settings01Icon,
+    Layers01Icon,
+    ArrowRight01Icon,
+    KanbanIcon,
+    UserCheck01Icon
+  } from '@hugeicons/core-free-icons';
+  import type { LayoutData } from './$types';
 
-  let { data }: { data: PageData } = $props();
+  let { data }: { data: LayoutData } = $props();
 
-  /** Initials for the avatar circle from a display name. */
-  function initials(name: string) {
-    return name
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase() ?? '')
-      .join('');
+  let loadingData = $state(true);
+  let workflows = $state<ApiWorkflow[]>([]);
+  let stats = $state<ApiDashboardStats>({ pending: 0, progress: 0, waiting: 0, done: 0, totalCustomers: 0 });
+  let members = $state<ApiWorkspaceMember[]>([]);
+  let waitingCards = $state<ApiWaitingActionCard[]>([]);
+  let selectedWaitingIds = $state<string[]>([]);
+  let bulkAssigneeId = $state('');
+  let bulkLoading = $state(false);
+  let bulkError = $state<string | null>(null);
+
+  const totalCards = $derived(
+    (stats.pending ?? 0) + (stats.progress ?? 0) + (stats.waiting ?? 0) + (stats.done ?? 0)
+  );
+
+  const urgentCount = $derived((stats.waiting ?? 0) + (stats.pending ?? 0));
+
+  async function loadDashboardData() {
+    if (!data.workspace?.id) return;
+    loadingData = true;
+    try {
+      const [{ workflows: wf }, { stats: st }, membersRes, waitingRes] = await Promise.all([
+        api.listWorkflows(data.workspace.id),
+        api.getWorkflowStats(data.workspace.id),
+        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
+        api.listWaitingAction(data.workspace.id).catch(() => ({ cards: [] }))
+      ]);
+      workflows = wf;
+      stats = st;
+      members = membersRes.members ?? [];
+      waitingCards = waitingRes.cards ?? [];
+      selectedWaitingIds = [];
+    } catch (err) {
+      console.error('Failed to load dashboard data:', err);
+    } finally {
+      loadingData = false;
+    }
+  }
+
+  $effect(() => {
+    if (data.workspace?.id) {
+      loadDashboardData();
+    }
+  });
+
+  let createOpen = $state(false);
+  let name = $state('');
+  let loading = $state(false);
+  let error = $state<string | null>(null);
+
+  async function createWorkflow() {
+    if (!name.trim() || !data.workspace) return;
+    loading = true;
+    error = null;
+    try {
+      const { workflow } = await api.createWorkflow(data.workspace.id, { name: name.trim() });
+      createOpen = false;
+      name = '';
+      await goto(`/dashboard/workflows/${workflow.id}/setup`);
+    } catch (err) {
+      error = err instanceof ApiError ? err.message : 'Gagal membuat workflow.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  function toggleWaitingSelection(cardId: string, checked: boolean) {
+    if (checked) {
+      selectedWaitingIds = [...selectedWaitingIds, cardId];
+    } else {
+      selectedWaitingIds = selectedWaitingIds.filter((id) => id !== cardId);
+    }
+  }
+
+  function toggleAllWaiting(checked: boolean) {
+    selectedWaitingIds = checked ? waitingCards.map((c) => c.cardId) : [];
+  }
+
+  async function bulkReassignWaiting() {
+    if (!data.workspace?.id || selectedWaitingIds.length === 0) return;
+    bulkLoading = true;
+    bulkError = null;
+    try {
+      await api.bulkReassignCards(data.workspace.id, {
+        cardIds: selectedWaitingIds,
+        assigneeId: bulkAssigneeId || null
+      });
+      selectedWaitingIds = [];
+      bulkAssigneeId = '';
+      await loadDashboardData();
+    } catch (err) {
+      bulkError = err instanceof ApiError ? err.message : 'Gagal reassign massal.';
+    } finally {
+      bulkLoading = false;
+    }
   }
 </script>
 
-<svelte:head><title>Dashboard — Narko</title></svelte:head>
+<svelte:head>
+  <title>Dashboard — Flowboard</title>
+</svelte:head>
 
-<div class="mx-auto w-full max-w-[1240px]">
-  <header class="flex flex-col gap-2">
-    <div class="flex items-center gap-3">
-      <h1 class="font-display text-3xl font-semibold tracking-tight text-ink">Dashboard</h1>
-      <Badge tone="green" dot>Live</Badge>
+{#snippet customersIcon()}
+  <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
+{/snippet}
+
+{#snippet workflowsIcon()}
+  <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+{/snippet}
+
+{#snippet membersIcon()}
+  <HugeiconsIcon icon={UserCheck01Icon} size={18} strokeWidth={1.8} />
+{/snippet}
+
+{#snippet urgentIcon()}
+  <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
+{/snippet}
+
+<div class="space-y-8">
+  <!-- Clean Header & Direct Actions -->
+  <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="space-y-1">
+      <h1 class="ds-page-title text-ink">{data.workspace?.name ?? 'Dashboard'}</h1>
+      <p class="ds-caption text-mute">Ringkasan operasional dan alur kerja pelanggan.</p>
     </div>
-    <p class="text-sm text-mute">
-      Signed in as <span class="font-medium text-ink">{data.user?.name}</span>
-      <span class="text-ash">· {data.user?.email}</span>
-    </p>
+
+    <div class="flex items-center gap-3">
+      <Button href="/dashboard/members" variant="secondary" size="sm">
+        <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
+        <span>Tim</span>
+      </Button>
+      <Button variant="primary" size="sm" onclick={() => (createOpen = true)}>
+        <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
+        <span>Buat Workflow</span>
+      </Button>
+    </div>
   </header>
 
-  <div class="mt-8 grid gap-4 sm:grid-cols-3">
-    <StatCard value={String(data.users.length)} label="Total users" sub="registered accounts" />
-    <StatCard value="1" label="Active session" sub="this browser" />
-    <StatCard value="Postgres" label="Data store" sub="Drizzle ORM" />
-  </div>
+  <!-- Workspace Stats Grid (Clean & Direct) -->
+  <section>
+    {#if loadingData}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {#each [1, 2, 3, 4] as _i}
+          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
+            <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
+            <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
+            <Skeleton shape="rect" class="h-7 w-14 rounded-md" />
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total Pelanggan"
+          value={String(stats.totalCustomers ?? totalCards)}
+          icon={customersIcon}
+          class="p-5 rounded-2xl"
+        />
+        <StatCard
+          label="Workflows"
+          value={String(workflows.length)}
+          icon={workflowsIcon}
+          class="p-5 rounded-2xl"
+        />
+        <StatCard
+          label="Anggota Tim"
+          value={String(members.length)}
+          icon={membersIcon}
+          class="p-5 rounded-2xl"
+        />
+        <StatCard
+          label="Perlu Tindakan"
+          value={String(urgentCount)}
+          icon={urgentIcon}
+          class="p-5 rounded-2xl"
+        />
+      </div>
+    {/if}
+  </section>
 
-  <section class="mt-8 overflow-hidden rounded-xl border border-hairline bg-surface">
-    <div class="flex items-center justify-between border-b border-hairline px-5 py-4">
-      <h2 class="text-sm font-medium text-ink">Users</h2>
-      <span class="rounded-full border border-hairline bg-elevated px-2.5 py-0.5 text-[12px] font-medium text-mute">
-        {data.users.length}
-      </span>
+  <!-- Waiting Action Section -->
+  {#if !loadingData && waitingCards.length > 0}
+    <section class="space-y-4">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="ds-section-title text-ink">Perlu Tindakan</h2>
+          <p class="ds-caption text-mute">
+            Card dengan error WA atau follow-up dihentikan — reassign massal ke PIC baru.
+          </p>
+        </div>
+        <Badge tone="urgent">{waitingCards.length} card</Badge>
+      </div>
+
+      <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
+        <div class="flex flex-wrap items-center gap-3 border-b border-hairline bg-canvas-sunken px-4 py-3">
+          <label class="flex items-center gap-2 text-xs font-semibold text-ink cursor-pointer">
+            <Checkbox
+              checked={selectedWaitingIds.length === waitingCards.length && waitingCards.length > 0}
+              onchange={(e) => toggleAllWaiting(e.currentTarget.checked)}
+            />
+            <span>Pilih semua</span>
+          </label>
+          <select
+            bind:value={bulkAssigneeId}
+            class="h-8 rounded-full border border-hairline bg-card px-3 text-xs font-medium text-ink outline-none focus:border-primary"
+            aria-label="PIC tujuan reassign"
+          >
+            <option value="">Hapus assignee</option>
+            {#each members as member (member.id)}
+              <option value={member.id}>{member.name}</option>
+            {/each}
+          </select>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={bulkLoading}
+            disabled={selectedWaitingIds.length === 0}
+            onclick={bulkReassignWaiting}
+          >
+            Reassign ({selectedWaitingIds.length})
+          </Button>
+        </div>
+
+        {#if bulkError}
+          <p class="px-4 py-2 text-xs font-semibold text-status-urgent-ink bg-status-urgent-soft">
+            {bulkError}
+          </p>
+        {/if}
+
+        <ul class="divide-y divide-hairline">
+          {#each waitingCards as card (card.cardId)}
+            <li class="flex items-center gap-3 px-4 py-3 hover:bg-canvas-sunken/50">
+              <Checkbox
+                checked={selectedWaitingIds.includes(card.cardId)}
+                onchange={(e) => toggleWaitingSelection(card.cardId, e.currentTarget.checked)}
+              />
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-sm font-bold text-ink">{card.customerName}</p>
+                  {#if card.waErrorFlag}
+                    <Badge tone="urgent" variant="soft">WA Error</Badge>
+                  {:else if card.waFollowupsStopped}
+                    <Badge tone="progress" variant="soft">Follow-up stop</Badge>
+                  {/if}
+                </div>
+                <p class="ds-caption text-mute">
+                  {card.workflowName} · {card.stageName}
+                  {#if card.assigneeName} · PIC: {card.assigneeName}{/if}
+                </p>
+              </div>
+              <Button
+                href="/dashboard/workflows/{card.workflowId}"
+                variant="ghost"
+                size="sm"
+              >
+                Buka
+              </Button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    </section>
+  {/if}
+
+  <!-- Workflows Section (Subtle description added) -->
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="ds-section-title text-ink">Workflows</h2>
+        <p class="ds-caption text-mute">Papan alur proses onboarding pelanggan.</p>
+      </div>
+      <Button href="/dashboard/workflows" variant="ghost" size="sm">
+        <span>Semua ({workflows.length})</span>
+        <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
+      </Button>
     </div>
 
-    <ul class="divide-y divide-hairline">
-      {#each data.users as user (user.id)}
-        <li class="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-white/[0.02]">
-          <span
-            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline bg-elevated text-[12px] font-semibold text-charcoal"
-          >
-            {initials(user.name)}
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium text-ink">{user.name}</span>
-            <span class="block truncate text-[13px] text-mute">{user.email}</span>
-          </span>
-        </li>
-      {:else}
-        <li class="px-5 py-10 text-center text-sm text-ash">No users yet.</li>
-      {/each}
-    </ul>
+    {#if loadingData}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each [1, 2, 3] as _i}
+          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
+            <Skeleton shape="rect" class="h-1 w-7 rounded-full" />
+            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
+            <Skeleton shape="rect" class="h-4 w-24 rounded-md" />
+            <div class="flex gap-2 pt-2">
+              <Skeleton shape="rect" class="h-8 flex-1 rounded-full" />
+              <Skeleton shape="rect" class="h-8 w-16 rounded-full" />
+            </div>
+          </div>
+        {/each}
+      </div>
+    {:else if workflows.length === 0}
+      <EmptyStateBlock
+        title="Belum ada workflow"
+        description="Buat workflow pertama untuk mulai tracking onboarding pelanggan."
+        actionLabel="Buat Workflow"
+        onaction={() => (createOpen = true)}
+      />
+    {:else}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each workflows as workflow (workflow.id)}
+          <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
+            <div>
+              <!-- 4px Signature Tag Strip -->
+              <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
+
+              <h3 class="text-base font-bold text-ink">{workflow.name}</h3>
+
+              <div class="mt-3 flex items-center gap-2">
+                <Avatar name={workflow.ownerName ?? 'PIC'} size={22} />
+                <span class="ds-caption text-mute">{workflow.ownerName ?? 'Belum ada PIC'}</span>
+              </div>
+            </div>
+
+            <div class="mt-5 flex items-center gap-2 border-t border-hairline pt-3.5">
+              <Button href="/dashboard/workflows/{workflow.id}" variant="primary" size="sm" class="flex-1">
+                <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
+                <span>Buka Board</span>
+              </Button>
+              <Button href="/dashboard/workflows/{workflow.id}/setup" variant="secondary" size="sm">
+                Setup
+              </Button>
+            </div>
+          </article>
+        {/each}
+      </div>
+    {/if}
   </section>
+
+  <!-- Team & Shortcuts (Subtle descriptions added) -->
+  <div class="grid gap-5 lg:grid-cols-2">
+    <!-- Team Members List -->
+    <section class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4">
+      <div class="space-y-3">
+        <div class="space-y-1">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} class="text-primary" />
+              <h2 class="ds-section-title text-ink">Tim</h2>
+            </div>
+            {#if loadingData}
+              <Skeleton shape="rect" class="h-4 w-16 rounded-md" />
+            {:else}
+              <span class="ds-caption text-mute">{members.length} anggota</span>
+            {/if}
+          </div>
+          <p class="ds-caption text-mute">Staf pelaksana dan penanggung jawab alur kerja.</p>
+        </div>
+
+        {#if loadingData}
+          <div class="space-y-3 py-1">
+            {#each [1, 2, 3] as _i}
+              <div class="flex items-center justify-between gap-3 py-1.5">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <Skeleton shape="circle" class="size-8 rounded-full" />
+                  <div class="space-y-1.5 min-w-0">
+                    <Skeleton shape="rect" class="h-4 w-28 rounded-md" />
+                    <Skeleton shape="rect" class="h-3 w-36 rounded-md" />
+                  </div>
+                </div>
+                <Skeleton shape="rect" class="h-5 w-12 rounded-full" />
+              </div>
+            {/each}
+          </div>
+        {:else if members.length === 0}
+          <p class="ds-body py-4 text-center text-mute">Belum ada anggota lain.</p>
+        {:else}
+          <ul class="divide-y divide-hairline">
+            {#each members.slice(0, 4) as member (member.id)}
+              <li class="flex items-center justify-between gap-3 py-2.5">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={30} />
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-ink">{member.name}</p>
+                    <p class="truncate text-xs text-mute">{member.email}</p>
+                  </div>
+                </div>
+                <Badge tone={member.role === 'owner' ? 'done' : 'idle'}>{member.role}</Badge>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+
+      <div class="border-t border-hairline pt-3">
+        <Button href="/dashboard/members" variant="ghost" size="sm" class="w-full justify-center text-primary">
+          <span>Kelola Tim →</span>
+        </Button>
+      </div>
+    </section>
+
+    <!-- Operational Shortcuts -->
+    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} class="text-primary" />
+          <h2 class="ds-section-title text-ink">Pintasan</h2>
+        </div>
+        <p class="ds-caption text-mute">Akses cepat modul dan konfigurasi workspace.</p>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-3">
+        <a
+          href="/dashboard/workflows"
+          class="flex flex-col justify-between rounded-xl border border-hairline bg-lane p-3.5 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
+        >
+          <div class="flex items-center gap-2 text-primary">
+            <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+            <span class="text-sm font-semibold text-ink">Setup Tahapan</span>
+          </div>
+          <p class="ds-caption mt-1.5 text-mute">Atur kolom stage & checklist</p>
+        </a>
+
+        <a
+          href="/dashboard/members"
+          class="flex flex-col justify-between rounded-xl border border-hairline bg-lane p-3.5 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
+        >
+          <div class="flex items-center gap-2 text-primary">
+            <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
+            <span class="text-sm font-semibold text-ink">Undang Staf</span>
+          </div>
+          <p class="ds-caption mt-1.5 text-mute">Kelola PIC & anggota</p>
+        </a>
+
+        <a
+          href="/dashboard/settings"
+          class="flex flex-col justify-between rounded-xl border border-hairline bg-lane p-3.5 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
+        >
+          <div class="flex items-center gap-2 text-primary">
+            <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
+            <span class="text-sm font-semibold text-ink">Pengaturan</span>
+          </div>
+          <p class="ds-caption mt-1.5 text-mute">Profil akun & keamanan</p>
+        </a>
+      </div>
+    </section>
+  </div>
 </div>
+
+<!-- Modal Dialog: Buat Workflow Baru -->
+<Dialog
+  bind:open={createOpen}
+  title="Buat Workflow Baru"
+  description="Workflow baru akan dibuat dengan 3 stage standar: Pending, In Progress, dan Done."
+>
+  <div class="space-y-4">
+    <FormField label="Nama Workflow" required>
+      {#snippet control(args)}
+        <Input {...args} bind:value={name} placeholder="Contoh: Pendaftaran Webinar Apr 2026" />
+      {/snippet}
+    </FormField>
+    {#if error}
+      <p class="ds-caption text-status-urgent">{error}</p>
+    {/if}
+  </div>
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
+      <Button variant="secondary" onclick={() => (createOpen = false)}>Batal</Button>
+      <Button variant="primary" {loading} onclick={createWorkflow}>Simpan</Button>
+    </div>
+  {/snippet}
+</Dialog>

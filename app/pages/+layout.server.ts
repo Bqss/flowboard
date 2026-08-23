@@ -8,11 +8,11 @@ import type { LayoutServerLoad } from './$types';
  */
 export const load: LayoutServerLoad = async ({ fetch }) => {
   try {
-    const { user } = await api.me(fetch);
-    return { user };
+    const data = await api.me(fetch);
+    return { user: data.user, workspace: data.workspace };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      return { user: null };
+      return { user: null, workspace: null };
     }
     throw err;
   }

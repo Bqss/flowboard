@@ -1,46 +1,72 @@
 <script lang="ts">
-  import Button from '$lib/components/atoms/Button.svelte';
-  import { api } from '$lib/api/client';
+  import { Avatar, Button, Input } from '$lib/components/atoms/index.js';
+  import { FormField, PasswordInput, Breadcrumb } from '$lib/components/molecules/index.js';
+  import { api, ApiError } from '$lib/api/client';
   import { invalidateAll } from '$app/navigation';
-  import type { PageData } from './$types';
+  import { HugeiconsIcon } from '@hugeicons/svelte';
+  import {
+    UserCircleIcon,
+    LockPasswordIcon,
+    Image01Icon,
+    CheckmarkCircle02Icon,
+    Alert02Icon
+  } from '@hugeicons/core-free-icons';
+  import type { LayoutData } from '../$types';
 
-  let { data }: { data: PageData } = $props();
+  let { data }: { data: LayoutData } = $props();
 
-  let loading = $state(false);
-  let name = $state(data.user?.name || '');
-  let email = $state(data.user?.email || '');
-  
+  let loadingProfile = $state(false);
+  let name = $state('');
+  let email = $derived(data.user?.email || '');
+
+  let profileSuccess = $state<string | null>(null);
+  let profileError = $state<string | null>(null);
+
+  $effect(() => {
+    if (data.user?.name) {
+      name = data.user.name;
+    }
+  });
+
+  let loadingPassword = $state(false);
   let currentPassword = $state('');
   let newPassword = $state('');
-  
+  let passwordSuccess = $state<string | null>(null);
+  let passwordError = $state<string | null>(null);
+
   let fileInput: HTMLInputElement;
+  let uploadingAvatar = $state(false);
 
   async function updateProfile() {
     if (!data.user) return;
-    loading = true;
+    loadingProfile = true;
+    profileSuccess = null;
+    profileError = null;
     try {
       await api.updateUser(data.user.id, { name });
       await invalidateAll();
+      profileSuccess = 'Profil berhasil diperbarui.';
     } catch (err) {
-      console.error(err);
-      alert('Failed to update profile');
+      profileError = err instanceof ApiError ? err.message : 'Gagal memperbarui profil.';
     } finally {
-      loading = false;
+      loadingProfile = false;
     }
   }
 
   async function updatePassword() {
-    loading = true;
+    if (!currentPassword || !newPassword) return;
+    loadingPassword = true;
+    passwordSuccess = null;
+    passwordError = null;
     try {
       await api.changePassword({ currentPassword, newPassword });
-      alert('Password updated successfully');
+      passwordSuccess = 'Kata sandi berhasil diubah.';
       currentPassword = '';
       newPassword = '';
     } catch (err) {
-      console.error(err);
-      alert(err instanceof Error ? err.message : 'Failed to update password');
+      passwordError = err instanceof ApiError ? err.message : 'Gagal mengubah kata sandi.';
     } finally {
-      loading = false;
+      loadingPassword = false;
     }
   }
 
@@ -49,110 +75,154 @@
     const file = target.files?.[0];
     if (!file) return;
 
+    uploadingAvatar = true;
+    profileSuccess = null;
+    profileError = null;
     try {
       await api.uploadAvatar(file);
       await invalidateAll();
+      profileSuccess = 'Foto profil berhasil diperbarui.';
     } catch (err) {
-      console.error(err);
-      alert('Failed to upload avatar');
+      profileError = err instanceof ApiError ? err.message : 'Gagal mengunggah foto profil.';
+    } finally {
+      uploadingAvatar = false;
     }
   }
 </script>
 
 <svelte:head>
-  <title>Setting Profile — Narko</title>
+  <title>Pengaturan Akun — Flowboard</title>
 </svelte:head>
 
-<div class="mx-auto max-w-3xl">
-  <div class="mb-8">
-    <h1 class="font-display text-2xl font-semibold tracking-tight text-ink">Profile Settings</h1>
-    <p class="mt-2 text-mute">Manage your account details and password.</p>
-  </div>
+<div class="space-y-8">
+  <header class="space-y-3">
+    <Breadcrumb
+      items={[
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Pengaturan Akun' }
+      ]}
+      showHomeIcon
+    />
+    <div class="pt-1">
+      <h1 class="ds-page-title text-ink">Pengaturan Akun</h1>
+      <p class="ds-caption mt-1 text-mute">Kelola data profil pengguna dan keamanan kata sandi.</p>
+    </div>
+  </header>
 
-  <div class="flex flex-col gap-8">
+  <div class="grid gap-6 lg:grid-cols-2">
     <!-- Profile Info Card -->
-    <div class="rounded-lg border border-hairline bg-surface p-6">
-      <h2 class="mb-6 text-lg font-medium text-ink">Profile Information</h2>
-      
-      <div class="mb-8 flex items-center gap-6">
-        {#if data.user?.avatarUrl}
-          <img src={data.user.avatarUrl} alt="Avatar" class="h-20 w-20 rounded-full object-cover border border-hairline" />
-        {:else}
-          <div class="flex h-20 w-20 items-center justify-center rounded-full bg-accent-blue/20 text-3xl font-semibold text-accent-blue">
-            {data.user?.name?.charAt(0).toUpperCase() || 'U'}
-          </div>
-        {/if}
+    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
+      <div class="flex items-center gap-2">
+        <HugeiconsIcon icon={UserCircleIcon} size={20} strokeWidth={1.8} class="text-primary" />
+        <h2 class="ds-section-title text-ink">Informasi Profil</h2>
+      </div>
+
+      <div class="flex items-center gap-5">
+        <Avatar name={data.user?.name} src={data.user?.avatarUrl ?? undefined} size={72} />
         <div>
-          <input 
-            type="file" 
-            accept="image/png, image/jpeg, image/gif" 
-            class="hidden" 
-            bind:this={fileInput} 
-            onchange={handleFileChange} 
+          <input
+            type="file"
+            accept="image/png, image/jpeg, image/gif"
+            class="hidden"
+            bind:this={fileInput}
+            onchange={handleFileChange}
           />
-          <Button variant="tertiary" size="sm" onclick={() => fileInput.click()}>Change Picture</Button>
-          <p class="mt-2 text-[13px] text-mute">JPG, GIF or PNG. 1MB max.</p>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={uploadingAvatar}
+            onclick={() => fileInput.click()}
+          >
+            <HugeiconsIcon icon={Image01Icon} size={15} strokeWidth={1.8} />
+            <span>{uploadingAvatar ? 'Mengunggah…' : 'Ganti Foto'}</span>
+          </Button>
+          <p class="ds-caption mt-1.5 text-mute">Format JPG, PNG atau GIF (Maks. 1MB)</p>
         </div>
       </div>
 
-      <form onsubmit={(e) => { e.preventDefault(); updateProfile(); }} class="space-y-4">
-        <div>
-          <label for="name" class="mb-1.5 block text-[14px] font-medium text-ink">Full Name</label>
-          <input 
-            type="text" 
-            id="name" 
-            bind:value={name} 
-            class="w-full rounded-md border border-hairline bg-surface-elevated px-3 py-2 text-[14px] text-ink transition-all focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hairline-strong"
-          />
-        </div>
-        
-        <div>
-          <label for="email" class="mb-1.5 block text-[14px] font-medium text-ink">Email Address</label>
-          <input 
-            type="email" 
-            id="email" 
-            bind:value={email} 
-            disabled
-            class="w-full cursor-not-allowed rounded-md border border-hairline bg-surface-elevated/50 px-3 py-2 text-[14px] text-mute"
-          />
-          <p class="mt-1 text-[13px] text-mute">Email cannot be changed.</p>
-        </div>
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          updateProfile();
+        }}
+        class="space-y-4"
+      >
+        <FormField label="Nama Lengkap" required>
+          {#snippet control(args)}
+            <Input {...args} bind:value={name} placeholder="Nama lengkap Anda" />
+          {/snippet}
+        </FormField>
 
-        <div class="pt-4">
-          <Button variant="primary" type="submit" {loading}>Save Changes</Button>
+        <FormField label="Alamat Email" helper="Email terdaftar tidak dapat diubah.">
+          {#snippet control(args)}
+            <Input {...args} value={email} disabled />
+          {/snippet}
+        </FormField>
+
+        {#if profileError}
+          <div class="flex items-center gap-2 text-sm text-status-urgent-ink">
+            <HugeiconsIcon icon={Alert02Icon} size={16} strokeWidth={1.8} />
+            <span>{profileError}</span>
+          </div>
+        {/if}
+
+        {#if profileSuccess}
+          <div class="flex items-center gap-2 text-sm text-status-done-ink">
+            <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} strokeWidth={1.8} />
+            <span>{profileSuccess}</span>
+          </div>
+        {/if}
+
+        <div class="pt-2">
+          <Button variant="primary" type="submit" loading={loadingProfile}>Simpan Perubahan</Button>
         </div>
       </form>
-    </div>
+    </section>
 
     <!-- Password Card -->
-    <div class="rounded-lg border border-hairline bg-surface p-6">
-      <h2 class="mb-6 text-lg font-medium text-ink">Change Password</h2>
-      
-      <form onsubmit={(e) => { e.preventDefault(); updatePassword(); }} class="space-y-4">
-        <div>
-          <label for="current_password" class="mb-1.5 block text-[14px] font-medium text-ink">Current Password</label>
-          <input 
-            type="password" 
-            id="current_password" 
-            bind:value={currentPassword} 
-            class="w-full rounded-md border border-hairline bg-surface-elevated px-3 py-2 text-[14px] text-ink transition-all focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hairline-strong"
-          />
-        </div>
-        
-        <div>
-          <label for="new_password" class="mb-1.5 block text-[14px] font-medium text-ink">New Password</label>
-          <input 
-            type="password" 
-            id="new_password" 
-            bind:value={newPassword} 
-            class="w-full rounded-md border border-hairline bg-surface-elevated px-3 py-2 text-[14px] text-ink transition-all focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hairline-strong"
-          />
-        </div>
+    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
+      <div class="flex items-center gap-2">
+        <HugeiconsIcon icon={LockPasswordIcon} size={20} strokeWidth={1.8} class="text-primary" />
+        <h2 class="ds-section-title text-ink">Keamanan & Kata Sandi</h2>
+      </div>
 
-        <div class="pt-4">
-          <Button variant="primary" type="submit" {loading}>Update Password</Button>
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          updatePassword();
+        }}
+        class="space-y-4"
+      >
+        <FormField label="Kata Sandi Saat Ini" required>
+          {#snippet control(args)}
+            <PasswordInput {...args} bind:value={currentPassword} placeholder="••••••••" />
+          {/snippet}
+        </FormField>
+
+        <FormField label="Kata Sandi Baru" required>
+          {#snippet control(args)}
+            <PasswordInput {...args} bind:value={newPassword} strength placeholder="••••••••" />
+          {/snippet}
+        </FormField>
+
+        {#if passwordError}
+          <div class="flex items-center gap-2 text-sm text-status-urgent-ink">
+            <HugeiconsIcon icon={Alert02Icon} size={16} strokeWidth={1.8} />
+            <span>{passwordError}</span>
+          </div>
+        {/if}
+
+        {#if passwordSuccess}
+          <div class="flex items-center gap-2 text-sm text-status-done-ink">
+            <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} strokeWidth={1.8} />
+            <span>{passwordSuccess}</span>
+          </div>
+        {/if}
+
+        <div class="pt-2">
+          <Button variant="primary" type="submit" loading={loadingPassword}>Perbarui Kata Sandi</Button>
         </div>
       </form>
-    </div>
+    </section>
   </div>
 </div>

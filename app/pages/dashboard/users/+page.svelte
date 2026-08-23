@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import { api } from '$lib/api/client';
-  import Button from '$lib/components/atoms/Button.svelte';
+  import { Avatar, Button, Input } from '$lib/components/atoms/index.js';
+  import { FormField, PasswordInput, Breadcrumb } from '$lib/components/molecules/index.js';
+  import { Dialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
-  import { PlusSignIcon, Edit02Icon, Delete02Icon } from '@hugeicons/core-free-icons';
+  import { Add01Icon, Edit02Icon, Delete02Icon } from '@hugeicons/core-free-icons';
   
   let { data }: { data: PageData } = $props();
 
@@ -54,75 +56,84 @@
       loading = false;
     }
   }
-
 </script>
 
 <svelte:head>
-  <title>Users Management — Narko</title>
+  <title>Users Management — Flowboard</title>
 </svelte:head>
 
-<div class="mx-auto max-w-5xl">
-  <div class="mb-8 flex items-center justify-between">
-    <div>
-      <h1 class="font-display text-2xl font-semibold tracking-tight text-ink">Users Management</h1>
-      <p class="mt-2 text-mute">Manage all registered users in your application.</p>
+<div class="mx-auto max-w-5xl space-y-8">
+  <div class="space-y-3">
+    <Breadcrumb
+      items={[
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Users Management' }
+      ]}
+      showHomeIcon
+    />
+    <div class="flex flex-wrap items-center justify-between gap-4 pt-1">
+      <div>
+        <h1 class="ds-page-title text-ink">Users Management</h1>
+        <p class="ds-body mt-1 text-mute">Manage all registered users in your application.</p>
+      </div>
+      <Button variant="primary" onclick={openCreate}>
+        <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
+        <span>Add User</span>
+      </Button>
     </div>
-    <Button variant="primary" onclick={openCreate}>
-      <HugeiconsIcon icon={PlusSignIcon} size={18} />
-      Add User
-    </Button>
   </div>
 
-  <div class="overflow-hidden rounded-lg border border-hairline bg-surface">
+  <div class="overflow-hidden rounded-2xl bg-card shadow-card">
     <table class="w-full text-left">
-      <thead class="border-b border-hairline bg-surface-elevated">
+      <thead class="border-b border-hairline bg-canvas-sunken">
         <tr>
-          <th class="px-6 py-3 text-[13px] font-medium uppercase tracking-[0.1px] text-mute">User</th>
-          <th class="px-6 py-3 text-[13px] font-medium uppercase tracking-[0.1px] text-mute">Email</th>
-          <th class="px-6 py-3 text-[13px] font-medium uppercase tracking-[0.1px] text-mute">ID</th>
-          <th class="px-6 py-3 text-right text-[13px] font-medium uppercase tracking-[0.1px] text-mute">Actions</th>
+          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">User</th>
+          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">Email</th>
+          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">ID</th>
+          <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-mute">Actions</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-hairline">
-        {#each data.users as user}
-          <tr class="transition-colors hover:bg-surface-card">
+        {#each data.users as user (user.id)}
+          <tr class="transition-colors hover:bg-lane/40">
             <td class="px-6 py-4">
               <div class="flex items-center gap-3">
-                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-accent-blue/20 text-[13px] font-semibold text-accent-blue">
-                  {user.name?.charAt(0).toUpperCase() || '?'}
-                </div>
-                <span class="text-[14px] font-medium text-ink">{user.name}</span>
+                <Avatar name={user.name} size={32} />
+                <span class="text-sm font-semibold text-ink">{user.name}</span>
               </div>
             </td>
-            <td class="px-6 py-4 text-[14px] text-body">{user.email}</td>
-            <td class="px-6 py-4 font-mono text-[13px] text-mute">{user.id}</td>
+            <td class="px-6 py-4 text-sm text-body">{user.email}</td>
+            <td class="px-6 py-4 font-mono text-xs text-mute">{user.id}</td>
             <td class="px-6 py-4 text-right">
-              <div class="flex items-center justify-end gap-3">
-                <button 
+              <div class="flex items-center justify-end gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
                   onclick={() => openEdit(user)}
-                  class="flex items-center gap-1.5 text-[13px] font-medium text-ink hover:underline"
                 >
-                  <HugeiconsIcon icon={Edit02Icon} size={14} />
+                  <HugeiconsIcon icon={Edit02Icon} size={16} strokeWidth={1.8} />
                   Edit
-                </button>
-                <button 
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  class="text-status-urgent-ink hover:text-status-urgent-strong"
                   onclick={async () => {
                     if (confirm('Delete user?')) {
                       await api.deleteUser(user.id);
                       location.reload();
                     }
                   }}
-                  class="flex items-center gap-1.5 text-[13px] font-medium text-accent-red hover:underline"
                 >
-                  <HugeiconsIcon icon={Delete02Icon} size={14} />
+                  <HugeiconsIcon icon={Delete02Icon} size={16} strokeWidth={1.8} />
                   Delete
-                </button>
+                </Button>
               </div>
             </td>
           </tr>
         {:else}
           <tr>
-            <td colspan="4" class="px-6 py-8 text-center text-mute">No users found.</td>
+            <td colspan="4" class="px-6 py-10 text-center ds-body text-mute">No users found.</td>
           </tr>
         {/each}
       </tbody>
@@ -130,65 +141,56 @@
   </div>
 </div>
 
-{#if showModal}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 p-4 backdrop-blur-sm" role="dialog" tabindex="-1">
-    <div class="absolute inset-0" onclick={closeModal} role="presentation"></div>
+<Dialog
+  bind:open={showModal}
+  title={modalMode === 'create' ? 'Create User' : 'Edit User'}
+  description={modalMode === 'create' ? 'Add a new user account to the platform.' : 'Update user profile details.'}
+>
+  <form onsubmit={(e) => { e.preventDefault(); submitForm(); }} class="space-y-4">
+    <FormField label="Full Name" required>
+      {#snippet control(args)}
+        <Input 
+          {...args} 
+          bind:value={formName} 
+          placeholder="Jane Doe"
+          required
+        />
+      {/snippet}
+    </FormField>
     
-    <div class="relative w-full max-w-md overflow-hidden rounded-xl border border-hairline bg-surface shadow-2xl">
-      <div class="border-b border-hairline px-6 py-4">
-        <h3 class="font-display text-lg font-semibold text-ink">
-          {modalMode === 'create' ? 'Create User' : 'Edit User'}
-        </h3>
-      </div>
-      
-      <form onsubmit={(e) => { e.preventDefault(); submitForm(); }} class="p-6">
-        <div class="space-y-4">
-          <div>
-            <label for="fname" class="mb-1.5 block text-[14px] font-medium text-ink">Full Name</label>
-            <input 
-              type="text" 
-              id="fname" 
-              bind:value={formName} 
-              required
-              class="w-full rounded-md border border-hairline bg-surface-elevated px-3 py-2 text-[14px] text-ink transition-all focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hairline-strong"
-            />
-          </div>
-          
-          <div>
-            <label for="femail" class="mb-1.5 block text-[14px] font-medium text-ink">Email Address</label>
-            <input 
-              type="email" 
-              id="femail" 
-              bind:value={formEmail} 
-              required
-              disabled={modalMode === 'edit'}
-              class="w-full rounded-md border border-hairline bg-surface-elevated px-3 py-2 text-[14px] text-ink transition-all focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hairline-strong disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-          </div>
+    <FormField label="Email Address" required>
+      {#snippet control(args)}
+        <Input 
+          {...args} 
+          type="email" 
+          bind:value={formEmail} 
+          placeholder="jane@company.com"
+          disabled={modalMode === 'edit'}
+          required
+        />
+      {/snippet}
+    </FormField>
 
-          {#if modalMode === 'create'}
-            <div>
-              <label for="fpass" class="mb-1.5 block text-[14px] font-medium text-ink">Password</label>
-              <input 
-                type="password" 
-                id="fpass" 
-                bind:value={formPassword} 
-                required
-                class="w-full rounded-md border border-hairline bg-surface-elevated px-3 py-2 text-[14px] text-ink transition-all focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hairline-strong"
-              />
-            </div>
-          {/if}
-        </div>
-        
-        <div class="mt-8 flex items-center justify-end gap-3">
-          <Button variant="tertiary" type="button" onclick={closeModal}>Cancel</Button>
-          <Button variant="primary" type="submit" {loading}>
-            {modalMode === 'create' ? 'Create User' : 'Save Changes'}
-          </Button>
-        </div>
-      </form>
+    {#if modalMode === 'create'}
+      <FormField label="Password" required>
+        {#snippet control(args)}
+          <PasswordInput 
+            {...args} 
+            bind:value={formPassword} 
+            placeholder="••••••••"
+            required
+          />
+        {/snippet}
+      </FormField>
+    {/if}
+  </form>
+  
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
+      <Button variant="secondary" onclick={closeModal}>Cancel</Button>
+      <Button variant="primary" {loading} onclick={submitForm}>
+        {modalMode === 'create' ? 'Create User' : 'Save Changes'}
+      </Button>
     </div>
-  </div>
-{/if}
+  {/snippet}
+</Dialog>

@@ -1,8 +1,8 @@
 <script lang="ts">
   import '../app.css';
   import { page } from '$app/stores';
-  import Nav from '$lib/components/organisms/Nav.svelte';
-  import Footer from '$lib/components/organisms/Footer.svelte';
+  import Nav from '$lib/components/landing/organisms/Nav.svelte';
+  import Footer from '$lib/components/landing/organisms/Footer.svelte';
   import type { LayoutData } from './$types';
   import { gsap } from 'gsap';
   import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -14,8 +14,16 @@
   // Every other route gets top padding to clear the nav and a footer.
   let isHome = $derived($page.url.pathname === '/');
   let isDashboard = $derived($page.url.pathname.startsWith('/dashboard'));
+  let isDesignSystem = $derived($page.url.pathname.startsWith('/design-system'));
+  let isAuth = $derived(
+    $page.url.pathname === '/login' ||
+      $page.url.pathname === '/register' ||
+      $page.url.pathname.startsWith('/invite/')
+  );
 
   $effect(() => {
+    if (isDashboard || isDesignSystem || isAuth) return;
+
     gsap.registerPlugin(ScrollTrigger);
 
     const lenis = new Lenis();
@@ -36,7 +44,7 @@
 </script>
 
 <div class="flex min-h-screen flex-col bg-canvas text-body">
-  {#if isDashboard}
+  {#if isDashboard || isDesignSystem || isAuth}
     {@render children()}
   {:else}
     <Nav user={data.user} />

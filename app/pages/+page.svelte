@@ -1,11 +1,11 @@
 <script lang="ts">
-  import Hero from '$lib/components/organisms/Hero.svelte';
-  import FeatureGrid from '$lib/components/organisms/FeatureGrid.svelte';
-  import Architecture from '$lib/components/organisms/Architecture.svelte';
-  import BenchmarkSection from '$lib/components/organisms/BenchmarkSection.svelte';
-  import SsrCsrSection from '$lib/components/organisms/SsrCsrSection.svelte';
-  import StackSection from '$lib/components/organisms/StackSection.svelte';
-  import CTASection from '$lib/components/organisms/CTASection.svelte';
+  import Hero from '$lib/components/landing/organisms/Hero.svelte';
+  import FeatureGrid from '$lib/components/landing/organisms/FeatureGrid.svelte';
+  import Architecture from '$lib/components/landing/organisms/Architecture.svelte';
+  import BenchmarkSection from '$lib/components/landing/organisms/BenchmarkSection.svelte';
+  import SsrCsrSection from '$lib/components/landing/organisms/SsrCsrSection.svelte';
+  import StackSection from '$lib/components/landing/organisms/StackSection.svelte';
+  import CTASection from '$lib/components/landing/organisms/CTASection.svelte';
   import type { LayoutData } from './$types';
   import { gsap } from 'gsap';
   import { ScrollTrigger } from 'gsap/ScrollTrigger';
