@@ -13,11 +13,12 @@ import { Elysia } from 'elysia';
  * Note: forwarding headers are client-controllable when you are NOT behind a
  * trusted proxy. Only rely on them for throttling once such a proxy is in place.
  */
-export const withClientIp = new Elysia({ name: 'withClientIp' }).derive(
-  { as: 'scoped' },
-  ({ headers }) => {
+export const createWithClientIp = () =>
+  new Elysia().derive({ as: 'scoped' }, ({ headers }) => {
     const forwarded = headers['x-forwarded-for'];
     const clientIp = forwarded?.split(',')[0]?.trim() || headers['x-real-ip'] || 'unknown';
     return { clientIp };
-  }
-);
+  });
+
+/** @deprecated Prefer `createWithClientIp()` when building route tables in dev. */
+export const withClientIp = createWithClientIp();

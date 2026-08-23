@@ -1,8 +1,9 @@
 
+import { mkdir } from 'node:fs/promises';
 import { eq } from 'drizzle-orm';
 import { db, users } from '@/db';
 import { env } from '@/config/env';
-import { toPublicUser, type Ctx } from '@/core';
+import { toPublicUser, toPublicWorkspace, type Ctx } from '@/core';
 import {
   hashPassword,
   verifyPassword,
@@ -13,6 +14,7 @@ import {
   destroySession,
   sessionCookieOptions
 } from '@/services';
+import { createWorkspaceForUser, getActiveWorkspaceContext } from '@/services/workspace';
 import { logger } from '@/services/logger';
 import { isLockedOut, getRemainingLockoutMs, recordFailedAttempt, clearAttempts } from '@/services/throttle';
 
@@ -40,12 +42,21 @@ export async function register({ body, cookie, set, clientIp }: Ctx<RegisterBody
     .values({ email: body.email, name: body.name, passwordHash })
     .returning();
 
+  await createWorkspaceForUser(user.id, `${body.name}'s Workspace`);
+
   const sessionId = await createSession(user.id);
   cookie[env.sessionCookie].set({ value: sessionId, ...sessionCookieOptions });
 
   logger.logAuth('registration_success', { userId: user.id, ip: clientIp });
   set.status = 201;
-  return { user: toPublicUser(user) };
+
+  const refreshed = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+  const ctx = await getActiveWorkspaceContext(refreshed[0].id, refreshed[0].activeWorkspaceId);
+
+  return {
+    user: toPublicUser(refreshed[0]),
+    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null
+  };
 }
 
 export async function login({ body, cookie, set, clientIp }: Ctx<LoginBody>) {
@@ -82,7 +93,12 @@ export async function login({ body, cookie, set, clientIp }: Ctx<LoginBody>) {
   cookie[env.sessionCookie].set({ value: sessionId, ...sessionCookieOptions });
 
   logger.logAuth('login_success', { userId: user.id, ip });
-  return { user: toPublicUser(user) };
+  const ctx = await getActiveWorkspaceContext(user.id, user.activeWorkspaceId);
+
+  return {
+    user: toPublicUser(user),
+    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null
+  };
 }
 
 export async function logout({ cookie, user }: Ctx) {
@@ -118,12 +134,18 @@ export async function changePassword({ body, user, cookie, set, clientIp }: Ctx<
   return { ok: true };
 }
 
-export function me({ user, set }: Ctx) {
+export async function me({ user, set }: Ctx) {
   if (!user) {
     set.status = 401;
     return { error: 'Unauthorized' };
   }
-  return { user: toPublicUser(user) };
+
+  const ctx = await getActiveWorkspaceContext(user.id, user.activeWorkspaceId);
+
+  return {
+    user: toPublicUser(user),
+    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null
+  };
 }
 
 export async function uploadAvatar({ user, body, set }: Ctx<{ avatar: File }>) {
@@ -138,16 +160,11 @@ export async function uploadAvatar({ user, body, set }: Ctx<{ avatar: File }>) {
     return { error: 'No file uploaded' };
   }
 
-  // In a real app, save to S3 or similar. Here we just mock a URL.
-  // We can write it to the static folder using standard node:fs/promises.
+  // In a real app, save to S3 or similar. Here we write to the static folder.
   const ext = file.name.split('.').pop() || 'png';
   const filename = `${user.id}-${Date.now()}.${ext}`;
 
-  // Vite dev server berjalan di Node.js, sedangkan production di Bun.
-  // Karena `Bun` tidak terdefinisi di Node.js, kita perlu cross-runtime check.
-
-  console.log("ada")
-
+  await mkdir('static/avatars', { recursive: true });
   await Bun.write(`static/avatars/${filename}`, file);
 
 
