@@ -8,6 +8,62 @@
       "when": 1784471204088,
       "tag": "0000_strange_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786706435995,
+      "tag": "0001_lean_sabretooth",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786709247225,
+      "tag": "0002_free_phantom_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786710000000,
+      "tag": "0003_customers",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786711000000,
+      "tag": "0004_remove_stage_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786712000000,
+      "tag": "0005_default_assignee_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786713000000,
+      "tag": "0006_phase3_wa_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786714000000,
+      "tag": "0007_card_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786715000000,
+      "tag": "0008_stage_estafet",
+      "breakpoints": true
     }
   ]
 }
