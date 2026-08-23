@@ -15,7 +15,7 @@
     "db:migrate": "bun run app/db/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "bun run app/db/seed.ts"
+    "db:seed": "svelte-kit sync && bun run app/db/seed.ts"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.2.2",

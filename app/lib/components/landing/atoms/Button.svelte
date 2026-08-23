@@ -3,7 +3,7 @@
   import type { HTMLButtonAttributes, HTMLAnchorAttributes } from 'svelte/elements';
 
   /**
-   * The Narko button. `variant` maps to the DESIGN.landing.md button vocabulary:
+   * The Flowboard button. `variant` maps to the DESIGN.landing.md button vocabulary:
    * - primary   → the universal white CTA pill (scarce: one per fold)
    * - secondary → transparent text button
    * - tertiary  → soft surface-elevated fill

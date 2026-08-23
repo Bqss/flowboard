@@ -1,37 +1,29 @@
 <script lang="ts">
   import Logo from '../atoms/Logo.svelte';
 
-  /**
-   * Footer: canvas background with a hairline top rule, a brand column plus
-   * link columns, and a bottom meta row. Multi-column at desktop, collapsing
-   * down to single column on mobile.
-   */
   const columns = [
     {
-      title: 'Product',
+      title: 'Produk',
       links: [
-        { label: 'Features', href: '#features' },
-        { label: 'Architecture', href: '#architecture' },
-        { label: 'Pricing', href: '#pricing' },
-        { label: 'Changelog', href: '#' }
+        { label: 'Fitur', href: '#features' },
+        { label: 'Cara kerja', href: '#how-it-works' },
+        { label: 'Contoh alur', href: '#use-cases' }
       ]
     },
     {
-      title: 'Developers',
+      title: 'Untuk tim',
       links: [
-        { label: 'Documentation', href: '#' },
-        { label: 'API reference', href: '#' },
-        { label: 'CLI', href: '#' },
-        { label: 'Status', href: '#' }
+        { label: 'Webinar', href: '#use-cases' },
+        { label: 'Onboarding pelanggan', href: '#use-cases' },
+        { label: 'Follow-up operasional', href: '#features' }
       ]
     },
     {
-      title: 'Company',
+      title: 'Workspace',
       links: [
-        { label: 'About', href: '#' },
-        { label: 'Blog', href: '#' },
-        { label: 'Careers', href: '#' },
-        { label: 'Contact', href: '#' }
+        { label: 'Masuk', href: '/login' },
+        { label: 'Mulai gratis', href: '/register' },
+        { label: 'Buka dashboard', href: '/dashboard' }
       ]
     }
   ];
@@ -43,8 +35,7 @@
       <div>
         <Logo />
         <p class="mt-4 max-w-xs text-sm leading-relaxed text-mute">
-          The full-stack boilerplate that runs your API and app on one port —
-          fast by construction.
+          Customer onboarding yang rapi: setiap card punya proses, setiap staff tahu langkah berikutnya.
         </p>
       </div>
 
@@ -67,12 +58,8 @@
     <div
       class="mt-14 flex flex-col gap-4 border-t border-hairline pt-8 text-[13px] text-ash sm:flex-row sm:items-center sm:justify-between"
     >
-      <span>© {new Date().getFullYear()} Narko. Built on Bun.</span>
-      <div class="flex items-center gap-6">
-        {#each [{ label: 'Privacy', href: '/privacy' }, { label: 'Terms', href: '/terms' }, { label: 'GitHub', href: 'https://github.com' }] as meta (meta.label)}
-          <a href={meta.href} class="transition-colors hover:text-body">{meta.label}</a>
-        {/each}
-      </div>
+      <span>© {new Date().getFullYear()} Flowboard. Dibuat untuk tim yang tidak mau kehilangan pelanggan.</span>
+      <span>Workflow · Checklist · Follow-up</span>
     </div>
   </div>
 </footer>

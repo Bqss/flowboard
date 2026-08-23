@@ -7,18 +7,17 @@
   import Button from '../atoms/Button.svelte';
 
   /**
-   * Sticky primary nav. Canvas background that gains a hairline rule + blur once
-   * the page scrolls past the fold. Auth-aware: shows Dashboard/Sign out when a
-   * user is present, else Login/Sign up. Collapses to a drawer under 768px.
+   * Sticky marketing navigation for Flowboard. It stays auth-aware while the
+   * page links explain the customer-onboarding workflow.
    */
   type NavUser = { email: string; name: string } | null;
 
   let { user = null }: { user?: NavUser } = $props();
 
   const links = [
-    { href: '#features', label: 'Features' },
-    { href: '#architecture', label: 'Architecture' },
-    { href: '#stack', label: 'Stack' }
+    { href: '#features', label: 'Fitur' },
+    { href: '#how-it-works', label: 'Cara kerja' },
+    { href: '#use-cases', label: 'Contoh alur' }
   ];
 
   let scrolled = $state(false);
@@ -70,16 +69,16 @@
           class="text-[13px] font-medium text-mute transition-colors hover:text-ink"
           class:!text-ink={$page.url.pathname === '/dashboard'}
         >
-          Dashboard
+          Buka workspace
         </a>
         <Button variant="tertiary" size="sm" onclick={logout} loading={loggingOut}>
-          Sign out
+          Keluar
         </Button>
       {:else}
         <a href="/login" class="text-[13px] font-medium text-mute transition-colors hover:text-ink">
-          Sign in
+          Masuk
         </a>
-        <Button variant="primary" size="sm" href="/register">Get started</Button>
+        <Button variant="primary" size="sm" href="/register">Mulai gratis</Button>
       {/if}
     </div>
 
@@ -114,13 +113,13 @@
         {/each}
         <div class="mt-2 flex flex-col gap-2 border-t border-hairline pt-3">
           {#if user}
-            <Button variant="tertiary" size="md" full href="/dashboard">Dashboard</Button>
+            <Button variant="tertiary" size="md" full href="/dashboard">Buka workspace</Button>
             <Button variant="secondary" size="md" full onclick={logout} loading={loggingOut}>
-              Sign out
+              Keluar
             </Button>
           {:else}
-            <Button variant="tertiary" size="md" full href="/login">Sign in</Button>
-            <Button variant="primary" size="md" full href="/register">Get started</Button>
+            <Button variant="tertiary" size="md" full href="/login">Masuk</Button>
+            <Button variant="primary" size="md" full href="/register">Mulai gratis</Button>
           {/if}
         </div>
       </div>

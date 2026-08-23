@@ -2,57 +2,55 @@
   import FeatureCard from '../molecules/FeatureCard.svelte';
   import { reveal } from '$lib/actions/reveal';
 
-  /** "Everything wired, nothing in the way" — the core feature grid. Each card
-   *  carries a category-accent icon (accents live in illustrations only). */
   const features = [
     {
-      title: 'Single-port by construction',
-      accent: 'red' as const,
-      body: 'Elysia owns Bun.serve. /api is handled natively; everything else falls through to SvelteKit. No proxy, no CORS, no second process.',
-      path: 'M4 12h16M4 12l4-4M4 12l4 4'
-    },
-    {
-      title: 'Typed end to end',
+      title: 'Workflow yang jelas',
       accent: 'blue' as const,
-      body: 'Handlers are plain functions over a light Ctx. Validators use Elysia’s t schema. The client is a same-origin typed fetch wrapper.',
-      path: 'M6 4h8l4 4v12H6zM13 4v5h5'
+      body: 'Definisikan stage, owner, checklist, dan aturan proses sekali. Tim menjalankan alur yang sama untuk setiap pelanggan.',
+      path: 'M4 6h16M4 12h10M4 18h16M17 10l3 2-3 2'
     },
     {
-      title: 'Sessions, done right',
+      title: 'Checklist yang berjalan',
       accent: 'green' as const,
-      body: 'DB-backed sessions in Postgres behind an httpOnly cookie. Passwords hashed with Bun.password (argon2id). No JWT footguns.',
-      path: 'M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z'
+      body: 'Langkah required tetap terlihat di dalam card. Progress n/m memberi konteks tanpa membuka spreadsheet lain.',
+      path: 'M5 12l4 4L19 6M4 4h16v16H4z'
     },
     {
-      title: 'Drizzle + Postgres',
+      title: 'Reminder untuk staff',
       accent: 'yellow' as const,
-      body: 'A typed schema, generated migrations, seed scripts, and Drizzle Studio. The postgres.js driver connects lazily so non-DB routes boot instantly.',
-      path: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6'
+      body: 'Card yang diam berubah menjadi Waiting Action. Assignee tahu siapa yang harus ditindaklanjuti berikutnya.',
+      path: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4'
     },
     {
-      title: 'SSR without a hop',
+      title: 'WhatsApp ke pelanggan',
       accent: 'blue' as const,
-      body: 'Server loads call the same api instance in-process — no network round-trip. External /api traffic goes straight to Elysia. Identical behavior, either path.',
-      path: 'M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0zM3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18'
+      body: 'Kirim pesan template dan follow-up sesuai stage. Balasan pelanggan bisa memberi handover ke staff.',
+      path: 'M5 5h14v10H9l-4 4zM8 9h8M8 12h5'
     },
     {
-      title: 'Atomic components',
+      title: 'Satu pelanggan, banyak proses',
       accent: 'green' as const,
-      body: 'A Svelte 5 runes component library organized atoms → molecules → organisms, on a dark design system with Inter ss03 and a strict surface ladder.',
-      path: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 3v18M4 7.5l8 4.5 8-4.5'
+      body: 'Identitas customer tetap satu, tetapi card bisa berjalan paralel di Webinar, Post Produk, atau workflow lain.',
+      path: 'M6 4h12v5H6zM4 15h7v5H4zM13 15h7v5h-7zM12 9v3M7.5 12h9'
+    },
+    {
+      title: 'Dari masuk sampai selesai',
+      accent: 'red' as const,
+      body: 'Masukkan pelanggan manual, lewat CSV, API, atau estafet. Semua jalur berakhir di createCard yang sama.',
+      path: 'M4 12h16M13 5l7 7-7 7M4 5v14'
     }
   ];
 </script>
 
 <section id="features" class="mx-auto max-w-[1240px] scroll-mt-20 px-6 py-24">
   <div use:reveal class="reveal max-w-2xl">
-    <p class="text-[13px] font-medium uppercase tracking-[0.18em] text-accent-red">Features</p>
+    <p class="text-[13px] font-medium uppercase tracking-[0.18em] text-accent-blue">Fitur inti</p>
     <h2 class="font-display mt-3 text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-tight text-ink">
-      Everything wired. Nothing in the way.
+      Operasional yang mengikuti proses.
     </h2>
     <p class="mt-4 text-lg leading-relaxed text-mute">
-      A batteries-included foundation that stays out of your way — the boring
-      parts are solved so you can ship the interesting ones.
+      Flowboard menyatukan konteks pelanggan, pekerjaan staff, dan automasi follow-up
+      supaya proses tidak berhenti di kepala satu orang.
     </p>
   </div>
 

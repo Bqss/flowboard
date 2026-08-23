@@ -4,7 +4,7 @@
   import Logo from '../atoms/Logo.svelte';
 
   /**
-   * Auth form shell: centered surface card with the Narko mark, title/subtitle,
+   * Auth form shell: centered surface card with the Flowboard mark, title/subtitle,
    * a slot for Fields, an inline error banner, the submit CTA, and a footer.
    * The card sits on the dark canvas with a hairline edge (no shadow).
    */
