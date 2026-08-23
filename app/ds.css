@@ -1,0 +1,228 @@
+
+/* Flowboard app design system — tokens from DESIGN.md.
+   Utilities resolve via @theme; [data-theme="app"] overrides landing defaults. */
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  /* Brand & action */
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-pressed: #3730a3;
+  --color-primary-soft: #eef2ff;
+  --color-primary-soft-hover: #e0e7ff;
+  --color-primary-border: #c7d2fe;
+  --color-primary-ink: #4338ca;
+  --color-on-primary: #ffffff;
+
+  /* Surfaces */
+  --color-canvas: #ffffff;
+  --color-canvas-sunken: #f8fafc;
+  --color-lane: #f1f5f9;
+  --color-lane-dropzone: #e0e7ff;
+  --color-card: #ffffff;
+  --color-hairline: #e2e8f0;
+  --color-hairline-strong: #cbd5e1;
+  --color-ring-hover: #94a3b8;
+  --color-ring-active: #64748b;
+
+  /* Text */
+  --color-ink: #0f172a;
+  --color-ink-soft: #1e293b;
+  --color-body: #334155;
+  --color-mute: #64748b;
+  --color-faint: #94a3b8;
+
+  /* Status triads */
+  --color-status-queued: #4f46e5;
+  --color-status-queued-soft: #eef2ff;
+  --color-status-queued-ink: #4338ca;
+  --color-status-progress: #f59e0b;
+  --color-status-progress-strong: #b45309;
+  --color-status-progress-soft: #fffbeb;
+  --color-status-progress-ink: #b45309;
+  --color-status-done: #22c55e;
+  --color-status-done-strong: #15803d;
+  --color-status-done-soft: #f0fdf4;
+  --color-status-done-ink: #15803d;
+  --color-status-urgent: #f43f5e;
+  --color-status-urgent-strong: #e11d48;
+  --color-status-urgent-soft: #fff1f2;
+  --color-status-urgent-ink: #be123c;
+  --color-status-idle: #94a3b8;
+  --color-status-idle-soft: #f1f5f9;
+  --color-status-idle-ink: #475569;
+  --color-positive: #22c55e;
+  --color-negative: #f43f5e;
+  --color-warning: #f59e0b;
+  --color-info: #4f46e5;
+
+  --color-presence-online: #22c55e;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-card: 16px;
+  --radius-lane: 20px;
+  --radius-panel: 24px;
+
+  --shadow-control: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.07);
+  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.08), 0 8px 24px rgba(15, 23, 42, 0.1);
+  --shadow-card-drag: 0 12px 32px rgba(15, 23, 42, 0.16);
+  --shadow-primary: 0 4px 12px rgba(79, 70, 229, 0.24);
+  --shadow-popover: 0 8px 28px rgba(15, 23, 42, 0.12);
+
+  --spacing-lane: 320px;
+}
+
+[data-theme='app'] {
+  color-scheme: light;
+
+  /* Brand & action */
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-pressed: #3730a3;
+  --color-primary-soft: #eef2ff;
+  --color-primary-soft-hover: #e0e7ff;
+  --color-primary-border: #c7d2fe;
+  --color-primary-ink: #4338ca;
+  --color-on-primary: #ffffff;
+
+  /* Surfaces */
+  --color-canvas: #ffffff;
+  --color-canvas-sunken: #f8fafc;
+  --color-lane: #f1f5f9;
+  --color-lane-dropzone: #e0e7ff;
+  --color-card: #ffffff;
+  --color-hairline: #e2e8f0;
+  --color-hairline-strong: #cbd5e1;
+  --color-ring-hover: #94a3b8;
+  --color-ring-active: #64748b;
+
+  /* Text */
+  --color-ink: #0f172a;
+  --color-ink-soft: #1e293b;
+  --color-body: #334155;
+  --color-mute: #64748b;
+  --color-faint: #94a3b8;
+
+  /* Status */
+  --color-status-queued: #4f46e5;
+  --color-status-queued-soft: #eef2ff;
+  --color-status-queued-ink: #4338ca;
+  --color-status-progress: #f59e0b;
+  --color-status-progress-strong: #b45309;
+  --color-status-progress-soft: #fffbeb;
+  --color-status-progress-ink: #b45309;
+  --color-status-done: #22c55e;
+  --color-status-done-strong: #15803d;
+  --color-status-done-soft: #f0fdf4;
+  --color-status-done-ink: #15803d;
+  --color-status-urgent: #f43f5e;
+  --color-status-urgent-strong: #e11d48;
+  --color-status-urgent-soft: #fff1f2;
+  --color-status-urgent-ink: #be123c;
+  --color-status-idle: #94a3b8;
+  --color-status-idle-soft: #f1f5f9;
+  --color-status-idle-ink: #475569;
+  --color-presence-online: #22c55e;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-card: 16px;
+  --radius-lane: 20px;
+  --radius-panel: 24px;
+
+  /* Shadows & focus */
+  --shadow-control: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.07);
+  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.08), 0 8px 24px rgba(15, 23, 42, 0.1);
+  --shadow-card-drag: 0 12px 32px rgba(15, 23, 42, 0.16);
+  --shadow-primary: 0 4px 12px rgba(79, 70, 229, 0.24);
+  --shadow-popover: 0 8px 28px rgba(15, 23, 42, 0.12);
+  --shadow-raised: var(--shadow-popover);
+  --shadow-modal: var(--shadow-popover);
+  --focus: rgba(79, 70, 229, 0.22);
+  --overlay-scrim: rgba(15, 23, 42, 0.45);
+
+  /* Board */
+  --spacing-lane: 320px;
+
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-theme='app'] :focus-visible:not(input):not(textarea):not(select) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Typography utilities — map reference ds-* classes to DESIGN.md scale */
+[data-theme='app'] .ds-page-title {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+[data-theme='app'] .ds-section-title {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+[data-theme='app'] .ds-stat {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+[data-theme='app'] .ds-body {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+[data-theme='app'] .ds-label {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+[data-theme='app'] .ds-caption {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.005em;
+}
+
+[data-theme='app'] .ds-button-text {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+}
+
+[data-theme='app'] .ds-nav {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+[data-theme='app'] h1,
+[data-theme='app'] h2,
+[data-theme='app'] h3,
+[data-theme='app'] h4 {
+  color: var(--color-ink);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}

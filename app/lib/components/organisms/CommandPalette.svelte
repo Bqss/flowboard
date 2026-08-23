@@ -1,120 +1,166 @@
 <script lang="ts">
-  import CommandRow from '../molecules/CommandRow.svelte';
-  import Keycap from '../atoms/Keycap.svelte';
+	import type { HTMLAttributes } from 'svelte/elements';
+	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { dismissable } from '$lib/components/molecules/shared.js';
+	import { SearchInput } from '$lib/components/molecules/index.js';
+	import type { CommandItem } from './shared.js';
+	import { modalBackdrop, modalPanel } from './modal-transitions.js';
 
-  /**
-   * The hero command-palette mockup — the brand's load-bearing visual. A faux
-   * macOS window (traffic-light dots, search row, command list, footer hint).
-   * A tiny typing loop cycles the query and moves the active-row selection so
-   * the mockup reads as alive without a real backend. Reduced-motion friendly:
-   * the interval simply drives state; nothing layout-shifts abruptly.
-   */
-  import { onMount } from 'svelte';
+	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+		open?: boolean;
+		items: CommandItem[];
+		placeholder?: string;
+		emptyText?: string;
+		onselect?: (item: CommandItem) => void;
+		onclose?: () => void;
+		class?: string;
+	};
 
-  const queries = ['Deploy to production', 'Search users', 'Run migration', 'Open dashboard'];
-  const rows = [
-    { label: 'Deploy to production', accent: 'red', shortcut: '⌘ ⏎', letter: 'D' },
-    { label: 'Search users', accent: 'blue', shortcut: '⌘ K', letter: 'U' },
-    { label: 'Run migration', accent: 'green', shortcut: '⌘ M', letter: 'M' },
-    { label: 'View API health', accent: 'yellow', shortcut: '⌘ H', letter: 'H' }
-  ] as const;
+	let {
+		ref = $bindable(null),
+		open = $bindable(false),
+		items,
+		placeholder = 'Ketik perintah atau cari…',
+		emptyText = 'Tidak ada hasil.',
+		onselect,
+		onclose,
+		class: className,
+		...rest
+	}: Props = $props();
 
-  let active = $state(0);
-  let typed = $state('');
+	let query = $state('');
+	let active = $state(0);
 
-  onMount(() => {
-    const reduce =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	const filtered = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		if (!q) return items;
+		return items.filter(
+			(i) =>
+				i.label.toLowerCase().includes(q) ||
+				i.group?.toLowerCase().includes(q) ||
+				i.keywords?.toLowerCase().includes(q)
+		);
+	});
 
-    let qi = 0;
-    let ci = 0;
-    let holding = 0;
+	function close() {
+		open = false;
+		query = '';
+		active = 0;
+		onclose?.();
+	}
 
-    const id = setInterval(() => {
-      const target = queries[qi];
-      if (reduce) {
-        typed = target;
-        active = qi;
-        qi = (qi + 1) % queries.length;
-        return;
-      }
-      if (holding > 0) {
-        holding--;
-        if (holding === 0) {
-          qi = (qi + 1) % queries.length;
-          ci = 0;
-          typed = '';
-        }
-        return;
-      }
-      if (ci <= target.length) {
-        typed = target.slice(0, ci);
-        active = qi;
-        ci++;
-      } else {
-        holding = 14; // pause on the full query
-      }
-    }, 90);
+	function choose(item: CommandItem) {
+		item.onselect?.();
+		onselect?.(item);
+		close();
+	}
 
-    return () => clearInterval(id);
-  });
+	function onkeydown(event: KeyboardEvent) {
+		if (!open) return;
+		if (event.key === 'ArrowDown') {
+			event.preventDefault();
+			active = Math.min(active + 1, filtered.length - 1);
+		} else if (event.key === 'ArrowUp') {
+			event.preventDefault();
+			active = Math.max(active - 1, 0);
+		} else if (event.key === 'Enter' && filtered[active]) {
+			event.preventDefault();
+			choose(filtered[active]);
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			close();
+		}
+	}
+
+	$effect(() => {
+		if (!open) return;
+
+		const scrollY = window.scrollY;
+		const { style } = document.body;
+		const prevOverflow = style.overflow;
+
+		style.overflow = 'hidden';
+
+		return () => {
+			style.overflow = prevOverflow;
+			window.scrollTo(0, scrollY);
+		};
+	});
+
+	$effect(() => {
+		if (!open) return;
+		const onGlobal = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+				e.preventDefault();
+				close();
+			}
+		};
+		window.addEventListener('keydown', onGlobal);
+		return () => window.removeEventListener('keydown', onGlobal);
+	});
 </script>
 
-<div
-  class="w-full overflow-hidden rounded-xl border border-hairline bg-surface/95 backdrop-blur-xl
-    shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)]"
->
-  <!-- window chrome -->
-  <div class="flex items-center gap-2 border-b border-hairline px-4 py-3">
-    <span class="h-3 w-3 rounded-full bg-[#ff5f57]"></span>
-    <span class="h-3 w-3 rounded-full bg-[#febc2e]"></span>
-    <span class="h-3 w-3 rounded-full bg-[#28c840]"></span>
-    <span class="ml-3 text-[12px] text-ash">narko — command palette</span>
-  </div>
+<svelte:window onkeydown={onkeydown} />
 
-  <!-- search row -->
-  <div class="flex items-center gap-3 border-b border-hairline px-4 py-3.5">
-    <svg class="h-4 w-4 text-ash" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4" />
-      <path d="m11 11 3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-    </svg>
-    <span class="flex-1 text-sm text-ink">
-      {typed}<span
-        class="ml-0.5 inline-block h-4 w-px translate-y-0.5 bg-accent-red"
-        style="animation: narko-blink 1s step-end infinite;"
-      ></span>
-    </span>
-    <Keycap>esc</Keycap>
-  </div>
+{#if open}
+	<div bind:this={ref} class={cn('fixed inset-0 z-[100]', className)} use:dismissable={close} {...rest}>
+		<button
+			type="button"
+			class="absolute inset-0 bg-[var(--overlay-scrim)] backdrop-blur-[2px]"
+			aria-label="Tutup command palette"
+			transition:modalBackdrop={{ duration: 220 }}
+			onclick={close}
+		></button>
 
-  <!-- command rows -->
-  <div class="flex flex-col gap-0.5 p-2">
-    <div class="px-2.5 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wider text-ash">
-      Commands
-    </div>
-    {#each rows as row, i (row.label)}
-      <CommandRow
-        label={row.label}
-        accent={row.accent}
-        shortcut={row.shortcut}
-        active={i === active}
-      >
-        {#snippet glyph()}
-          <span class="text-[11px] font-semibold">{row.letter}</span>
-        {/snippet}
-      </CommandRow>
-    {/each}
-  </div>
+		<div
+			class="pointer-events-none fixed inset-0 flex items-start justify-center p-4 pt-[12vh]"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Command palette"
+		>
+			<div
+				class="pointer-events-auto w-full max-w-xl overflow-hidden rounded-xl border border-hairline bg-card shadow-[var(--shadow-modal)] origin-center will-change-[transform,opacity]"
+				transition:modalPanel={{ duration: 300, y: 12, startScale: 0.98 }}
+			>
+			<div class="border-b border-hairline p-2">
+				<SearchInput bind:value={query} {placeholder} submit={false} clearable class="!shadow-none" />
+			</div>
 
-  <!-- footer hint -->
-  <div class="flex items-center justify-between border-t border-hairline px-4 py-2.5 text-[12px] text-ash">
-    <span class="flex items-center gap-1.5">
-      <span class="h-4 w-4 rounded bg-gradient-to-br from-[#ff5757] to-[#a1131a]"></span>
-      Narko
-    </span>
-    <span class="flex items-center gap-1.5">
-      Actions <Keycap>⌘</Keycap><Keycap>K</Keycap>
-    </span>
-  </div>
-</div>
+			<div class="max-h-80 overflow-y-auto p-1.5" role="listbox">
+				{#each filtered as item, i (item.id)}
+					<button
+						type="button"
+						role="option"
+						aria-selected={i === active}
+						onmouseenter={() => (active = i)}
+						onclick={() => choose(item)}
+						class={cn(
+							'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors',
+							i === active ? 'bg-primary-soft' : 'hover:bg-primary-soft/60'
+						)}
+					>
+						<span class="inline-flex min-w-0 items-center gap-2.5">
+							{#if item.icon}
+								<span class="grid size-4 shrink-0 place-items-center text-mute [&_svg]:size-4">
+									{@render item.icon()}
+								</span>
+							{/if}
+							<span>
+								<span class="ds-body block text-ink">{item.label}</span>
+								{#if item.group}
+									<span class="ds-caption text-mute">{item.group}</span>
+								{/if}
+							</span>
+						</span>
+						{#if item.shortcut}
+							<span class="ds-caption ds-mono shrink-0 text-faint">{item.shortcut}</span>
+						{/if}
+					</button>
+				{:else}
+					<p class="ds-body px-3 py-6 text-center text-mute">{emptyText}</p>
+				{/each}
+			</div>
+			</div>
+		</div>
+	</div>
+{/if}

@@ -1,75 +1,113 @@
+<script lang="ts" module>
+	import { type VariantProps, tv } from 'tailwind-variants';
+
+	export const buttonVariants = tv({
+		base: 'ds-button-text inline-flex shrink-0 items-center justify-center gap-2 transition-all duration-150 ease-out select-none whitespace-nowrap outline-none [&_svg]:pointer-events-none [&_svg]:shrink-0 active:scale-[.98] disabled:pointer-events-none disabled:opacity-50',
+		variants: {
+			variant: {
+				primary:
+					'rounded-full bg-primary text-on-primary shadow-primary hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2',
+				secondary:
+					'rounded-full border border-hairline bg-card text-ink-soft hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
+				tertiary:
+					'rounded-full bg-lane text-ink-soft hover:bg-primary-soft focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
+				ghost:
+					'rounded-md text-mute hover:bg-lane hover:text-ink-soft focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
+				destructive:
+					'rounded-full bg-status-urgent text-on-primary hover:bg-status-urgent-strong focus-visible:ring-2 focus-visible:ring-status-urgent/25 focus-visible:ring-offset-2',
+				danger:
+					'rounded-full bg-status-urgent text-on-primary hover:bg-status-urgent-strong focus-visible:ring-2 focus-visible:ring-status-urgent/25 focus-visible:ring-offset-2',
+				success:
+					'rounded-full bg-status-done text-status-done-ink hover:bg-status-done-strong focus-visible:ring-2 focus-visible:ring-status-done/25 focus-visible:ring-offset-2',
+				warning:
+					'rounded-full bg-status-progress text-status-progress-ink hover:bg-status-progress-strong focus-visible:ring-2 focus-visible:ring-status-progress/25 focus-visible:ring-offset-2',
+				info:
+					'rounded-full bg-status-queued text-on-primary hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-status-queued/25 focus-visible:ring-offset-2',
+				link: 'rounded-md text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
+				lane:
+					'rounded-full text-on-primary shadow-primary focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2'
+			},
+			lane: {
+				queued: 'bg-status-queued hover:bg-primary-hover',
+				progress: 'bg-status-progress text-ink hover:brightness-95',
+				done: 'bg-status-done text-ink hover:brightness-95',
+				none: ''
+			},
+			size: {
+				sm: 'h-9 px-4 text-[13px] [&_svg:not([class*=size-])]:size-4',
+				md: 'h-10 px-5 [&_svg:not([class*=size-])]:size-[18px]',
+				lg: 'h-11 px-5 text-[14px] [&_svg:not([class*=size-])]:size-5',
+				lane: 'h-11 w-full px-5 [&_svg:not([class*=size-])]:size-[18px]',
+				icon: 'size-10 p-0 [&_svg:not([class*=size-])]:size-[18px]'
+			}
+		},
+		defaultVariants: { variant: 'primary', size: 'md', lane: 'none' }
+	});
+
+	export type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
+	export type ButtonSize = VariantProps<typeof buttonVariants>['size'];
+	export type ButtonLane = VariantProps<typeof buttonVariants>['lane'];
+</script>
+
 <script lang="ts">
-  import type { Snippet } from 'svelte';
-  import type { HTMLButtonAttributes, HTMLAnchorAttributes } from 'svelte/elements';
+	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
+	import { cn, type WithElementRef } from '$lib/utils.js';
 
-  /**
-   * The Narko button. `variant` maps to the DESIGN.md button vocabulary:
-   * - primary   → the universal white CTA pill (scarce: one per fold)
-   * - secondary → transparent text button
-   * - tertiary  → soft surface-elevated fill
-   * - outline   → hairline-bordered "install" pill
-   * Renders an <a> when `href` is set, else a <button>.
-   */
-  type Variant = 'primary' | 'secondary' | 'tertiary' | 'outline';
-  type Size = 'sm' | 'md' | 'lg';
+	type Props = WithElementRef<HTMLButtonAttributes> &
+		WithElementRef<HTMLAnchorAttributes> & {
+			variant?: ButtonVariant;
+			size?: ButtonSize;
+			lane?: ButtonLane;
+			href?: string;
+			loading?: boolean;
+			children?: import('svelte').Snippet;
+		};
 
-  let {
-    variant = 'primary',
-    size = 'md',
-    href = undefined,
-    type = 'button',
-    full = false,
-    loading = false,
-    disabled = false,
-    class: klass = '',
-    children,
-    ...rest
-  }: {
-    variant?: Variant;
-    size?: Size;
-    href?: string;
-    type?: HTMLButtonAttributes['type'];
-    full?: boolean;
-    loading?: boolean;
-    disabled?: boolean;
-    class?: string;
-    children: Snippet;
-    [key: string]: unknown;
-  } = $props();
-
-  const base =
-    'relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium tracking-[0.01em] transition-all duration-200 select-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-55';
-
-  const sizes: Record<Size, string> = {
-    sm: 'h-8 px-3 text-[13px]',
-    md: 'h-9 px-4 text-sm',
-    lg: 'h-11 px-5 text-[15px]'
-  };
-
-  const variants: Record<Variant, string> = {
-    primary:
-      'bg-primary text-on-primary hover:bg-primary-pressed active:bg-primary-pressed shadow-[0_1px_0_rgba(255,255,255,0.4)_inset,0_8px_30px_-12px_rgba(255,255,255,0.5)] hover:-translate-y-px',
-    secondary: 'bg-transparent text-ink hover:bg-white/5',
-    tertiary: 'bg-elevated text-ink hover:bg-card border border-hairline',
-    outline: 'bg-transparent text-ink border border-hairline-strong hover:bg-white/5'
-  };
-
-  let cls = $derived(
-    `${base} ${sizes[size]} ${variants[variant]} ${full ? 'w-full' : ''} ${klass}`
-  );
-
-  const spinner =
-    'h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent opacity-70';
+	let {
+		class: className,
+		variant = 'primary',
+		size = 'md',
+		lane = 'none',
+		ref = $bindable(null),
+		href = undefined,
+		type = 'button',
+		loading = false,
+		disabled,
+		children,
+		...rest
+	}: Props = $props();
 </script>
 
 {#if href}
-  <a {href} class={cls} aria-busy={loading} {...rest}>
-    {#if loading}<span class={spinner}></span>{/if}
-    {@render children()}
-  </a>
+	<a
+		bind:this={ref}
+		class={cn(buttonVariants({ variant, size, lane: variant === 'lane' ? lane : 'none' }), className)}
+		{href}
+		aria-disabled={disabled || loading || undefined}
+		role={disabled || loading ? 'link' : undefined}
+		tabindex={disabled || loading ? -1 : undefined}
+		{...rest}
+	>
+		{@render children?.()}
+	</a>
 {:else}
-  <button {type} class={cls} disabled={disabled || loading} aria-busy={loading} {...rest}>
-    {#if loading}<span class={spinner}></span>{/if}
-    {@render children()}
-  </button>
+	<button
+		bind:this={ref}
+		class={cn(
+			buttonVariants({ variant, size, lane: variant === 'lane' ? lane : 'none' }),
+			loading && 'cursor-wait',
+			className
+		)}
+		{type}
+		disabled={disabled || loading}
+		{...rest}
+	>
+		{#if loading}
+			<svg class="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+				<path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+			</svg>
+		{/if}
+		{@render children?.()}
+	</button>
 {/if}

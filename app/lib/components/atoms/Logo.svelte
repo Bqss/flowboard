@@ -1,41 +1,24 @@
 <script lang="ts">
-  /**
-   * Narko wordmark. A small angular glyph mark (three diagonal strokes echoing
-   * the hero stripe motif) beside the lowercase wordmark. `size` scales both.
-   */
-  let {
-    size = 'md',
-    href = '/',
-    class: klass = ''
-  }: {
-    size?: 'sm' | 'md' | 'lg';
-    href?: string | null;
-    class?: string;
-  } = $props();
+	import type { HTMLAttributes } from 'svelte/elements';
+	import { cn, type WithElementRef } from '$lib/utils.js';
 
-  let dims = $derived(
-    {
-      sm: { box: 18, gap: 'gap-2', text: 'text-[15px]' },
-      md: { box: 22, gap: 'gap-2.5', text: 'text-[17px]' },
-      lg: { box: 30, gap: 'gap-3', text: 'text-2xl' }
-    }[size]
-  );
+	type Props = WithElementRef<HTMLAttributes<HTMLElement>> & {
+		size?: number;
+		class?: string;
+	};
+
+	let { ref = $bindable(null), size = 32, class: className, ...rest }: Props = $props();
 </script>
 
-{#snippet mark()}
-  <span
-    class="inline-flex items-center {dims.gap} font-display font-semibold tracking-tight text-ink {dims.text} {klass}"
-  >
-    <img
-      src="/logo.png"
-      alt="Logo"
-      class="h-20 md:h-24 w-auto "
-    />
-  </span>
-{/snippet}
-
-{#if href}
-  <a {href} class="inline-flex" aria-label="Narko home">{@render mark()}</a>
-{:else}
-  {@render mark()}
-{/if}
+<span
+	bind:this={ref}
+	class={cn(
+		'inline-flex items-center justify-center rounded-lg bg-primary text-on-primary font-extrabold',
+		className
+	)}
+	style={`width:${size}px;height:${size}px;font-size:${Math.max(14, size * 0.44)}px;`}
+	aria-label="Flowboard"
+	{...rest}
+>
+	F
+</span>
