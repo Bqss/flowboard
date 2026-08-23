@@ -11,5 +11,6 @@
     "strict": true,
     "moduleResolution": "bundler"
   },
-  "include": ["app", "routes", "server.ts", "drizzle.config.ts", "bench"]
+  "include": ["app", "routes", "server.ts", "drizzle.config.ts", "bench"],
+  "exclude": ["app/lib/references/**"]
 }

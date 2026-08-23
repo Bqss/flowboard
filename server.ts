@@ -13,6 +13,7 @@
  */
 import { api } from '@routes/api';
 import { env } from '@config/env';
+import { startScheduler } from '@services/scheduler';
 
 // Resolved at runtime (after `vite build`). The computed specifier keeps tsc
 // from type-checking the generated file, which may not exist at check time.
@@ -37,4 +38,4 @@ const server = Bun.serve({
   }
 });
 
-console.log(`Listening on ${server.url}`);
+  startScheduler();

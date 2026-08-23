@@ -14,7 +14,7 @@ const config = {
       lib: 'app/lib',
       assets: 'static',
       appTemplate: 'app/app.html',
-      hooks: { server: 'app/hooks.server.ts' }
+      hooks: { server: 'app/hooks.server.ts', client: 'app/hooks.client.ts' }
     },
 
     // Aliases for the Elysia backend layers. Mirrored in tsconfig.json `paths`

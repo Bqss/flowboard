@@ -1,11 +1,12 @@
 @import 'tailwindcss';
+@import './ds.css';
 
 /* ------------------------------------------------------------------ *
  * Narko design system — a dark-canvas developer-tools aesthetic.
  * Inter with the ss03 stylistic set enabled site-wide; elevation is
  * built purely from a 4-step surface ladder (no drop shadows); a single
  * white pill is the universal primary action. Tokens map 1:1 to
- * DESIGN.md so utilities like `bg-surface` / `text-ink` resolve here.
+ * DESIGN.landing.md so utilities like `bg-surface` / `text-ink` resolve here.
  * ------------------------------------------------------------------ */
 
 @theme {

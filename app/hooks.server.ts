@@ -1,5 +1,8 @@
 import type { Handle } from '@sveltejs/kit';
-import { api } from '@routes/api';
+import { getApi, reloadApi } from '@routes/api';
+import { startScheduler } from '@services/scheduler';
+
+startScheduler();
 
 /**
  * Routes internal `/api` calls to Elysia.
@@ -17,8 +20,14 @@ import { api } from '@routes/api';
  */
 export const handle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api')) {
-    return api.handle(event.request);
+    return getApi().handle(event.request);
   }
 
   return resolve(event);
 };
+
+if (import.meta.hot) {
+  import.meta.hot.on('flowboard:api-reload', () => {
+    reloadApi();
+  });
+}
