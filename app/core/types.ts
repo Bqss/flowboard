@@ -1,4 +1,8 @@
-import type { User } from '@db';
+import type { User, Workspace, WorkspaceRole } from '@db';
+
+export type WorkspaceMembership = {
+  role: WorkspaceRole;
+};
 
 /**
  * A minimal, framework-light view of an Elysia request context.
@@ -24,6 +28,9 @@ export interface Ctx<Body = unknown, Params = Record<string, string>> {
   set: { status?: number | string; headers: Record<string, string | number> };
   cookie: Record<string, CookieJar>;
   user?: User | null;
+  workspace?: Workspace | null;
+  membership?: WorkspaceMembership | null;
+  workflow?: import('@db').Workflow | null;
   /** Best-effort client IP. Populated by `withClientIp`; used for throttling. */
   clientIp?: string;
 }

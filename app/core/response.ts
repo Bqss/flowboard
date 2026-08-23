@@ -6,11 +6,15 @@ export type PublicUser = {
   email: string;
   name: string;
   avatarUrl: string | null;
+  activeWorkspaceId: string | null;
 };
 
-export const toPublicUser = (u: Pick<User, 'id' | 'email' | 'name' | 'avatarUrl'>): PublicUser => ({
+export const toPublicUser = (
+  u: Pick<User, 'id' | 'email' | 'name' | 'avatarUrl' | 'activeWorkspaceId'>
+): PublicUser => ({
   id: u.id,
   email: u.email,
   name: u.name,
-  avatarUrl: u.avatarUrl
+  avatarUrl: u.avatarUrl,
+  activeWorkspaceId: u.activeWorkspaceId
 });

@@ -32,3 +32,203 @@ export const UserIdParam = t.Object({
 export const UpdateUserSchema = t.Object({
   name: t.String({ minLength: 1 })
 });
+
+export const WorkspaceIdParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' })
+});
+
+export const WorkspaceMemberParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  userId: t.String({ format: 'uuid' })
+});
+
+export const UpdateWorkspaceSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 })
+});
+
+export const CreateInviteSchema = t.Object({
+  email: t.String({ format: 'email' }),
+  role: t.Optional(t.Union([t.Literal('member')]))
+});
+
+export const AcceptInviteSchema = t.Object({
+  token: t.String({ minLength: 1 })
+});
+
+export const InviteTokenParam = t.Object({
+  token: t.String({ minLength: 1 })
+});
+
+export const WorkflowIdParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  workflowId: t.String({ format: 'uuid' })
+});
+
+export const WorkflowStageParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  workflowId: t.String({ format: 'uuid' }),
+  stageId: t.String({ format: 'uuid' })
+});
+
+export const WorkflowStageTemplateParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  workflowId: t.String({ format: 'uuid' }),
+  stageId: t.String({ format: 'uuid' }),
+  templateId: t.String({ format: 'uuid' })
+});
+
+export const WorkflowCardParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  workflowId: t.String({ format: 'uuid' }),
+  cardId: t.String({ format: 'uuid' })
+});
+
+export const WorkflowCardItemParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  workflowId: t.String({ format: 'uuid' }),
+  cardId: t.String({ format: 'uuid' }),
+  itemId: t.String({ format: 'uuid' })
+});
+
+export const CreateWorkflowSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  ownerId: t.Optional(t.String({ format: 'uuid' })),
+  defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
+});
+
+export const UpdateWorkflowSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  ownerId: t.Optional(t.String({ format: 'uuid' })),
+  defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
+});
+
+export const CreateStageSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  color: t.Optional(t.String({ minLength: 1, maxLength: 50 }))
+});
+
+export const UpdateStageSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  color: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+  onReplyNotify: t.Optional(t.Boolean()),
+  overdueReminderHours: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
+  nextWorkflowId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()]))
+});
+
+export const BulkReassignSchema = t.Object({
+  cardIds: t.Array(t.String({ format: 'uuid' }), { minItems: 1, maxItems: 100 }),
+  assigneeId: t.Union([t.String({ format: 'uuid' }), t.Null()])
+});
+
+export const UpdateChecklistActionSchema = t.Object({
+  kind: t.Union([t.Literal('none'), t.Literal('send'), t.Literal('followup')]),
+  messageTemplate: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  delayMinutes: t.Optional(t.Integer({ minimum: 0, maximum: 10080 })),
+  followupIfNoReply: t.Optional(t.Boolean())
+});
+
+export const WhatsappWebhookSchema = t.Object({
+  wa: t.String({ minLength: 8, maxLength: 20 }),
+  message: t.Optional(t.String({ maxLength: 2000 }))
+});
+
+export const NotificationIdParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  notificationId: t.String({ format: 'uuid' })
+});
+
+const ChecklistActionDraftSchema = t.Object({
+  kind: t.Union([t.Literal('none'), t.Literal('send'), t.Literal('followup')]),
+  messageTemplate: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  delayMinutes: t.Optional(t.Integer({ minimum: 0, maximum: 10080 })),
+  followupIfNoReply: t.Optional(t.Boolean())
+});
+
+export const WorkflowDraftSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  stages: t.Array(
+    t.Object({
+      name: t.String({ minLength: 1, maxLength: 120 }),
+      color: t.Optional(t.String({ maxLength: 50 })),
+      onReplyNotify: t.Optional(t.Boolean()),
+      overdueReminderHours: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
+      checklists: t.Array(
+        t.Object({
+          label: t.String({ minLength: 1, maxLength: 200 }),
+          required: t.Optional(t.Boolean()),
+          action: t.Optional(ChecklistActionDraftSchema)
+        })
+      )
+    }),
+    { minItems: 1 }
+  )
+});
+
+export const GenerateWorkflowDraftSchema = t.Object({
+  prompt: t.String({ minLength: 3, maxLength: 2000 })
+});
+
+export const McpCallSchema = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  tool: t.Union([
+    t.Literal('create_card'),
+    t.Literal('notify_assignee'),
+    t.Literal('move_stage'),
+    t.Literal('stop_followups')
+  ]),
+  arguments: t.Record(t.String(), t.Unknown())
+});
+
+export const IntegrationCreateCardSchema = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  workflowId: t.String({ format: 'uuid' }),
+  name: t.String({ minLength: 1, maxLength: 200 }),
+  wa: t.String({ minLength: 8, maxLength: 20 }),
+  product: t.Optional(t.String({ maxLength: 200 })),
+  tag: t.Optional(t.String({ maxLength: 80 })),
+  source: t.Optional(t.Union([t.Literal('mcp'), t.Literal('manual')]))
+});
+
+export const ReorderStagesSchema = t.Object({
+  stageIds: t.Array(t.String({ format: 'uuid' }))
+});
+
+export const CreateChecklistTemplateSchema = t.Object({
+  label: t.String({ minLength: 1, maxLength: 200 }),
+  required: t.Optional(t.Boolean())
+});
+
+export const UpdateChecklistTemplateSchema = t.Object({
+  label: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+  required: t.Optional(t.Boolean())
+});
+
+export const CreateCardSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 200 }),
+  wa: t.String({ minLength: 8, maxLength: 20 }),
+  product: t.Optional(t.String({ maxLength: 200 })),
+  tag: t.Optional(t.String({ maxLength: 80 })),
+  assigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  source: t.Optional(
+    t.Union([t.Literal('manual'), t.Literal('csv'), t.Literal('mcp'), t.Literal('estafet')])
+  )
+});
+
+export const UpdateCardAssigneeSchema = t.Object({
+  assigneeId: t.Union([t.String({ format: 'uuid' }), t.Null()])
+});
+
+export const ImportCardsSchema = t.Object({
+  csv: t.String({ minLength: 1 }),
+  mode: t.Optional(t.Union([t.Literal('skip'), t.Literal('update')]))
+});
+
+export const MoveCardSchema = t.Object({
+  stageId: t.String({ format: 'uuid' })
+});
+
+export const ToggleChecklistItemSchema = t.Object({
+  done: t.Boolean()
+});

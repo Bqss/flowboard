@@ -11,6 +11,168 @@ export type ApiUser = {
   email: string;
   name: string;
   avatarUrl?: string | null;
+  activeWorkspaceId?: string | null;
+};
+
+export type ApiWorkspace = {
+  id: string;
+  name: string;
+  slug: string;
+  role: 'owner' | 'member';
+};
+
+export type ApiWorkflow = {
+  id: string;
+  name: string;
+  ownerId: string;
+  ownerName?: string;
+  defaultAssigneeId: string | null;
+  defaultAssigneeIds?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ApiBoardColumn = {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  cards: Array<{
+    id: string;
+    customerName: string;
+    customerWa: string;
+    product: string | null;
+    tag: string | null;
+    assigneeId: string | null;
+    assigneeName: string | null;
+    stageId: string;
+    checklistDone: number;
+    checklistTotal: number;
+    waErrorFlag?: boolean;
+    createdAt: string;
+  }>;
+};
+
+export type ApiCardDetail = {
+  card: {
+    id: string;
+    product: string | null;
+    tag: string | null;
+    assigneeId: string | null;
+    stageId: string;
+    customerId: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  customer: {
+    id: string;
+    name: string;
+    wa: string;
+  } | null;
+  stage: {
+    id: string;
+    name: string;
+    color: string;
+    position: number;
+  } | null;
+  checklist: Array<{
+    id: string;
+    label: string;
+    required: boolean;
+    done: boolean;
+    position: number;
+  }>;
+  assigneeName: string | null;
+  nextStage: { id: string; name: string; color: string; position: number } | null;
+  nextWorkflow?: { id: string; name: string } | null;
+  waErrorFlag?: boolean;
+  waFollowupsStopped?: boolean;
+};
+
+export type ApiWorkflowDraft = {
+  name: string;
+  stages: Array<{
+    name: string;
+    color?: string;
+    onReplyNotify?: boolean;
+    overdueReminderHours?: number | null;
+    checklists: Array<{
+      label: string;
+      required?: boolean;
+      action?: ApiChecklistAction;
+    }>;
+  }>;
+};
+
+export type ApiChecklistAction = {
+  kind: 'none' | 'send' | 'followup';
+  messageTemplate: string | null;
+  delayMinutes: number;
+  followupIfNoReply: boolean;
+};
+
+export type ApiWorkflowSetupStage = {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  onReplyNotify?: boolean;
+  overdueReminderHours?: number | null;
+  nextWorkflowId?: string | null;
+  templates: Array<{
+    id: string;
+    label: string;
+    required: boolean;
+    position: number;
+    action?: ApiChecklistAction;
+  }>;
+};
+
+export type ApiNotification = {
+  id: string;
+  type: 'wa_failed' | 'customer_replied' | 'card_overdue';
+  title: string;
+  body: string;
+  cardId: string | null;
+  read: boolean;
+  createdAt: string;
+};
+
+export type ApiWaitingActionCard = {
+  cardId: string;
+  workflowId: string;
+  workflowName: string;
+  customerName: string;
+  customerWa: string;
+  stageName: string;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  waErrorFlag: boolean;
+  waFollowupsStopped: boolean;
+  product: string | null;
+  tag: string | null;
+};
+
+export type ApiDashboardStats = {
+  pending: number;
+  progress: number;
+  waiting: number;
+  done: number;
+  totalCustomers?: number;
+};
+
+export type ApiWorkspaceMember = {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  role: 'owner' | 'member';
+  joinedAt: string;
+};
+
+export type MeResponse = {
+  user: ApiUser;
+  workspace: ApiWorkspace | null;
 };
 
 export class ApiError extends Error {
@@ -59,14 +221,14 @@ export const api = {
   get: <T>(path: string, fetchFn?: FetchLike) => request<T>(path, { fetch: fetchFn }),
 
   register: (body: { email: string; name: string; password: string }, fetchFn?: FetchLike) =>
-    request<{ user: ApiUser }>('/auth/register', {
+    request<MeResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(body),
       fetch: fetchFn
     }),
 
   login: (body: { email: string; password: string }, fetchFn?: FetchLike) =>
-    request<{ user: ApiUser }>('/auth/login', {
+    request<MeResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(body),
       fetch: fetchFn
@@ -75,7 +237,7 @@ export const api = {
   logout: (fetchFn?: FetchLike) =>
     request<{ ok: true }>('/auth/logout', { method: 'POST', fetch: fetchFn }),
 
-  me: (fetchFn?: FetchLike) => request<{ user: ApiUser }>('/auth/me', { fetch: fetchFn }),
+  me: (fetchFn?: FetchLike) => request<MeResponse>('/auth/me', { fetch: fetchFn }),
 
   listUsers: (fetchFn?: FetchLike) => request<{ users: ApiUser[] }>('/users', { fetch: fetchFn }),
 
@@ -113,5 +275,366 @@ export const api = {
     const payload = await res.json();
     if (!res.ok) throw new ApiError(res.status, payload.error || 'Upload failed');
     return payload as { ok: true; avatarUrl: string };
-  }
+  },
+
+  listWorkspaceMembers: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ members: ApiWorkspaceMember[] }>(`/workspaces/${workspaceId}/members`, {
+      fetch: fetchFn
+    }),
+
+  listWorkspaces: (fetchFn?: FetchLike) =>
+    request<{
+      workspaces: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        role: 'owner' | 'member';
+        joinedAt: string;
+      }>;
+    }>('/workspaces', { fetch: fetchFn }),
+
+  switchWorkspace: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true; workspace: ApiWorkspace }>(`/workspaces/${workspaceId}/switch`, {
+      method: 'POST',
+      fetch: fetchFn
+    }),
+
+  createWorkspaceInvite: (
+    workspaceId: string,
+    body: { email: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ invite: { id: string; email: string; token: string; expiresAt: string } }>(
+      `/workspaces/${workspaceId}/invites`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  listWorkspaceInvites: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{
+      invites: Array<{ id: string; email: string; role: string; expiresAt: string; createdAt: string }>;
+    }>(`/workspaces/${workspaceId}/invites`, { fetch: fetchFn }),
+
+  removeWorkspaceMember: (workspaceId: string, userId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/members/${userId}`, {
+      method: 'DELETE',
+      fetch: fetchFn
+    }),
+
+  getInvite: (token: string, fetchFn?: FetchLike) =>
+    request<{
+      invite: { email: string; workspaceName: string; role: string; expiresAt: string };
+    }>(`/workspaces/invites/${token}`, { fetch: fetchFn }),
+
+  acceptInvite: (token: string, fetchFn?: FetchLike) =>
+    request<{ ok: true; workspaceId: string; alreadyMember: boolean }>(
+      '/workspaces/invites/accept',
+      { method: 'POST', body: JSON.stringify({ token }), fetch: fetchFn }
+    ),
+
+  updateWorkspace: (workspaceId: string, body: { name: string }, fetchFn?: FetchLike) =>
+    request<{ workspace: ApiWorkspace }>(`/workspaces/${workspaceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  listWorkflows: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ workflows: ApiWorkflow[] }>(`/workspaces/${workspaceId}/workflows`, { fetch: fetchFn }),
+
+  createWorkflow: (
+    workspaceId: string,
+    body: {
+      name: string;
+      ownerId?: string;
+      defaultAssigneeId?: string | null;
+      defaultAssigneeIds?: string[];
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ workflow: ApiWorkflow }>(`/workspaces/${workspaceId}/workflows`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  generateWorkflowDraft: (workspaceId: string, body: { prompt: string }, fetchFn?: FetchLike) =>
+    request<{ draft: ApiWorkflowDraft; provider: 'openai' | 'heuristic' }>(
+      `/workspaces/${workspaceId}/workflows/ai/draft`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  saveWorkflowDraft: (workspaceId: string, body: ApiWorkflowDraft, fetchFn?: FetchLike) =>
+    request<{
+      workflow: ApiWorkflow;
+      stages: Array<{ id: string; name: string; color: string; position: number }>;
+    }>(`/workspaces/${workspaceId}/workflows/ai/save`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  getWorkflowBoard: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
+    request<{ board: { columns: ApiBoardColumn[] } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/board`,
+      { fetch: fetchFn }
+    ),
+
+  getWorkflowSetup: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
+    request<{ stages: ApiWorkflowSetupStage[] }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/setup`,
+      { fetch: fetchFn }
+    ),
+
+  getWorkflowStats: (workspaceId: string, workflowId?: string, fetchFn?: FetchLike) =>
+    request<{ stats: ApiDashboardStats }>(
+      `/workspaces/${workspaceId}/workflows/stats${workflowId ? `?workflowId=${workflowId}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  listWaitingAction: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ cards: ApiWaitingActionCard[] }>(
+      `/workspaces/${workspaceId}/workflows/waiting-action`,
+      { fetch: fetchFn }
+    ),
+
+  bulkReassignCards: (
+    workspaceId: string,
+    body: { cardIds: string[]; assigneeId: string | null },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ updated: number }>(`/workspaces/${workspaceId}/workflows/cards/bulk-assign`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  createCard: (
+    workspaceId: string,
+    workflowId: string,
+    body: {
+      name: string;
+      wa: string;
+      product?: string;
+      tag?: string;
+      assigneeId?: string | null;
+      source?: 'manual' | 'csv' | 'mcp' | 'estafet';
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ card: { id: string }; customer: { id: string; name: string; wa: string } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        fetch: fetchFn
+      }
+    ),
+
+  importCardsCsv: (
+    workspaceId: string,
+    workflowId: string,
+    body: { csv: string; mode?: 'skip' | 'update' },
+    fetchFn?: FetchLike
+  ) =>
+    request<{
+      result: { created: number; skipped: number; updated: number; errors: Array<{ row: number; reason: string }> };
+    }>(`/workspaces/${workspaceId}/workflows/${workflowId}/cards/import`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  updateCardAssignee: (
+    workspaceId: string,
+    workflowId: string,
+    cardId: string,
+    body: { assigneeId: string | null },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ card: { id: string; assigneeId: string | null } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}/assignee`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  getCardDetail: (workspaceId: string, workflowId: string, cardId: string, fetchFn?: FetchLike) =>
+    request<{ detail: ApiCardDetail }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}`,
+      { fetch: fetchFn }
+    ),
+
+  moveCard: (
+    workspaceId: string,
+    workflowId: string,
+    cardId: string,
+    body: { stageId: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ card: { id: string; stageId: string } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}/move`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  relayCard: (workspaceId: string, workflowId: string, cardId: string, fetchFn?: FetchLike) =>
+    request<{
+      sourceCardId: string;
+      card: { id: string };
+      workflow: { id: string; name: string };
+    }>(`/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}/relay`, {
+      method: 'POST',
+      fetch: fetchFn
+    }),
+
+  toggleChecklistItem: (
+    workspaceId: string,
+    workflowId: string,
+    cardId: string,
+    itemId: string,
+    body: { done: boolean },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ item: { id: string; done: boolean } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}/checklist/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateWorkflow: (
+    workspaceId: string,
+    workflowId: string,
+    body: {
+      name?: string;
+      ownerId?: string;
+      defaultAssigneeId?: string | null;
+      defaultAssigneeIds?: string[];
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ workflow: ApiWorkflow }>(`/workspaces/${workspaceId}/workflows/${workflowId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  createStage: (
+    workspaceId: string,
+    workflowId: string,
+    body: { name: string; color?: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ stage: { id: string } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateStage: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    body: {
+      name?: string;
+      color?: string;
+      onReplyNotify?: boolean;
+      overdueReminderHours?: number | null;
+      nextWorkflowId?: string | null;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ stage: { id: string; name: string; color: string } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteStage: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  reorderStages: (
+    workspaceId: string,
+    workflowId: string,
+    body: { stageIds: string[] },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ stages: ApiWorkflowSetupStage[] }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/reorder`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  createChecklistTemplate: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    body: { label: string; required?: boolean },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ template: { id: string } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/templates`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateChecklistTemplate: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    templateId: string,
+    body: { label?: string; required?: boolean },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ template: { id: string; label: string; required: boolean } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/templates/${templateId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateChecklistAction: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    templateId: string,
+    body: {
+      kind: 'none' | 'send' | 'followup';
+      messageTemplate?: string | null;
+      delayMinutes?: number;
+      followupIfNoReply?: boolean;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ action: ApiChecklistAction }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/templates/${templateId}/action`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteChecklistTemplate: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    templateId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/templates/${templateId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  listNotifications: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ notifications: ApiNotification[]; unread: number }>(
+      `/workspaces/${workspaceId}/notifications`,
+      { fetch: fetchFn }
+    ),
+
+  markNotificationRead: (workspaceId: string, notificationId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+      fetch: fetchFn
+    }),
+
+  markAllNotificationsRead: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/notifications/read-all`, {
+      method: 'POST',
+      fetch: fetchFn
+    })
 };
