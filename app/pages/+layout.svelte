@@ -7,6 +7,7 @@
   import { gsap } from 'gsap';
   import { ScrollTrigger } from 'gsap/ScrollTrigger';
   import Lenis from 'lenis';
+  import { ModeWatcher } from 'mode-watcher';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
 
@@ -43,6 +44,7 @@
   });
 </script>
 
+<ModeWatcher />
 <div class="flex min-h-screen flex-col bg-canvas text-body">
   {#if isDashboard || isDesignSystem || isAuth}
     {@render children()}

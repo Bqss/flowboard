@@ -159,6 +159,79 @@
   -webkit-font-smoothing: antialiased;
 }
 
+[data-theme='app'].dark,
+.dark [data-theme='app'] {
+  color-scheme: dark;
+
+  /* Brand & action */
+  --color-primary: #818cf8;
+  --color-primary-hover: #6366f1;
+  --color-primary-pressed: #4f46e5;
+  --color-primary-soft: #1e1b4b;
+  --color-primary-soft-hover: #312e81;
+  --color-primary-border: #6366f1;
+  --color-primary-ink: #c7d2fe;
+  --color-on-primary: #ffffff;
+
+  /* Surfaces */
+  --color-canvas: #0f172a;
+  --color-canvas-sunken: #0b1220;
+  --color-lane: #111c2f;
+  --color-lane-dropzone: #1e1b4b;
+  --color-card: #172033;
+  --color-hairline: #26364d;
+  --color-hairline-strong: #3b4d68;
+  --color-ring-hover: #64748b;
+  --color-ring-active: #94a3b8;
+
+  /* Text */
+  --color-ink: #f8fafc;
+  --color-ink-soft: #e2e8f0;
+  --color-body: #cbd5e1;
+  --color-mute: #94a3b8;
+  --color-faint: #64748b;
+
+  /* Status */
+  --color-status-queued: #818cf8;
+  --color-status-queued-soft: #1e1b4b;
+  --color-status-queued-ink: #c7d2fe;
+  --color-status-progress: #fbbf24;
+  --color-status-progress-strong: #f59e0b;
+  --color-status-progress-soft: #3a2c0b;
+  --color-status-progress-ink: #fcd34d;
+  --color-status-done: #4ade80;
+  --color-status-done-strong: #22c55e;
+  --color-status-done-soft: #0f2e1b;
+  --color-status-done-ink: #86efac;
+  --color-status-urgent: #fb7185;
+  --color-status-urgent-strong: #f43f5e;
+  --color-status-urgent-soft: #3a1320;
+  --color-status-urgent-ink: #fda4af;
+  --color-status-idle: #64748b;
+  --color-status-idle-soft: #1e293b;
+  --color-status-idle-ink: #cbd5e1;
+  --color-presence-online: #4ade80;
+  --color-positive: #4ade80;
+  --color-negative: #fb7185;
+  --color-warning: #fbbf24;
+  --color-info: #818cf8;
+
+  /* Shadows & focus */
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.32), 0 8px 24px rgba(0, 0, 0, 0.24);
+  --shadow-card-drag: 0 12px 32px rgba(0, 0, 0, 0.42);
+  --shadow-primary: 0 4px 12px rgba(99, 102, 241, 0.32);
+  --shadow-popover: 0 8px 28px rgba(0, 0, 0, 0.42);
+  --shadow-raised: var(--shadow-popover);
+  --shadow-modal: var(--shadow-popover);
+  --focus: rgba(129, 140, 248, 0.38);
+  --overlay-scrim: rgba(2, 6, 23, 0.72);
+
+  background: var(--color-canvas);
+  color: var(--color-body);
+}
+
 [data-theme='app'] :focus-visible:not(input):not(textarea):not(select) {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
