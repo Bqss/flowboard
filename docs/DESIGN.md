@@ -431,7 +431,7 @@ Geometry is uniformly soft: nothing in the system has a sharp corner. Cards are 
 
 ## Colors
 
-> **Source screenshots:** `reference/image.png` (list-lane board with label bars, perspective render), `reference/image copy.png` (three-lane board with filled trays — the canonical desktop reference), `reference/image copy 2.png` (three mobile viewports). Sampled directly from pixels; the palette resolves almost exactly onto Tailwind's default ramp, which makes it reproducible without custom color math.
+> **Source screenshots:** `../reference/image.png` (list-lane board with label bars, perspective render), `../reference/image copy.png` (three-lane board with filled trays — the canonical desktop reference), `../reference/image copy 2.png` (three mobile viewports). Sampled directly from pixels; the palette resolves almost exactly onto Tailwind's default ramp, which makes it reproducible without custom color math.
 
 ### Brand & Action
 - **Primary** (`{colors.primary}` — `#4f46e5`, Tailwind `indigo-600`): the single brand action. Carries `{component.button-primary}`, the queued lane's "Add New Task" pill, the active tab label and underline, the active rail icon, and the selection ring on a focused card.
@@ -476,7 +476,7 @@ The lane's own "Add" pill inherits its lane hue: indigo in the queued lane, ambe
 **Presence** (`{colors.presence-online}` — `#22c55e`): 8px dot at the bottom-right of an avatar, ringed 2px in `{colors.canvas}`.
 
 ### Brand Aurora (marketing / auth / empty states only)
-A vertical violet wash from white down to saturated indigo, sampled from `reference/image copy 2.png`: `{colors.aurora-0}` #ffffff → `{colors.aurora-1}` #f3eefd → `{colors.aurora-2}` #d9c6fa → `{colors.aurora-3}` #9e76f8 → `{colors.aurora-4}` #6c49f7 → `{colors.aurora-5}` #4f46e5.
+A vertical violet wash from white down to saturated indigo, sampled from `../reference/image copy 2.png`: `{colors.aurora-0}` #ffffff → `{colors.aurora-1}` #f3eefd → `{colors.aurora-2}` #d9c6fa → `{colors.aurora-3}` #9e76f8 → `{colors.aurora-4}` #6c49f7 → `{colors.aurora-5}` #4f46e5.
 
 Use it for the login/register split panel, a marketing hero backdrop, or a large empty-state illustration ground. **Never** behind a board, a lane, or a card — the working surface stays white.
 
@@ -855,7 +855,7 @@ Landing uses **`app/lib/components/landing/`** + [`DESIGN.landing.md`](./DESIGN.
 - `{shadow.card-drag}` + 1px `{colors.ring-active}` ring + `scale(1.02)`. The origin slot leaves a `{rounded.xl}` dashed `{colors.primary-border}` placeholder at the card's height.
 
 **`task-card-flat`** — for boards on a white background (no lane tray)
-- Same card, but **add** a 1px `{colors.hairline}` border and soften the shadow to `{shadow.control}`. Lanes in this layout are separated by 1px vertical `{colors.hairline}` rules instead of trays. Used by list-style board views (`reference/image.png`).
+- Same card, but **add** a 1px `{colors.hairline}` border and soften the shadow to `{shadow.control}`. Lanes in this layout are separated by 1px vertical `{colors.hairline}` rules instead of trays. Used by list-style board views (`../reference/image.png`).
 
 ### Badges, Pills & Chips
 
@@ -1032,7 +1032,7 @@ Rules that follow from the table:
 - **Left rail → bottom tab bar** at tablet: 64px tall, `{colors.card}`, 1px `{colors.hairline}` top rule, `{component.rail-item-active}` tinting unchanged.
 - **Board** at mobile: one lane per viewport at `scroll-snap-type: x mandatory`, with a lane-position indicator (dots in status hues) under the tab strip. Lane trays keep `{rounded.2xl}` and 16px padding.
 - **View tabs → segmented control** at mobile, horizontally scrollable, active segment filled `{colors.lane}`.
-- **Topbar** at mobile: logo tile + wordmark left, `Menu01Icon` right. Breadcrumbs collapse to the last crumb only. The action cluster (notification / invite / share / avatar) moves onto its own row beneath the page title as a 40px icon-button row — as in `reference/image copy 2.png`.
+- **Topbar** at mobile: logo tile + wordmark left, `Menu01Icon` right. Breadcrumbs collapse to the last crumb only. The action cluster (notification / invite / share / avatar) moves onto its own row beneath the page title as a 40px icon-button row — as in `../reference/image copy 2.png`.
 - **Detail drawer → full-screen sheet** at mobile, `{rounded.3xl}` top corners only, with a 4px × 40px `{colors.hairline-strong}` drag handle centered at the top.
 - **Modal → bottom sheet** at mobile.
 

@@ -8,13 +8,13 @@ Read in this order:
 
 1. **[CODEMAP.md](./CODEMAP.md)** — codebase topology in one read.
 2. **This file** — conventions, anti-patterns, dependency policy.
-3. **[DESIGN.md](./DESIGN.md)** — the design system for the app UI (light kanban workspace). Read before writing any markup.
+3. **[docs/DESIGN.md](./docs/DESIGN.md)** — the design system for the app UI (light kanban workspace). Read before writing any markup.
 4. **[`routes/`](./routes/)** — API routes.
 5. **[`app/pages/`](./app/pages/)** — SvelteKit frontend routes.
 6. **[`.agents/skills/SKILL.md`](./.agents/skills/SKILL.md)** — skill index.
 7. **`/design-system`** — live component showcase (browse before building UI).
 
-> **Two design systems, no crossover.** [`DESIGN.md`](./DESIGN.md) governs the authenticated app (light canvas, indigo `#4f46e5`, Hugeicons stroke-rounded, derived from `reference/`). [`DESIGN.landing.md`](./DESIGN.landing.md) governs the dark marketing landing page that the starter shipped with. Never mix their tokens in one screen.
+> **Two design systems, no crossover.** [`docs/DESIGN.md`](./docs/DESIGN.md) governs the authenticated app (light canvas, indigo `#4f46e5`, Hugeicons stroke-rounded, derived from `reference/`). [`docs/DESIGN.landing.md`](./docs/DESIGN.landing.md) governs the dark marketing landing page. Never mix their tokens in one screen.
 
 ## Overview
 
@@ -41,7 +41,7 @@ AI-first TypeScript full-stack starter kit. Functions over classes, Drizzle ORM 
 
 ## Frontend — Component Library
 
-**110+ Svelte components** live in `app/lib/components/`. They implement [`DESIGN.md`](./DESIGN.md) tokens and patterns. **Do not build UI from scratch** when a component already exists.
+**110+ Svelte components** live in `app/lib/components/`. They implement [`docs/DESIGN.md`](./docs/DESIGN.md) tokens and patterns. **Do not build UI from scratch** when a component already exists.
 
 ### Showcase (browse before coding)
 
@@ -99,8 +99,8 @@ See `app/pages/dashboard/+layout.svelte` and `app/pages/design-system/+layout.sv
 
 | Surface | Components | Design doc |
 |---|---|---|
-| Marketing (`/`, login chrome) | `app/lib/components/landing/` | [`DESIGN.landing.md`](./DESIGN.landing.md) |
-| App (`/dashboard`, `/design-system`) | `app/lib/components/{atoms,molecules,organisms}/` | [`DESIGN.md`](./DESIGN.md) |
+| Marketing (`/`, login chrome) | `app/lib/components/landing/` | [`docs/DESIGN.landing.md`](./docs/DESIGN.landing.md) |
+| App (`/dashboard`, `/design-system`) | `app/lib/components/{atoms,molecules,organisms}/` | [`docs/DESIGN.md`](./docs/DESIGN.md) |
 
 Never mix landing dark tokens with app light tokens on the same screen.
 

@@ -1,9 +1,9 @@
 ---
 version: alpha
-name: Raycast-design-analysis
-属于: A dark-canvas developer-tools system that treats the marketing page like an extended product screenshot — pure-near-black background, command-palette mockups as the hero, Inter typography with the ss03 stylistic set turned on, and a single white CTA pill that doesn't break the inky atmosphere. The chrome reads like Raycast's own command-palette UI scaled up to a marketing page: monochrome dark surfaces with a faint surface ladder (#07080a → #0d0d0d → #101111), tight 6–10px radius on cards, hairline 1px borders in #242728, and rare splashes of saturated accent (Hacker News yellow, Slack red, Mac green, info blue) reserved for product-tile category illustrations. The signature visual moment is a red gradient hero wordmark — three diagonal red stripes laid across the very top of the home page like a launch-banner — paired with full-bleed product UI screenshots that show Raycast's actual command palette, store, and AI chat surfaces.
+name: Flowboard-marketing-system
+belongs: A dark-canvas customer-operations system that treats the marketing page like an operating console: near-black surfaces, command-palette product visuals, hairline borders, Inter typography with ss03, and a restrained white CTA. Flowboard uses the visual language for customer onboarding rather than developer tooling.
 description: |
-  Raycast's marketing system reads like an extended product screenshot. The chrome IS the in-product chrome at marketing scale: pure-near-black canvas, hairline 1px borders, command-palette-style cards, Inter typography with the ss03 stylistic set enabled site-wide, white CTA pill, and a small set of saturated category accent colors (yellow / red / green / blue) reserved for extension and feature illustrations. Section rhythm is generous (~96px) but the page never breaks tonal continuity — the whole site sits in one continuous dark mode.
+  Flowboard's marketing system treats the landing page like an operating console for customer onboarding: near-black canvas by default, optional light mode, hairline borders, command-palette product visuals, Inter typography with ss03 enabled, a single primary CTA, and restrained category accents. Section rhythm stays generous (~96px) while the page keeps one continuous theme at a time.
 
 colors:
   primary: "#ffffff"
@@ -383,6 +383,11 @@ The design philosophy is "the marketing page is the product." Section rhythm is 
 - **Hero Stripe Gradient** — three diagonal red stripes layered across the very top of the home page hero, fading from `{colors.hero-stripe-start}` (`#ff5757`) to `{colors.hero-stripe-end}` (`#a1131a`). The system's only chromatic gradient on chrome — used once per page maximum and reserved for hero launch-banner moments.
 - **Keycap Gradient** — the small key-glyph background uses a subtle linear-gradient from `{colors.key-bg-start}` (`#121212`) to `{colors.key-bg-end}` (`#0d0d0d`) that gives Raycast's keycap UI its slight 3D-key feel.
 
+### Theme toggle extension
+The landing defaults to the documented dark surface ladder. A global theme control can switch the entire marketing surface to light mode; it never mixes themes within one section.
+
+Light mode keeps the same hierarchy with a light canvas (`#f8fafc`), white surfaces, slate hairlines, near-black primary CTA, and darker semantic accent ramps. The mode is applied by `mode-watcher` on the root `<html>` element and persisted across routes.
+
 ## Typography
 
 ### Font Family
@@ -598,19 +603,19 @@ There is no traditional photography. Visual elements are limited to:
 ## Do's and Don'ts
 
 ### Do
-- Render the entire site in one continuous dark mode. There is no light variant in the system.
-- Use `{colors.primary}` (white pill) for every primary CTA. There is no second primary color — white IS the brand action.
+- Render the marketing surface in one continuous theme at a time. Dark is the default; the user can switch the full landing surface to light mode with the theme control.
+- Use one primary CTA per fold. Dark mode uses the white pill; light mode uses the near-black pill.
 - Build elevation from the surface-color ladder (`{colors.canvas}` → `{colors.surface}` → `{colors.surface-elevated}` → `{colors.surface-card}`), never from drop shadows.
 - Enable `font-feature-settings: "calt", "kern", "liga", "ss03"` on the body element. The ss03 alternate `g` is part of the brand identity.
-- Anchor a `{component.command-palette-card}` mockup as the hero's load-bearing visual. Real Raycast UI is the brand.
+- Anchor a `{component.command-palette-card}` mockup as the hero's load-bearing visual. The Flowboard command palette is the product artifact.
 - Use `{component.keycap}` glyphs inline to indicate keyboard shortcuts. Subtle key-bg gradient (`{colors.key-bg-start}` → `{colors.key-bg-end}`) is the brand's only "depth" decoration.
 - Reserve `{colors.hero-stripe-start}` → `{colors.hero-stripe-end}` red gradient for the hero band exactly once per page. Never repeat the stripe gradient deeper in the page.
 - Use saturated category accents (`{colors.accent-yellow}`, `{colors.accent-red}`, `{colors.accent-green}`, `{colors.accent-blue}`) only inside extension and feature illustrations — never on chrome buttons or text.
 
 ### Don't
-- Don't introduce a light mode. The system is dark-only by design.
+- Don't mix light and dark tokens within one surface or switch themes per section.
 - Don't add drop shadows on cards. Elevation is built from the surface ladder, not from shadows.
-- Don't replace `{colors.primary}` (white) with a tinted accent for the primary CTA. Pure white is the brand action color.
+- Don't introduce a second competing primary color. Keep the CTA white in dark mode and near-black in light mode.
 - Don't use the saturated accent colors (`{colors.accent-yellow}`, `{colors.accent-red}`, `{colors.accent-green}`, `{colors.accent-blue}`) on text, buttons, or chrome surfaces. They belong inside extension illustrations.
 - Don't repeat the hero stripe gradient outside the top hero band. The one-band rule is the system's restraint.
 - Don't use Inter without the `ss03` feature flag enabled. The chrome will lose its signature voice.

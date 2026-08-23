@@ -17,7 +17,7 @@
   let dims = $derived(
     {
       sm: { box: 18, gap: 'gap-2', text: 'text-[15px]' },
-      md: { box: 22, gap: 'gap-2.5', text: 'text-[17px]' },
+      md: { box: 22, gap: 'gap-2.5', text: 'text-base' },
       lg: { box: 30, gap: 'gap-3', text: 'text-2xl' }
     }[size]
   );
@@ -30,8 +30,8 @@
       style={`width: ${dims.box}px; height: ${dims.box}px`}
       aria-hidden="true"
     >
-      <span class="h-1/2 flex-1 rounded-sm bg-accent-blue"></span>
-      <span class="h-2/3 flex-1 rounded-sm bg-accent-green"></span>
+      <span class="h-1/2 flex-1 rounded-sm bg-charcoal"></span>
+      <span class="h-2/3 flex-1 rounded-sm bg-ash"></span>
       <span class="h-full flex-1 rounded-sm bg-ink"></span>
     </span>
     <span>flowboard</span>

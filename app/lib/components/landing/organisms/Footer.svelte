@@ -3,27 +3,27 @@
 
   const columns = [
     {
-      title: 'Produk',
+      title: 'Product',
       links: [
-        { label: 'Fitur', href: '#features' },
-        { label: 'Cara kerja', href: '#how-it-works' },
-        { label: 'Contoh alur', href: '#use-cases' }
+        { label: 'Features', href: '#features' },
+        { label: 'How it works', href: '#how-it-works' },
+        { label: 'Example journey', href: '#use-cases' }
       ]
     },
     {
-      title: 'Untuk tim',
+      title: 'For teams',
       links: [
-        { label: 'Webinar', href: '#use-cases' },
-        { label: 'Onboarding pelanggan', href: '#use-cases' },
-        { label: 'Follow-up operasional', href: '#features' }
+        { label: 'Webinars', href: '#use-cases' },
+        { label: 'Customer onboarding', href: '#use-cases' },
+        { label: 'Operational follow-up', href: '#features' }
       ]
     },
     {
       title: 'Workspace',
       links: [
-        { label: 'Masuk', href: '/login' },
-        { label: 'Mulai gratis', href: '/register' },
-        { label: 'Buka dashboard', href: '/dashboard' }
+        { label: 'Sign in', href: '/login' },
+        { label: 'Start free', href: '/register' },
+        { label: 'Open dashboard', href: '/dashboard' }
       ]
     }
   ];
@@ -35,7 +35,7 @@
       <div>
         <Logo />
         <p class="mt-4 max-w-xs text-sm leading-relaxed text-mute">
-          Customer onboarding yang rapi: setiap card punya proses, setiap staff tahu langkah berikutnya.
+          Customer onboarding that stays organized: every card has a process, and every staff member knows the next step.
         </p>
       </div>
 
@@ -58,7 +58,7 @@
     <div
       class="mt-14 flex flex-col gap-4 border-t border-hairline pt-8 text-[13px] text-ash sm:flex-row sm:items-center sm:justify-between"
     >
-      <span>© {new Date().getFullYear()} Flowboard. Dibuat untuk tim yang tidak mau kehilangan pelanggan.</span>
+      <span>© {new Date().getFullYear()} Flowboard. Built for teams that refuse to lose customers.</span>
       <span>Workflow · Checklist · Follow-up</span>
     </div>
   </div>

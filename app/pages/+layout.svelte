@@ -44,7 +44,7 @@
   });
 </script>
 
-<ModeWatcher />
+<ModeWatcher themeColors={{ dark: '#07080a', light: '#f8fafc' }} />
 <div class="flex min-h-screen flex-col bg-canvas text-body">
   {#if isDashboard || isDesignSystem || isAuth}
     {@render children()}

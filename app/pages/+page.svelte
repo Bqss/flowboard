@@ -10,10 +10,10 @@
 </script>
 
 <svelte:head>
-  <title>Flowboard — Customer onboarding yang tidak terlewat</title>
+  <title>Flowboard — Customer onboarding without blind spots</title>
   <meta
     name="description"
-    content="Flowboard membantu tim menjalankan customer onboarding dengan workflow, checklist, reminder, dan WhatsApp automation yang terlihat jelas."
+    content="Flowboard gives every customer a clear path from intake to completion with workflows, checklists, reminders, and WhatsApp automation in one workspace."
   />
 </svelte:head>
 

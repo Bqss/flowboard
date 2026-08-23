@@ -48,7 +48,7 @@
 
   const variants: Record<Variant, string> = {
     primary:
-      'bg-primary text-on-primary hover:bg-primary-pressed active:bg-primary-pressed shadow-[0_1px_0_rgba(255,255,255,0.4)_inset,0_8px_30px_-12px_rgba(255,255,255,0.5)] hover:-translate-y-px',
+      'bg-primary text-on-primary hover:bg-primary-pressed active:bg-primary-pressed',
     secondary: 'bg-transparent text-ink hover:bg-white/5',
     tertiary: 'bg-elevated text-ink hover:bg-card border border-hairline',
     outline: 'bg-transparent text-ink border border-hairline-strong hover:bg-white/5'

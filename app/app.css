@@ -2,7 +2,7 @@
 @import './ds.css';
 
 /* ------------------------------------------------------------------ *
- * Narko design system — a dark-canvas developer-tools aesthetic.
+ * Flowboard marketing system — a dark-canvas product workspace aesthetic.
  * Inter with the ss03 stylistic set enabled site-wide; elevation is
  * built purely from a 4-step surface ladder (no drop shadows); a single
  * white pill is the universal primary action. Tokens map 1:1 to
@@ -59,6 +59,36 @@
 
 :root {
   color-scheme: dark;
+  --focus: rgba(255, 255, 255, 0.35);
+}
+
+:root:not(.dark) {
+  color-scheme: light;
+
+  --color-primary: #0f172a;
+  --color-primary-pressed: #1e293b;
+  --color-on-primary: #ffffff;
+  --color-canvas: #f8fafc;
+  --color-surface: #ffffff;
+  --color-elevated: #f1f5f9;
+  --color-card: #ffffff;
+  --color-button-fg: #ffffff;
+  --color-hairline: #e2e8f0;
+  --color-hairline-soft: rgba(15, 23, 42, 0.08);
+  --color-hairline-strong: rgba(15, 23, 42, 0.16);
+  --color-ink: #0f172a;
+  --color-body: #334155;
+  --color-charcoal: #475569;
+  --color-mute: #64748b;
+  --color-ash: #94a3b8;
+  --color-stone: #cbd5e1;
+  --color-accent-blue: #2563eb;
+  --color-accent-red: #dc2626;
+  --color-accent-green: #15803d;
+  --color-accent-yellow: #a16207;
+  --color-stripe-start: #ef4444;
+  --color-stripe-end: #991b1b;
+  --focus: rgba(15, 23, 42, 0.24);
 }
 
 html {
@@ -107,7 +137,7 @@ body {
 }
 
 /* ---- Ambient keyframes used by the landing chrome ---- */
-@keyframes narko-float {
+@keyframes flowboard-float {
   0%,
   100% {
     transform: translateY(0);
@@ -117,7 +147,7 @@ body {
   }
 }
 
-@keyframes narko-fade-up {
+@keyframes flowboard-fade-up {
   from {
     opacity: 0;
     transform: translateY(16px);
@@ -128,7 +158,7 @@ body {
   }
 }
 
-@keyframes narko-shimmer {
+@keyframes flowboard-shimmer {
   0% {
     background-position: -200% 0;
   }
@@ -137,7 +167,7 @@ body {
   }
 }
 
-@keyframes narko-blink {
+@keyframes flowboard-blink {
   0%,
   49% {
     opacity: 1;

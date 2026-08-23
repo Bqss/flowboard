@@ -1,77 +1,74 @@
 <script lang="ts">
-  import FeatureCard from '../molecules/FeatureCard.svelte';
   import { reveal } from '$lib/actions/reveal';
 
-  const features = [
+  const signals = [
     {
-      title: 'Workflow yang jelas',
-      accent: 'blue' as const,
-      body: 'Definisikan stage, owner, checklist, dan aturan proses sekali. Tim menjalankan alur yang sama untuk setiap pelanggan.',
-      path: 'M4 6h16M4 12h10M4 18h16M17 10l3 2-3 2'
+      label: 'Context',
+      title: 'One card, one journey.',
+      body: 'Customer, workflow, assignee, and next step stay together.',
+      meta: 'CUSTOMER',
+      marker: 'bg-accent-blue'
     },
     {
-      title: 'Checklist yang berjalan',
-      accent: 'green' as const,
-      body: 'Langkah required tetap terlihat di dalam card. Progress n/m memberi konteks tanpa membuka spreadsheet lain.',
-      path: 'M5 12l4 4L19 6M4 4h16v16H4z'
+      label: 'Execution',
+      title: 'Required work stays in view.',
+      body: 'Checklists make progress legible before a handoff.',
+      meta: 'CHECKLIST',
+      marker: 'bg-accent-green'
     },
     {
-      title: 'Reminder untuk staff',
-      accent: 'yellow' as const,
-      body: 'Card yang diam berubah menjadi Waiting Action. Assignee tahu siapa yang harus ditindaklanjuti berikutnya.',
-      path: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4'
-    },
-    {
-      title: 'WhatsApp ke pelanggan',
-      accent: 'blue' as const,
-      body: 'Kirim pesan template dan follow-up sesuai stage. Balasan pelanggan bisa memberi handover ke staff.',
-      path: 'M5 5h14v10H9l-4 4zM8 9h8M8 12h5'
-    },
-    {
-      title: 'Satu pelanggan, banyak proses',
-      accent: 'green' as const,
-      body: 'Identitas customer tetap satu, tetapi card bisa berjalan paralel di Webinar, Post Produk, atau workflow lain.',
-      path: 'M6 4h12v5H6zM4 15h7v5H4zM13 15h7v5h-7zM12 9v3M7.5 12h9'
-    },
-    {
-      title: 'Dari masuk sampai selesai',
-      accent: 'red' as const,
-      body: 'Masukkan pelanggan manual, lewat CSV, API, atau estafet. Semua jalur berakhir di createCard yang sama.',
-      path: 'M4 12h16M13 5l7 7-7 7M4 5v14'
+      label: 'Attention',
+      title: 'The system surfaces what is stuck.',
+      body: 'Waiting Action, reminders, and replies point to the next move.',
+      meta: 'SIGNAL',
+      marker: 'bg-accent-red'
     }
   ];
 </script>
 
 <section id="features" class="mx-auto max-w-[1240px] scroll-mt-20 px-6 py-24">
-  <div use:reveal class="reveal max-w-2xl">
-    <p class="text-[13px] font-medium uppercase tracking-[0.18em] text-accent-blue">Fitur inti</p>
-    <h2 class="font-display mt-3 text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-tight text-ink">
-      Operasional yang mengikuti proses.
-    </h2>
-    <p class="mt-4 text-lg leading-relaxed text-mute">
-      Flowboard menyatukan konteks pelanggan, pekerjaan staff, dan automasi follow-up
-      supaya proses tidak berhenti di kepala satu orang.
-    </p>
-  </div>
+  <div class="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-20">
+    <div use:reveal class="reveal max-w-xl">
+      <h2 class="font-display text-[clamp(1.9rem,4vw,3rem)] font-semibold leading-[1.12] tracking-[-0.025em] text-ink">
+        The work is visible before it becomes urgent.
+      </h2>
+      <p class="mt-5 text-lg leading-[1.6] text-mute">
+        Flowboard turns customer operations into a shared view of context, progress,
+        and attention. No status lives in one person’s private notes.
+      </p>
+      <a
+        href="#how-it-works"
+        class="mt-7 inline-flex items-center gap-2 rounded-md px-0 py-2 text-sm font-medium text-ink transition-colors hover:text-charcoal focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus)]"
+      >
+        See the operating rhythm
+        <span aria-hidden="true">→</span>
+      </a>
+    </div>
 
-  <div class="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    {#each features as f, i (f.title)}
-      <FeatureCard title={f.title} accent={f.accent} delay={i * 60}>
-        {#snippet icon()}
-          <span
-            class="flex h-10 w-10 items-center justify-center rounded-md
-              {f.accent === 'red' ? 'bg-accent-red/12 text-accent-red' : ''}
-              {f.accent === 'blue' ? 'bg-accent-blue/12 text-accent-blue' : ''}
-              {f.accent === 'green' ? 'bg-accent-green/12 text-accent-green' : ''}
-              {f.accent === 'yellow' ? 'bg-accent-yellow/12 text-accent-yellow' : ''}"
-          >
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d={f.path} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </span>
-        {/snippet}
-        {f.body}
-      </FeatureCard>
-    {/each}
+    <div use:reveal={80} class="reveal overflow-hidden rounded-xl border border-hairline bg-surface">
+      <div class="flex items-center justify-between gap-4 border-b border-hairline bg-elevated px-5 py-4">
+        <div>
+          <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-ash">Flowboard / customer operations</p>
+          <p class="mt-1 text-sm font-medium text-ink">Signals your team can act on</p>
+        </div>
+        <span class="text-[12px] text-mute">3 signals</span>
+      </div>
+
+      <div class="divide-y divide-hairline">
+        {#each signals as signal}
+          <div class="flex gap-4 px-5 py-6 sm:px-6">
+            <span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full {signal.marker}" aria-hidden="true"></span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-ash">{signal.label}</p>
+                <span class="text-[11px] font-medium tracking-[0.14em] text-ash">{signal.meta}</span>
+              </div>
+              <h3 class="mt-2 text-base font-medium text-ink">{signal.title}</h3>
+              <p class="mt-1.5 max-w-lg text-sm leading-relaxed text-mute">{signal.body}</p>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
   </div>
 </section>
