@@ -8,8 +8,16 @@
   import { ScrollTrigger } from 'gsap/ScrollTrigger';
   import Lenis from 'lenis';
   import { ModeWatcher } from 'mode-watcher';
+  import { initializeLocale, locale, localeToHtmlLang } from '$lib/i18n/index.js';
 
   let { data, children }: { data: LayoutData; children: import('svelte').Snippet } = $props();
+  $effect(() => {
+    initializeLocale();
+
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = localeToHtmlLang($locale);
+    }
+  });
 
   // The landing page is full-bleed and its hero renders behind the fixed nav.
   // Every other route gets top padding to clear the nav and a footer.

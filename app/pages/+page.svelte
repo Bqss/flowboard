@@ -4,17 +4,17 @@
   import HowItWorks from '$lib/components/landing/organisms/HowItWorks.svelte';
   import UseCases from '$lib/components/landing/organisms/UseCases.svelte';
   import CTASection from '$lib/components/landing/organisms/CTASection.svelte';
+  import { locale } from '$lib/i18n/index.js';
+  import { landingCopy } from '$lib/i18n/landing.js';
   import type { LayoutData } from './$types';
 
   let { data }: { data: LayoutData } = $props();
+  const copy = $derived(landingCopy[$locale]);
 </script>
 
 <svelte:head>
-  <title>Flowboard — Make the next handover obvious</title>
-  <meta
-    name="description"
-    content="Flowboard gives customer-onboarding teams a visible path from intake to completion, with the next handover clear for everyone."
-  />
+  <title>{copy.meta.title}</title>
+  <meta name="description" content={copy.meta.description} />
 </svelte:head>
 
 <Hero user={data.user} />

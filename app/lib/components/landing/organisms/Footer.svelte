@@ -1,32 +1,9 @@
 <script lang="ts">
+  import { locale } from '$lib/i18n/index.js';
+  import { landingCopy } from '$lib/i18n/landing.js';
   import Logo from '../atoms/Logo.svelte';
 
-  const columns = [
-    {
-      title: 'Product',
-      links: [
-        { label: 'Features', href: '#features' },
-        { label: 'How it works', href: '#how-it-works' },
-        { label: 'Example journey', href: '#use-cases' }
-      ]
-    },
-    {
-      title: 'For teams',
-      links: [
-        { label: 'Webinars', href: '#use-cases' },
-        { label: 'Customer onboarding', href: '#use-cases' },
-        { label: 'Operational follow-up', href: '#features' }
-      ]
-    },
-    {
-      title: 'Workspace',
-      links: [
-        { label: 'Sign in', href: '/login' },
-        { label: 'Start free', href: '/register' },
-        { label: 'Open dashboard', href: '/dashboard' }
-      ]
-    }
-  ];
+  const copy = $derived(landingCopy[$locale]);
 </script>
 
 <footer class="border-t border-hairline bg-card">
@@ -35,11 +12,11 @@
       <div>
         <Logo />
         <p class="mt-4 max-w-xs text-sm leading-relaxed text-body">
-          Customer operations, kept in view from first intake to final handover.
+          {copy.footer.description}
         </p>
       </div>
 
-      {#each columns as col (col.title)}
+      {#each copy.footer.columns as col (col.title)}
         <div>
           <h4 class="text-sm font-bold text-ink">{col.title}</h4>
           <ul class="mt-4 flex flex-col gap-3">
@@ -59,7 +36,7 @@
       class="mt-14 flex flex-col gap-4 border-t border-hairline pt-8 text-xs font-semibold text-faint sm:flex-row sm:items-center sm:justify-between"
     >
       <span>© {new Date().getFullYear()} Flowboard.</span>
-      <span>Workflow / Checklist / Handover</span>
+      <span>{copy.footer.workflow}</span>
     </div>
   </div>
 </footer>
