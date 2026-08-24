@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { HTMLFormAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { getEmailFieldError, normalizeEmail } from '$lib/email.js';
-	import { Button, Checkbox, Logo } from '$lib/components/atoms/index.js';
+	import { isValidEmail, normalizeEmail } from '$lib/email.js';
+	import { authCopy, type AuthLoginCopy } from '$lib/i18n/auth.js';
+	import { locale } from '$lib/i18n/index.js';
+	import { Button, Checkbox } from '$lib/components/atoms/index.js';
 	import { FormField, PasswordInput } from '$lib/components/molecules/index.js';
 	import { Input as AtomInput } from '$lib/components/atoms/index.js';
 	import { cardShellClass } from './shared.js';
@@ -13,6 +15,7 @@
 		remember?: boolean;
 		loading?: boolean;
 		error?: string;
+		copy?: AuthLoginCopy;
 		title?: string;
 		subtitle?: string;
 		submitLabel?: string;
@@ -28,16 +31,20 @@
 		remember = $bindable(false),
 		loading = false,
 		error,
-		title = 'Masuk ke Flowboard',
-		subtitle = 'Kelola onboarding pelanggan — tanpa pelanggan tercicir.',
-		submitLabel = 'Masuk',
+		copy: copyProp,
+		title,
+		subtitle,
+		submitLabel,
 		onSubmit,
 		class: className,
 		footer,
 		...rest
 	}: Props = $props();
 
-	const emailError = $derived(getEmailFieldError(email));
+	const copy = $derived(copyProp ?? authCopy[$locale].login);
+	const emailError = $derived(
+		email.trim().length > 0 && !isValidEmail(email) ? copy.validation.invalidEmail : null
+	);
 
 	function submit(event: SubmitEvent) {
 		event.preventDefault();
@@ -49,45 +56,69 @@
 <form
 	bind:this={ref}
 	onsubmit={submit}
-	class={cn(cardShellClass, 'mx-auto w-full max-w-md border border-hairline p-6 md:p-8', className)}
+	class={cn(
+		cardShellClass,
+		'relative mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-hairline bg-card p-6 shadow-card md:p-8',
+		className
+	)}
 	{...rest}
 >
-	<div class="mb-6 flex flex-col items-center text-center">
-		<Logo size={44} class="mb-3" />
-		<h1 class="ds-page-title text-ink">{title}</h1>
-		<p class="ds-body mt-1 text-mute">{subtitle}</p>
+	<div class="pointer-events-none absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true"></div>
+
+	<div class="mb-7">
+		<div class="mb-5 flex justify-end">
+			<span class="rounded-full border border-primary-border bg-primary-soft px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-primary-ink">
+				{copy.signal}
+			</span>
+		</div>
+		<p class="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">{copy.eyebrow}</p>
+		<h1 class="font-display mt-2 text-3xl font-extrabold leading-tight tracking-[-0.035em] text-ink">
+			{title ?? copy.title}
+		</h1>
+		<p class="ds-body mt-2 text-mute">{subtitle ?? copy.subtitle}</p>
 	</div>
 
 	<div class="space-y-4">
-		<FormField label="Email" required error={emailError ?? undefined}>
+		<FormField label={copy.fields.email.label} required error={emailError ?? undefined}>
 			{#snippet control(args)}
 				<AtomInput
 					{...args}
 					type="email"
 					bind:value={email}
-					placeholder="nama@perusahaan.com"
+					placeholder={copy.fields.email.placeholder}
 					autocomplete="email"
 					invalid={Boolean(emailError || error)}
 				/>
 			{/snippet}
 		</FormField>
 
-		<FormField label="Kata sandi" required>
+		<FormField label={copy.fields.password.label} required>
 			{#snippet control(args)}
-				<PasswordInput {...args} bind:value={password} placeholder="••••••••" invalid={Boolean(error)} />
+				<PasswordInput
+					{...args}
+					bind:value={password}
+					placeholder={copy.fields.password.placeholder}
+					showPasswordLabel={copy.fields.password.showPassword}
+					hidePasswordLabel={copy.fields.password.hidePassword}
+					invalid={Boolean(error)}
+				/>
 			{/snippet}
 		</FormField>
 
 		{#if error}
-			<p class="ds-caption text-status-urgent">{error}</p>
+			<p class="ds-caption rounded-xl border border-status-urgent/25 bg-status-urgent-soft px-3 py-2.5 text-status-urgent-ink">
+				{error}
+			</p>
 		{/if}
 
 		<label class="flex items-center gap-2.5">
 			<Checkbox bind:checked={remember} />
-			<span class="ds-body text-ink">Ingat saya di perangkat ini</span>
+			<span class="ds-body text-ink">{copy.remember}</span>
 		</label>
 
-		<Button type="submit" variant="primary" class="w-full" {loading}>{submitLabel}</Button>
+		<Button type="submit" variant="primary" class="w-full" {loading}>
+			{submitLabel ?? copy.submitLabel}
+		</Button>
 	</div>
 
 	{#if footer}

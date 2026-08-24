@@ -10,6 +10,12 @@
 		/** `icon` = single circular button; `segmented` = light / dark / system well. */
 		variant?: 'icon' | 'segmented';
 		size?: 'sm' | 'md';
+		labels?: {
+			light: string;
+			dark: string;
+			system: string;
+			group?: string;
+		};
 		class?: string;
 	};
 
@@ -17,6 +23,7 @@
 		ref = $bindable(null),
 		variant = 'icon',
 		size = 'md',
+		labels = { light: 'Terang', dark: 'Gelap', system: 'Sistem', group: 'Tema tampilan' },
 		class: className,
 		...rest
 	}: Props = $props();
@@ -35,8 +42,8 @@
 		bind:this={ref}
 		type="button"
 		onclick={toggleMode}
-		aria-label={isDark ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
-		title={isDark ? 'Mode terang' : 'Mode gelap'}
+		aria-label={isDark ? labels.light : labels.dark}
+		title={isDark ? labels.light : labels.dark}
 		class={cn(
 			'inline-grid shrink-0 place-items-center rounded-full bg-card text-ink shadow-[var(--shadow-card)] transition-colors duration-150 ease-out hover:bg-lane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]',
 			size === 'sm' ? 'size-8' : 'size-10',
@@ -54,7 +61,7 @@
 	<div
 		bind:this={ref}
 		role="radiogroup"
-		aria-label="Tema tampilan"
+		aria-label={labels.group}
 		class={cn('inline-flex w-fit items-center gap-1 rounded-md bg-lane p-1', className)}
 		{...rest}
 	>

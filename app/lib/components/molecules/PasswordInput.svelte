@@ -10,6 +10,8 @@
 		size?: 'sm' | 'md';
 		/** Shows a 4-step sage strength meter under the field. */
 		strength?: boolean;
+		showPasswordLabel?: string;
+		hidePasswordLabel?: string;
 		class?: string;
 	};
 
@@ -19,6 +21,8 @@
 		invalid = false,
 		size = 'md',
 		strength = false,
+		showPasswordLabel = 'Tampilkan kata sandi',
+		hidePasswordLabel = 'Sembunyikan kata sandi',
 		class: className,
 		...rest
 	}: Props = $props();
@@ -57,7 +61,7 @@
 		<button
 			type="button"
 			onclick={() => (visible = !visible)}
-			aria-label={visible ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+			aria-label={visible ? hidePasswordLabel : showPasswordLabel}
 			aria-pressed={visible}
 			class="absolute right-1.5 grid size-7 place-items-center rounded-full text-mute transition-colors hover:bg-primary-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 		>
