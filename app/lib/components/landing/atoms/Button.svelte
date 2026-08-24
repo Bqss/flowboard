@@ -3,11 +3,9 @@
   import type { HTMLButtonAttributes, HTMLAnchorAttributes } from 'svelte/elements';
 
   /**
-   * The Flowboard button. `variant` maps to the DESIGN.landing.md button vocabulary:
-   * - primary   → the universal white CTA pill (scarce: one per fold)
-   * - secondary → transparent text button
-   * - tertiary  → soft surface-elevated fill
-   * - outline   → hairline-bordered "install" pill
+   * The landing action component mirrors the shared dashboard/auth button language:
+   * full pills, indigo primary actions, white secondary surfaces, and semantic
+   * focus/hover states. It keeps landing-specific auth destinations and loading.
    * Renders an <a> when `href` is set, else a <button>.
    */
   type Variant = 'primary' | 'secondary' | 'tertiary' | 'outline';
@@ -38,20 +36,22 @@
   } = $props();
 
   const base =
-    'relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium tracking-[0.01em] transition-all duration-200 select-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-55';
+    'relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold tracking-[-0.005em] transition-all duration-150 ease-out select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 active:scale-[.98] disabled:pointer-events-none disabled:opacity-50';
 
   const sizes: Record<Size, string> = {
-    sm: 'h-8 px-3 text-[13px]',
-    md: 'h-9 px-4 text-sm',
-    lg: 'h-11 px-5 text-[15px]'
+    sm: 'h-9 px-4 text-[13px]',
+    md: 'h-10 px-5 text-sm',
+    lg: 'h-11 px-5 text-[14px]'
   };
 
   const variants: Record<Variant, string> = {
     primary:
-      'bg-primary text-on-primary hover:bg-primary-pressed active:bg-primary-pressed',
-    secondary: 'bg-transparent text-ink hover:bg-white/5',
-    tertiary: 'bg-elevated text-ink hover:bg-card border border-hairline',
-    outline: 'bg-transparent text-ink border border-hairline-strong hover:bg-white/5'
+      'bg-primary text-on-primary shadow-primary hover:bg-primary-hover active:bg-primary-pressed',
+    secondary:
+      'border border-hairline bg-card text-ink-soft hover:border-hairline-strong hover:bg-canvas-sunken',
+    tertiary: 'border border-transparent bg-lane text-ink-soft hover:bg-primary-soft',
+    outline:
+      'border border-hairline-strong bg-card text-ink-soft hover:bg-canvas-sunken'
   };
 
   let cls = $derived(

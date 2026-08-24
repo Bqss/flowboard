@@ -2,15 +2,14 @@
   import type { Snippet } from 'svelte';
 
   /**
-   * Inline keyboard-shortcut glyph. The signature "physical key" feel on a flat
-   * dark canvas — a subtle key-bg gradient (surface-card → surface) with a
-   * hairline edge and a soft top highlight.
+   * Inline keyboard shortcut matching the small rounded controls in the app.
+   * The surface follows the active landing theme.
    */
   let { children }: { children: Snippet } = $props();
 </script>
 
 <kbd
-  class="inline-flex h-5 min-w-5 items-center justify-center rounded-xs border border-hairline bg-gradient-to-b from-[#161616] to-[#0d0d0d] px-1.5 text-[12px] font-medium leading-none text-body shadow-[0_1px_0_rgba(255,255,255,0.06)_inset]"
+  class="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-hairline bg-card px-1.5 font-sans text-[11px] font-bold leading-none text-ink-soft shadow-control"
 >
   {@render children()}
 </kbd>

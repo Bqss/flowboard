@@ -3,27 +3,27 @@
   import Keycap from '../atoms/Keycap.svelte';
 
   let { user = null }: { user?: { name: string } | null } = $props();
+  let traceHandover = $state(false);
+
+  const stages = [
+    { label: 'Intake', detail: 'Customer added', marker: 'bg-accent-blue' },
+    { label: 'Confirm', detail: 'Required checks', marker: 'bg-accent-yellow' },
+    { label: 'Follow-up', detail: 'Reply received', current: true, marker: 'bg-accent-red' },
+    { label: 'Complete', detail: 'Journey closed', marker: 'bg-accent-green' }
+  ];
 </script>
 
 <section class="relative isolate overflow-hidden">
-  <div
-    class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 opacity-90"
-    aria-hidden="true"
-    style="background: repeating-linear-gradient(115deg, transparent 0 58px, color-mix(in srgb, var(--color-accent-red) 48%, transparent) 58px 60px); mask-image: linear-gradient(to bottom, black, transparent);"
-  ></div>
 
-  <div class="mx-auto w-full max-w-[1240px] px-6 pb-24 pt-32 lg:pb-28 lg:pt-40">
-    <div class="grid items-center gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
+  <div class="mx-auto w-full max-w-[1240px] px-6 pb-24 pt-32 lg:pb-32 lg:pt-40">
+    <div class="grid items-start gap-14 lg:grid-cols-[0.78fr_1.22fr] lg:items-center lg:gap-20">
       <div class="flex flex-col items-start">
-
-        <h1 class="font-display mt-0 max-w-2xl text-[clamp(2.75rem,6vw,4rem)] font-semibold leading-[1.08] tracking-[-0.025em] text-ink">
-          Customer onboarding
-          <span class="block text-charcoal">without blind spots.</span>
+        <h1 class="font-display max-w-2xl text-[clamp(2.8rem,6vw,4.25rem)] font-extrabold leading-[1.08] tracking-[-0.04em] text-ink">
+          Make the next handover obvious.
         </h1>
-
-        <p class="mt-6 max-w-xl text-lg leading-[1.6] text-body">
-          Flowboard gives every customer a clear path from intake to completion:
-          workflow, checklist, reminders, and handover in one workspace.
+        <p class="mt-6 max-w-lg text-lg leading-[1.6] text-body">
+          Keep every customer journey moving from intake to completion. Flowboard gives
+          owners the system and staff the next action.
         </p>
 
         <div class="mt-8 flex flex-wrap items-center gap-3">
@@ -32,64 +32,84 @@
           {:else}
             <Button variant="primary" size="lg" href="/register">Start free</Button>
           {/if}
-          <Button variant="secondary" size="lg" href="#how-it-works">See how it works</Button>
+          <Button variant="secondary" size="lg" href="#how-it-works">See how it moves</Button>
         </div>
 
-        <div class="mt-7 flex items-center gap-2 text-[13px] text-mute">
-          <span>Set up workflows in one place</span>
+        <div class="mt-7 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold text-mute">
+          <span>Workflow</span>
+          <span class="text-faint">/</span>
+          <span>Checklist</span>
+          <span class="text-faint">/</span>
+          <span>Handover</span>
           <Keycap>⌘ K</Keycap>
         </div>
       </div>
 
       <div
         role="img"
-        aria-label="Flowboard command palette for customer operations"
-        class="relative overflow-hidden rounded-xl border border-hairline bg-surface"
+        aria-label="Illustrative Flowboard customer handover record"
+        class="relative overflow-hidden rounded-2xl border border-hairline bg-card shadow-card"
       >
-        <div class="flex items-center gap-2 border-b border-hairline bg-elevated px-4 py-3">
-          <span class="h-2.5 w-2.5 rounded-full bg-[#ff5f56]"></span>
-          <span class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]"></span>
-          <span class="h-2.5 w-2.5 rounded-full bg-[#27c93f]"></span>
-          <span class="ml-2 text-[12px] text-ash">flowboard — customer operations</span>
+        <div class="flex items-center justify-between gap-4 border-b border-hairline bg-canvas-sunken px-5 py-4">
+          <div>
+            <p class="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Demo record / 04—07</p>
+            <p class="mt-1.5 text-sm font-bold text-ink">Customer handover ledger</p>
+          </div>
+          <span class="rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.04em] text-primary-ink">Illustrative</span>
         </div>
 
-        <div class="p-3 sm:p-4">
-          <div class="flex h-10 items-center gap-3 rounded-md border border-hairline bg-elevated px-3 text-sm text-mute">
-            <span class="flex h-5 w-5 items-center justify-center rounded border border-hairline-strong text-[11px] text-charcoal">/</span>
-            <span class="flex-1">Search customers, workflows, or actions…</span>
-            <Keycap>Esc</Keycap>
+        <div class="relative p-5 sm:p-7">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Customer</p>
+              <h2 class="mt-2 text-xl font-extrabold tracking-[-0.02em] text-ink">Siti Aminah</h2>
+              <p class="mt-1 text-sm text-mute">Webinar registration · owner: Diana</p>
+            </div>
+            <span class="text-xs font-bold text-faint">FB-0427</span>
           </div>
 
-          <div class="mt-3 space-y-1">
-            <div class="flex items-center gap-3 rounded-md bg-card px-3 py-2.5">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-blue/12 text-xs font-medium text-accent-blue">01</span>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm text-ink">Open Webinar Registration</p>
-                <p class="mt-0.5 text-[12px] text-mute">Workflow · 12 pending</p>
-              </div>
-              <Keycap>↵</Keycap>
+          <div class="relative mt-8">
+            <div
+              class="pointer-events-none absolute inset-x-[11%] top-1.5 h-0.5 rounded-full bg-hairline-strong"
+              aria-hidden="true"
+            >
+              <div class="h-full w-2/3 rounded-full bg-accent-red"></div>
             </div>
-            <div class="flex items-center gap-3 rounded-md px-3 py-2.5">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-yellow/12 text-xs font-medium text-accent-yellow">02</span>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm text-ink">View Waiting Action</p>
-                <p class="mt-0.5 text-[12px] text-mute">8 cards need attention</p>
-              </div>
-              <Keycap>⌘ 2</Keycap>
-            </div>
-            <div class="flex items-center gap-3 rounded-md px-3 py-2.5">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-green/12 text-xs font-medium text-accent-green">03</span>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm text-ink">Add a new customer</p>
-                <p class="mt-0.5 text-[12px] text-mute">Manual · CSV · API/MCP</p>
-              </div>
-              <Keycap>⌘ 3</Keycap>
+
+            <div class="relative grid grid-cols-4 gap-2">
+              {#each stages as stage}
+                <div class="flex min-w-0 flex-col items-center gap-2 text-center">
+                  <span
+                    class="relative z-10 h-3 w-3 rounded-full border-2 border-card {stage.marker} {stage.current ? 'ring-2 ring-accent-red/25' : ''}"
+                  ></span>
+                  <span class="text-xs font-semibold text-ink">{stage.label}</span>
+                  <span class="hidden text-xs text-mute sm:block">{stage.detail}</span>
+                </div>
+              {/each}
             </div>
           </div>
 
-          <div class="mt-3 flex items-center justify-between border-t border-hairline px-1 pt-3 text-[11px] text-ash">
-            <span>Flowboard command palette</span>
-            <span>Customer ops</span>
+          <div class="mt-12 border-t border-hairline pt-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">Next action</p>
+                <p class="mt-1.5 text-sm font-bold text-ink">
+                  {traceHandover ? 'Staff handover created' : 'Review customer reply'}
+                </p>
+              </div>
+              <Button variant="tertiary" size="sm" onclick={() => (traceHandover = !traceHandover)}>
+                {traceHandover ? 'Reset trace' : 'Trace handover'}
+              </Button>
+            </div>
+
+            <div class="mt-4 flex items-start gap-3 rounded-xl border border-hairline bg-canvas-sunken px-4 py-3 shadow-control" aria-live="polite">
+              <span class="mt-1 h-2 w-2 shrink-0 rounded-full {traceHandover ? 'bg-accent-green' : 'bg-accent-red'}" aria-hidden="true"></span>
+              {#if traceHandover}
+                <p class="text-sm leading-relaxed text-body">Reply received at 09:42. Diana has the context and the next step.</p>
+              {:else}
+                <p class="text-sm leading-relaxed text-body">A reply can become a visible handover instead of disappearing in a chat thread.</p>
+              {/if}
+            </div>
           </div>
         </div>
       </div>

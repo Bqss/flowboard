@@ -44,7 +44,8 @@
   });
 </script>
 
-<ModeWatcher themeColors={{ dark: '#07080a', light: '#f8fafc' }} />
+{@html `<!-- THESIS: Flowboard makes customer onboarding feel as clear as the workspace itself. OWN-WORLD: Bright white workspace surfaces, indigo actions, slate lanes, rounded cards, and status colors shared with the dashboard. COMPOSITION: One confident hero, one product record, then a short sequence of operational proof. MOMENT: Trace handover turns a customer reply into a visible staff action. REACH: The card system collapses into a vertical route on small screens; light and dark keep the same hierarchy. -->`}
+<ModeWatcher defaultMode="light" themeColors={{ dark: '#0f172a', light: '#ffffff' }} />
 <div class="flex min-h-screen flex-col bg-canvas text-body">
   {#if isDashboard || isDesignSystem || isAuth}
     {@render children()}

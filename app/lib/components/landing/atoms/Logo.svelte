@@ -1,8 +1,7 @@
 <script lang="ts">
   /**
-   * Flowboard wordmark used by the marketing surface and auth chrome.
-   * The mark is intentionally CSS-only so the landing has no starter-kit asset
-   * dependency.
+   * Landing wordmark matching the dashboard/auth brand mark.
+   * The indigo F block is the shared Flowboard anchor.
    */
   let {
     size = 'md',
@@ -16,25 +15,23 @@
 
   let dims = $derived(
     {
-      sm: { box: 18, gap: 'gap-2', text: 'text-[15px]' },
-      md: { box: 22, gap: 'gap-2.5', text: 'text-base' },
-      lg: { box: 30, gap: 'gap-3', text: 'text-2xl' }
+      sm: { box: 28, gap: 'gap-2', text: 'text-sm' },
+      md: { box: 32, gap: 'gap-2.5', text: 'text-base' },
+      lg: { box: 40, gap: 'gap-3', text: 'text-xl' }
     }[size]
   );
 </script>
 
 {#snippet mark()}
-  <span class="inline-flex items-center {dims.gap} font-display font-semibold tracking-tight text-ink {dims.text} {klass}">
+  <span class="inline-flex items-center {dims.gap} font-sans font-bold tracking-tight text-ink {dims.text} {klass}">
     <span
-      class="flex shrink-0 items-end gap-0.5 rounded-md border border-white/20 bg-white/5 p-1"
-      style={`width: ${dims.box}px; height: ${dims.box}px`}
+      class="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary font-extrabold text-on-primary"
+      style={`width: ${dims.box}px; height: ${dims.box}px; font-size: ${Math.max(14, dims.box * 0.44)}px`}
       aria-hidden="true"
     >
-      <span class="h-1/2 flex-1 rounded-sm bg-charcoal"></span>
-      <span class="h-2/3 flex-1 rounded-sm bg-ash"></span>
-      <span class="h-full flex-1 rounded-sm bg-ink"></span>
+      F
     </span>
-    <span>flowboard</span>
+    <span>Flowboard</span>
   </span>
 {/snippet}
 

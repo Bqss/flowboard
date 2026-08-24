@@ -11,9 +11,9 @@
   let { user = null }: { user?: NavUser } = $props();
 
   const links = [
-    { href: '#features', label: 'Features' },
-    { href: '#how-it-works', label: 'How it works' },
-    { href: '#use-cases', label: 'Example journey' }
+    { href: '#features', label: 'System' },
+    { href: '#how-it-works', label: 'How it moves' },
+    { href: '#use-cases', label: 'The ledger' }
   ];
 
   let open = $state(false);
@@ -32,12 +32,12 @@
   }
 </script>
 
-<header class="fixed inset-x-0 top-0 z-50 border-b border-hairline bg-canvas/95 backdrop-blur-xl">
-  <nav class="mx-auto flex h-14 max-w-[1240px] items-center justify-between gap-4 px-6">
+<header class="fixed inset-x-0 top-0 z-50 border-b border-hairline bg-card shadow-control">
+  <nav class="mx-auto flex h-16 max-w-[1240px] items-center justify-between gap-4 px-6">
     <div class="flex min-w-0 items-center gap-3 md:gap-8">
       <button
         type="button"
-        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-ink md:hidden"
+        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-lane md:hidden"
         onclick={() => (open = !open)}
         aria-label={open ? 'Close menu' : 'Open menu'}
         aria-expanded={open}
@@ -57,7 +57,7 @@
         {#each links as link (link.href)}
           <a
             href={link.href}
-            class="text-[13px] font-medium text-mute transition-colors hover:text-ink"
+            class="text-sm font-semibold text-mute transition-colors hover:text-ink"
           >
             {link.label}
           </a>
@@ -71,14 +71,13 @@
         {#if user}
           <a
             href="/dashboard"
-            class="text-[13px] font-medium text-mute transition-colors hover:text-ink"
-            class:!text-ink={$page.url.pathname === '/dashboard'}
+            class="text-sm font-semibold text-mute transition-colors hover:text-ink"
           >
             Open workspace
           </a>
           <Button variant="tertiary" size="sm" onclick={logout} loading={loggingOut}>Sign out</Button>
         {:else}
-          <a href="/login" class="text-[13px] font-medium text-mute transition-colors hover:text-ink">Sign in</a>
+          <a href="/login" class="text-sm font-semibold text-mute transition-colors hover:text-ink">Sign in</a>
           <Button variant="primary" size="sm" href="/register">Start free</Button>
         {/if}
       </div>
@@ -95,18 +94,18 @@
   </nav>
 
   {#if open}
-    <div class="border-t border-hairline bg-canvas/95 backdrop-blur-xl md:hidden">
+    <div class="border-t border-hairline bg-card md:hidden">
       <div class="flex flex-col gap-1 px-6 py-4">
         {#each links as link (link.href)}
           <a
             href={link.href}
             onclick={() => (open = false)}
-            class="rounded-md px-2 py-2.5 text-sm text-body hover:bg-elevated hover:text-ink"
+            class="rounded-lg px-3 py-3 text-sm font-semibold text-body transition-colors hover:bg-lane hover:text-ink"
           >
             {link.label}
           </a>
         {/each}
-        <div class="mt-2 flex flex-col gap-2 border-t border-hairline pt-3">
+        <div class="mt-3 flex flex-col gap-2 border-t border-hairline pt-4">
           {#if user}
             <Button variant="tertiary" size="md" full href="/dashboard">Open workspace</Button>
             <Button variant="secondary" size="md" full onclick={logout} loading={loggingOut}>Sign out</Button>
