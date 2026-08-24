@@ -179,6 +179,49 @@ Fitur 10, 11
 
 **Selesai jika:** Owner bayar pakai voucher, admin bisa lihat workspace itu dan extend trial tanpa sentuh Kanban.
 
+
+---
+
+## Phase 7 — Integrasi, automasi, dan workflow intelligence
+
+### 7.2 Model checklist dan stage
+
+- [ ] Finalisasi apakah checklist tetap menjadi langkah kerja di dalam stage atau dapat berperan sebagai sub-stage
+- [ ] Dokumentasikan aturan transisi dan dampaknya terhadap progress card sebelum mengubah model data
+- [ ] Tambahkan deadline pada setiap checklist item
+- [ ] Tambahkan opsi auto-move ke stage berikutnya ketika seluruh checklist wajib selesai
+- [ ] Pastikan auto-move tidak berjalan jika action masih pending, gagal, atau memerlukan persetujuan staff
+
+### 7.3 Integrasi Chat AI melalui MCP
+
+- [ ] Hubungkan chat AI nyata sebagai MCP client ke tools Flowboard
+- [ ] Izinkan Chat AI membuat card, memindahkan stage, memperbarui checklist, menghentikan follow-up, dan melakukan handover
+- [ ] Terapkan permission per workspace dan pembatasan tool yang dapat dipanggil agent
+- [ ] Uji alur end-to-end dari percakapan customer sampai perubahan terlihat di board
+
+### 7.4 Statistik workflow
+
+- [ ] Tambahkan statistik workflow berdasarkan status dan stage
+- [ ] Tampilkan jumlah card aktif, tertahan, overdue, Waiting Action, dan selesai
+- [ ] Tambahkan breakdown per assignee dan rentang waktu
+
+### 7.5 Integrasi Dripsender dan WhatsApp
+
+- [ ] Putuskan arsitektur integrasi: Flowboard sebagai displayer/orchestrator Dripsender atau sebagai gateway WhatsApp
+- [ ] Integrasikan Dripsender untuk pengiriman WhatsApp dan reminder pada workflow tertentu
+- [ ] Pertahankan queue dan action workflow di Flowboard sebagai sumber status automasi
+- [ ] Dukung koneksi WhatsApp melalui QR gateway atau API key sesuai arsitektur yang dipilih
+- [ ] Sinkronkan status queued, sent, delivered, read, dan failed dari Dripsender ke Flowboard
+- [ ] Tambahkan retry, idempotency, error handling, dan notifikasi ketika pengiriman gagal
+
+### 7.6 Notification settings
+
+- [ ] Tambahkan pengaturan notifikasi email per user dan workspace , dan notifikasi wa
+- [ ] Tambahkan pilihan event email: overdue, WA gagal, customer reply, dan handover
+- [ ] Tambahkan opsi instant notification atau digest
+
+**Selesai jika:** sistem eksternal dan Chat AI dapat mengubah workflow secara aman, checklist mendukung deadline dan auto-move, statistik operasional tersedia, Dripsender mengirim WhatsApp dengan status yang tersinkron, dan user dapat mengatur notifikasi email.
+
 ---
 
 ## Ringkasan sistem role (3 lapisan)
