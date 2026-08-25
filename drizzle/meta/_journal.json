@@ -64,6 +64,13 @@
       "when": 1786715000000,
       "tag": "0008_stage_estafet",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787605081940,
+      "tag": "0009_wajom_integration",
+      "breakpoints": true
     }
   ]
 }

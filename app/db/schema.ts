@@ -1,18 +1,33 @@
 import { sql } from 'drizzle-orm';
-import { boolean, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid
+} from 'drizzle-orm/pg-core';
 
 export const workspaceRoleEnum = pgEnum('workspace_role', ['owner', 'member']);
 export const checklistActionKindEnum = pgEnum('checklist_action_kind', ['none', 'send', 'followup']);
 export const whatsappJobStatusEnum = pgEnum('whatsapp_job_status', [
   'pending',
+  'queued',
   'sent',
+  'delivered',
+  'read',
   'failed',
   'cancelled'
 ]);
 export const notificationTypeEnum = pgEnum('notification_type', [
   'wa_failed',
   'customer_replied',
-  'card_overdue'
+  'card_overdue',
+  'handover'
 ]);
 export const cardSourceEnum = pgEnum('card_source', ['manual', 'csv', 'mcp', 'estafet']);
 
@@ -91,6 +106,95 @@ export const workflows = pgTable('workflows', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+export const wajomConnections = pgTable(
+  'wajom_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    defaultWorkflowId: uuid('default_workflow_id').references(() => workflows.id, {
+      onDelete: 'set null'
+    }),
+    name: text('name').notNull(),
+    instanceId: text('instance_id').notNull(),
+    countryCode: text('country_code').notNull().default('62'),
+    sendEndpoint: text('send_endpoint').notNull(),
+    healthEndpoint: text('health_endpoint'),
+    sendApiKeyEncrypted: text('send_api_key_encrypted'),
+    connectorTokenHash: text('connector_token_hash').notNull().unique(),
+    connectorTokenPrefix: text('connector_token_prefix').notNull(),
+    enabledTools: text('enabled_tools')
+      .array()
+      .notNull()
+      .default(
+        sql`ARRAY['get_onboarding_status', 'register_customer', 'complete_onboarding_step', 'move_customer_stage', 'handover_to_staff']::text[]`
+      ),
+    enabled: boolean('enabled').notNull().default(true),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('wajom_connections_workspace_idx').on(table.workspaceId),
+    uniqueIndex('wajom_connections_workspace_workflow_idx').on(
+      table.workspaceId,
+      table.defaultWorkflowId
+    )
+  ]
+);
+
+export const integrationAuditLogs = pgTable(
+  'integration_audit_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    connectionId: uuid('connection_id').references(() => wajomConnections.id, {
+      onDelete: 'set null'
+    }),
+    requestId: text('request_id').notNull(),
+    tool: text('tool').notNull(),
+    method: text('method').notNull(),
+    inputKeys: text('input_keys').array().notNull().default(sql`ARRAY[]::text[]`),
+    success: boolean('success').notNull(),
+    statusCode: integer('status_code').notNull(),
+    latencyMs: integer('latency_ms').notNull(),
+    resultSummary: jsonb('result_summary'),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('integration_audit_logs_workspace_created_idx').on(table.workspaceId, table.createdAt),
+    index('integration_audit_logs_connection_created_idx').on(table.connectionId, table.createdAt)
+  ]
+);
+
+export const integrationIdempotencyKeys = pgTable(
+  'integration_idempotency_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => wajomConnections.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    tool: text('tool').notNull(),
+    status: text('status').notNull().default('processing'),
+    response: jsonb('response'),
+    statusCode: integer('status_code'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('integration_idempotency_connection_key_idx').on(table.connectionId, table.key)
+  ]
+);
+
 export const stages = pgTable(
   'stages',
   {
@@ -165,6 +269,8 @@ export const cards = pgTable('cards', {
   assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
   stageEnteredAt: timestamp('stage_entered_at', { withTimezone: true }).notNull().defaultNow(),
   waFollowupsStopped: boolean('wa_followups_stopped').notNull().default(false),
+  handoverReason: text('handover_reason'),
+  handedOverAt: timestamp('handed_over_at', { withTimezone: true }),
   waErrorFlag: boolean('wa_error_flag').notNull().default(false),
   source: cardSourceEnum('source').notNull().default('manual'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -188,26 +294,44 @@ export const checklistItems = pgTable('checklist_items', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-export const whatsappJobs = pgTable('whatsapp_jobs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id')
-    .notNull()
-    .references(() => workspaces.id, { onDelete: 'cascade' }),
-  cardId: uuid('card_id')
-    .notNull()
-    .references(() => cards.id, { onDelete: 'cascade' }),
-  checklistItemId: uuid('checklist_item_id').references(() => checklistItems.id, {
-    onDelete: 'set null'
-  }),
-  templateId: uuid('template_id').references(() => checklistTemplates.id, { onDelete: 'set null' }),
-  toWa: text('to_wa').notNull(),
-  messageBody: text('message_body').notNull(),
-  scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
-  status: whatsappJobStatusEnum('status').notNull().default('pending'),
-  errorMessage: text('error_message'),
-  sentAt: timestamp('sent_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const whatsappJobs = pgTable(
+  'whatsapp_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    connectionId: uuid('connection_id').references(() => wajomConnections.id, {
+      onDelete: 'set null'
+    }),
+    cardId: uuid('card_id')
+      .notNull()
+      .references(() => cards.id, { onDelete: 'cascade' }),
+    checklistItemId: uuid('checklist_item_id').references(() => checklistItems.id, {
+      onDelete: 'set null'
+    }),
+    templateId: uuid('template_id').references(() => checklistTemplates.id, { onDelete: 'set null' }),
+    toWa: text('to_wa').notNull(),
+    messageBody: text('message_body').notNull(),
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
+    status: whatsappJobStatusEnum('status').notNull().default('pending'),
+    providerMessageId: text('provider_message_id'),
+    providerStatus: text('provider_status'),
+    attempts: integer('attempts').notNull().default(0),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('whatsapp_jobs_due_idx').on(table.status, table.scheduledAt),
+    index('whatsapp_jobs_connection_idx').on(table.connectionId, table.status),
+    index('whatsapp_jobs_provider_message_idx').on(table.providerMessageId)
+  ]
+);
 
 export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -240,6 +364,9 @@ export type Customer = typeof customers.$inferSelect;
 export type Card = typeof cards.$inferSelect;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type WhatsappJob = typeof whatsappJobs.$inferSelect;
+export type WajomConnection = typeof wajomConnections.$inferSelect;
+export type IntegrationAuditLog = typeof integrationAuditLogs.$inferSelect;
+export type IntegrationIdempotencyKey = typeof integrationIdempotencyKeys.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type ChecklistActionKind = (typeof checklistActionKindEnum.enumValues)[number];
 export type WhatsappJobStatus = (typeof whatsappJobStatusEnum.enumValues)[number];
