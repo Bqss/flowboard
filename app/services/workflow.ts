@@ -442,6 +442,7 @@ export const createCard = async (
   input: {
     name: string;
     wa: string;
+    countryCode?: string;
     product?: string | null;
     tag?: string | null;
     assigneeId?: string | null;
@@ -457,7 +458,8 @@ export const createCard = async (
 
   const customer = await findOrCreateCustomer(workflow.workspaceId, {
     name: input.name,
-    wa: input.wa
+    wa: input.wa,
+    countryCode: input.countryCode
   });
 
   const existing = await findCardByCustomerInWorkflow(workflow.id, customer.id);

@@ -232,3 +232,82 @@ export const MoveCardSchema = t.Object({
 export const ToggleChecklistItemSchema = t.Object({
   done: t.Boolean()
 });
+
+const WajomToolLiteral = t.Union([
+  t.Literal('get_onboarding_status'),
+  t.Literal('register_customer'),
+  t.Literal('complete_onboarding_step'),
+  t.Literal('move_customer_stage'),
+  t.Literal('handover_to_staff')
+]);
+
+export const WajomToolCallSchema = t.Object({
+  tool: WajomToolLiteral,
+  arguments: t.Record(t.String(), t.Unknown()),
+  idempotencyKey: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+  requestId: t.Optional(t.String({ minLength: 1, maxLength: 200 }))
+});
+
+export const WajomInboundReplySchema = t.Object({
+  wa: t.String({ minLength: 8, maxLength: 24 }),
+  message: t.Optional(t.String({ maxLength: 2000 })),
+  requestId: t.String({ minLength: 1, maxLength: 200 })
+});
+
+export const WajomDeliveryStatusSchema = t.Object({
+  status: t.Union([
+    t.Literal('queued'),
+    t.Literal('sent'),
+    t.Literal('delivered'),
+    t.Literal('read'),
+    t.Literal('failed'),
+    t.Literal('cancelled')
+  ]),
+  providerMessageId: t.Optional(t.String({ maxLength: 200 })),
+  errorMessage: t.Optional(t.String({ maxLength: 2000 })),
+  requestId: t.Optional(t.String({ minLength: 1, maxLength: 200 }))
+});
+
+export const WajomConnectionParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  connectionId: t.String({ format: 'uuid' })
+});
+
+const WajomEnabledTools = t.Optional(
+  t.Array(WajomToolLiteral, { minItems: 1, maxItems: 5 })
+);
+
+export const CreateWajomConnectionSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  instanceId: t.String({ minLength: 1, maxLength: 160 }),
+  countryCode: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
+  defaultWorkflowId: t.String({ format: 'uuid' }),
+  sendEndpoint: t.String({ minLength: 1, maxLength: 1000 }),
+  healthEndpoint: t.Optional(t.Union([t.String({ maxLength: 1000 }), t.Null()])),
+  sendApiKey: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  enabledTools: WajomEnabledTools
+});
+
+export const UpdateWajomConnectionSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  instanceId: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
+  countryCode: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
+  defaultWorkflowId: t.Optional(t.String({ format: 'uuid' })),
+  sendEndpoint: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
+  healthEndpoint: t.Optional(t.Union([t.String({ maxLength: 1000 }), t.Null()])),
+  sendApiKey: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  clearSendApiKey: t.Optional(t.Boolean()),
+  enabledTools: WajomEnabledTools,
+  enabled: t.Optional(t.Boolean())
+});
+
+export const WajomJobsQuery = t.Object({
+  connectionId: t.Optional(t.String({ format: 'uuid' }))
+});
+export const WajomJobParam = t.Object({
+  jobId: t.String({ format: 'uuid' })
+});
+export const WajomTestSendSchema = t.Object({
+  to: t.String({ minLength: 8, maxLength: 24 }),
+  message: t.String({ minLength: 1, maxLength: 2000 })
+});

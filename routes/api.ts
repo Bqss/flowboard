@@ -8,6 +8,7 @@ import { createWorkflowsRoutes } from './workflows';
 import { createNotificationsRoutes } from './notifications';
 import { createWebhooksRoutes } from './webhooks';
 import { createIntegrationsRoutes } from './integrations';
+import { createWajomRoutes } from './wajom';
 
 /**
  * The API surface. `createApiApp()` provides the `/api` prefix plus shared
@@ -23,7 +24,8 @@ export const buildApi = () =>
     .use(createWorkflowsRoutes())
     .use(createNotificationsRoutes())
     .use(createWebhooksRoutes())
-    .use(createIntegrationsRoutes());
+    .use(createIntegrationsRoutes())
+    .use(createWajomRoutes());
 
 export type Api = ReturnType<typeof buildApi>;
 

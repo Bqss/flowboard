@@ -1,4 +1,4 @@
-import type { User, Workspace, WorkspaceRole } from '@db';
+import type { User, WajomConnection, Workspace, WorkspaceRole } from '@db';
 
 export type WorkspaceMembership = {
   role: WorkspaceRole;
@@ -30,6 +30,7 @@ export interface Ctx<Body = unknown, Params = Record<string, string>> {
   user?: User | null;
   workspace?: Workspace | null;
   membership?: WorkspaceMembership | null;
+  wajomConnection?: WajomConnection | null;
   workflow?: import('@db').Workflow | null;
   /** Best-effort client IP. Populated by `withClientIp`; used for throttling. */
   clientIp?: string;
