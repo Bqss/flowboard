@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNotNull, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNotNull, lte, or } from 'drizzle-orm';
 import {
   cards,
   checklistActions,
@@ -7,13 +7,16 @@ import {
   customers,
   db,
   stages,
+  wajomConnections,
   whatsappJobs,
   workflows,
   type ChecklistActionKind
 } from '@db';
 import { createNotification, hasRecentNotification } from './notification';
 import { normalizeWa } from './customer';
-
+import { findWajomConnectionForWorkflow } from './wajom-connections';
+import { sendWajomMessage } from './wajom-transport';
+import { env } from '@config/env';
 type TemplateVars = {
   nama: string;
   wa: string;
@@ -29,18 +32,6 @@ export const renderMessageTemplate = (template: string, vars: TemplateVars) =>
     .replaceAll('{{tag}}', vars.tag ?? '')
     .replaceAll('{{link}}', 'https://flowboard.app');
 
-const sendWhatsAppMessage = async (toWa: string, body: string) => {
-  if (!toWa || toWa.length < 8) {
-    throw new Error('Nomor WhatsApp tidak valid.');
-  }
-
-  if (process.env.WA_MOCK_FAIL === '1') {
-    throw new Error('Simulasi kegagalan pengiriman WA.');
-  }
-
-  console.info(`[WA] → ${toWa}: ${body.slice(0, 120)}${body.length > 120 ? '…' : ''}`);
-  return { ok: true as const };
-};
 
 export const getChecklistActionForTemplate = async (templateId: string) => {
   const [row] = await db
@@ -149,6 +140,34 @@ export const cancelFollowupJobsForCard = async (cardId: string) => {
     .where(inArray(whatsappJobs.id, jobIds));
 };
 
+export const resolveFollowupJobsOnReply = async (cardId: string) => {
+  const pending = await db
+    .select({ checklistItemId: whatsappJobs.checklistItemId })
+    .from(whatsappJobs)
+    .innerJoin(checklistActions, eq(checklistActions.templateId, whatsappJobs.templateId))
+    .where(
+      and(
+        eq(whatsappJobs.cardId, cardId),
+        eq(whatsappJobs.status, 'pending'),
+        eq(checklistActions.kind, 'followup'),
+        eq(checklistActions.followupIfNoReply, true)
+      )
+    );
+
+  const checklistItemIds = pending
+    .map((job) => job.checklistItemId)
+    .filter(Boolean) as string[];
+  if (checklistItemIds.length > 0) {
+    await db
+      .update(checklistItems)
+      .set({ done: true, updatedAt: new Date() })
+      .where(inArray(checklistItems.id, checklistItemIds));
+  }
+
+  await cancelFollowupJobsForCard(cardId);
+  return checklistItemIds.length;
+};
+
 export const scheduleJobsForCard = async (cardId: string, stageId: string, stageEnteredAt: Date) => {
   const [context] = await db
     .select({
@@ -164,6 +183,10 @@ export const scheduleJobsForCard = async (cardId: string, stageId: string, stage
 
   if (!context || context.card.stageId !== stageId) return [];
 
+  const connection = await findWajomConnectionForWorkflow(
+    context.workflow.workspaceId,
+    context.workflow.id
+  );
   const templates = await db
     .select({
       template: checklistTemplates,
@@ -202,6 +225,7 @@ export const scheduleJobsForCard = async (cardId: string, stageId: string, stage
       .insert(whatsappJobs)
       .values({
         workspaceId: context.workflow.workspaceId,
+        connectionId: connection?.id ?? null,
         cardId,
         checklistItemId: item?.id ?? null,
         templateId: row.template.id,
@@ -217,6 +241,19 @@ export const scheduleJobsForCard = async (cardId: string, stageId: string, stage
   return jobs;
 };
 
+export const listWhatsappJobs = async (workspaceId: string, connectionId?: string) =>
+  db
+    .select()
+    .from(whatsappJobs)
+    .where(
+      and(
+        eq(whatsappJobs.workspaceId, workspaceId),
+        ...(connectionId ? [eq(whatsappJobs.connectionId, connectionId)] : [])
+      )
+    )
+    .orderBy(desc(whatsappJobs.updatedAt))
+    .limit(100);
+
 export const onCardEnteredStage = async (cardId: string, stageId: string) => {
   const now = new Date();
 
@@ -225,6 +262,8 @@ export const onCardEnteredStage = async (cardId: string, stageId: string) => {
     .set({
       stageEnteredAt: now,
       waFollowupsStopped: false,
+      handoverReason: null,
+      handedOverAt: null,
       waErrorFlag: false,
       updatedAt: now
     })
@@ -248,87 +287,163 @@ const notifyAssignee = async (
 
 export const processDueWhatsappJobs = async (limit = 50) => {
   const now = new Date();
+  const staleQueuedAt = new Date(
+    Date.now() - Math.max(env.wajomRequestTimeoutMs * 2, 5 * 60 * 1000)
+  );
   const dueJobs = await db
     .select()
     .from(whatsappJobs)
-    .where(and(eq(whatsappJobs.status, 'pending'), lte(whatsappJobs.scheduledAt, now)))
+    .where(
+      or(
+        and(eq(whatsappJobs.status, 'pending'), lte(whatsappJobs.scheduledAt, now)),
+        and(eq(whatsappJobs.status, 'queued'), lte(whatsappJobs.lastAttemptAt, staleQueuedAt))
+      )
+    )
     .orderBy(asc(whatsappJobs.scheduledAt))
     .limit(limit);
 
   for (const job of dueJobs) {
-    const [card] = await db.select().from(cards).where(eq(cards.id, job.cardId)).limit(1);
+    const [claimed] = await db
+      .update(whatsappJobs)
+      .set({
+        status: 'queued',
+        attempts: job.attempts + 1,
+        lastAttemptAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(whatsappJobs.id, job.id),
+          or(
+            eq(whatsappJobs.status, 'pending'),
+            and(eq(whatsappJobs.status, 'queued'), lte(whatsappJobs.lastAttemptAt, staleQueuedAt))
+          )
+        )
+      )
+      .returning();
+
+    if (!claimed) continue;
+
+    const [card] = await db.select().from(cards).where(eq(cards.id, claimed.cardId)).limit(1);
     if (!card || card.stageId === null) {
       await db
         .update(whatsappJobs)
-        .set({ status: 'cancelled' })
-        .where(eq(whatsappJobs.id, job.id));
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(eq(whatsappJobs.id, claimed.id));
       continue;
     }
 
-    const [action] = job.templateId
+    const [action] = claimed.templateId
       ? await db
           .select()
           .from(checklistActions)
-          .where(eq(checklistActions.templateId, job.templateId))
+          .where(eq(checklistActions.templateId, claimed.templateId))
           .limit(1)
       : [];
 
     if (action?.kind === 'followup' && action.followupIfNoReply && card.waFollowupsStopped) {
       await db
         .update(whatsappJobs)
-        .set({ status: 'cancelled' })
-        .where(eq(whatsappJobs.id, job.id));
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(eq(whatsappJobs.id, claimed.id));
+      continue;
+    }
+
+    const [connection] = claimed.connectionId
+      ? await db
+          .select()
+          .from(wajomConnections)
+          .where(eq(wajomConnections.id, claimed.connectionId))
+          .limit(1)
+      : [];
+
+    if (claimed.connectionId && (!connection || !connection.enabled || connection.revokedAt)) {
+      const errorMessage = 'Wajom connection is unavailable or revoked.';
+      await db
+        .update(whatsappJobs)
+        .set({ status: 'failed', errorMessage, updatedAt: new Date() })
+        .where(eq(whatsappJobs.id, claimed.id));
+      await db
+        .update(cards)
+        .set({ waErrorFlag: true, updatedAt: new Date() })
+        .where(eq(cards.id, claimed.cardId));
+      await notifyAssignee(
+        claimed.workspaceId,
+        card.assigneeId,
+        claimed.cardId,
+        'wa_failed',
+        'Gagal kirim WhatsApp',
+        errorMessage
+      );
       continue;
     }
 
     try {
-      await sendWhatsAppMessage(job.toWa, job.messageBody);
-
+      const delivery = await sendWajomMessage(connection ?? null, claimed);
+      const completedAt = new Date();
       await db
         .update(whatsappJobs)
-        .set({ status: 'sent', sentAt: new Date(), errorMessage: null })
-        .where(eq(whatsappJobs.id, job.id));
+        .set({
+          status: delivery.status,
+          providerMessageId: delivery.providerMessageId,
+          providerStatus: delivery.providerStatus,
+          sentAt: delivery.status === 'queued' ? null : completedAt,
+          errorMessage: null,
+          updatedAt: completedAt
+        })
+        .where(eq(whatsappJobs.id, claimed.id));
 
-      if (job.checklistItemId) {
+      if (delivery.status !== 'queued' && claimed.checklistItemId) {
         await db
           .update(checklistItems)
-          .set({ done: true, updatedAt: new Date() })
-          .where(eq(checklistItems.id, job.checklistItemId));
+          .set({ done: true, updatedAt: completedAt })
+          .where(eq(checklistItems.id, claimed.checklistItemId));
       }
 
       await db
         .update(cards)
-        .set({ waErrorFlag: false, updatedAt: new Date() })
-        .where(eq(cards.id, job.cardId));
+        .set({ waErrorFlag: false, updatedAt: completedAt })
+        .where(eq(cards.id, claimed.cardId));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Gagal mengirim WA.';
+      const shouldRetry = claimed.attempts < env.whatsappMaxAttempts;
+      const retryAt = new Date(
+        Date.now() + env.whatsappRetryDelayMinutes * 60 * 1000 * Math.max(1, claimed.attempts)
+      );
 
       await db
         .update(whatsappJobs)
-        .set({ status: 'failed', errorMessage: message })
-        .where(eq(whatsappJobs.id, job.id));
+        .set({
+          status: shouldRetry ? 'pending' : 'failed',
+          scheduledAt: shouldRetry ? retryAt : claimed.scheduledAt,
+          errorMessage: message,
+          updatedAt: new Date()
+        })
+        .where(eq(whatsappJobs.id, claimed.id));
 
       await db
         .update(cards)
         .set({ waErrorFlag: true, updatedAt: new Date() })
-        .where(eq(cards.id, job.cardId));
+        .where(eq(cards.id, claimed.cardId));
 
-      const [workflow] = await db
-        .select({ workspaceId: workflows.workspaceId })
-        .from(workflows)
-        .innerJoin(cards, eq(cards.workflowId, workflows.id))
-        .where(eq(cards.id, job.cardId))
-        .limit(1);
+      if (!shouldRetry) {
+        const [workflow] = await db
+          .select({ workspaceId: workflows.workspaceId })
+          .from(workflows)
+          .innerJoin(cards, eq(cards.workflowId, workflows.id))
+          .where(eq(cards.id, claimed.cardId))
+          .limit(1);
 
-      if (workflow) {
-        await notifyAssignee(
-          workflow.workspaceId,
-          card.assigneeId,
-          job.cardId,
-          'wa_failed',
-          'Gagal kirim WhatsApp',
-          message
-        );
+        if (workflow) {
+          await notifyAssignee(
+            workflow.workspaceId,
+            card.assigneeId,
+            claimed.cardId,
+            'wa_failed',
+            'Gagal kirim WhatsApp',
+            message
+          );
+        }
       }
     }
   }
@@ -386,29 +501,114 @@ export const processOverdueCardReminders = async () => {
   return notified;
 };
 
-export const handleInboundWhatsappReply = async (input: { wa: string; message?: string }) => {
-  const wa = normalizeWa(input.wa);
+export const updateWhatsappJobStatus = async (input: {
+  jobId: string;
+  connectionId: string;
+  status: 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'cancelled';
+  providerMessageId?: string;
+  errorMessage?: string;
+}) => {
+  const [existing] = await db
+    .select()
+    .from(whatsappJobs)
+    .where(eq(whatsappJobs.id, input.jobId))
+    .limit(1);
+  if (!existing) return null;
+  if (existing.connectionId !== input.connectionId) {
+    throw new Error('WhatsApp job tidak dimiliki koneksi ini.');
+  }
+
+  const now = new Date();
+  const deliveryComplete = input.status === 'sent' || input.status === 'delivered' || input.status === 'read';
+  const [updated] = await db
+    .update(whatsappJobs)
+    .set({
+      status: input.status,
+      providerMessageId: input.providerMessageId ?? existing.providerMessageId,
+      providerStatus: input.status,
+      sentAt: deliveryComplete ? existing.sentAt ?? now : existing.sentAt,
+      deliveredAt: input.status === 'delivered' || input.status === 'read' ? existing.deliveredAt ?? now : existing.deliveredAt,
+      readAt: input.status === 'read' ? existing.readAt ?? now : existing.readAt,
+      errorMessage: input.errorMessage ?? (input.status === 'failed' ? existing.errorMessage : null),
+      updatedAt: now
+    })
+    .where(eq(whatsappJobs.id, input.jobId))
+    .returning();
+
+  if (deliveryComplete && existing.checklistItemId) {
+    await db
+      .update(checklistItems)
+      .set({ done: true, updatedAt: now })
+      .where(eq(checklistItems.id, existing.checklistItemId));
+  }
+
+  if (deliveryComplete || input.status === 'failed') {
+    await db
+      .update(cards)
+      .set({ waErrorFlag: !deliveryComplete, updatedAt: now })
+      .where(eq(cards.id, existing.cardId));
+  }
+
+  return updated ?? null;
+};
+
+export const handleInboundWhatsappReply = async (input: {
+  wa: string;
+  message?: string;
+  workspaceId?: string;
+  workflowId?: string;
+  countryCode?: string;
+}) => {
+  const wa = normalizeWa(input.wa, input.countryCode);
   if (!wa) return { matchedCards: 0 };
 
-  const allCustomers = await db.select().from(customers);
-  const customerRows = allCustomers.filter((c) => normalizeWa(c.wa) === wa);
+  const customerRows = input.workspaceId
+    ? await db
+        .select()
+        .from(customers)
+        .where(and(eq(customers.workspaceId, input.workspaceId), eq(customers.wa, wa)))
+    : await db.select().from(customers).where(eq(customers.wa, wa));
   if (customerRows.length === 0) return { matchedCards: 0 };
 
   let matchedCards = 0;
 
   for (const customer of customerRows) {
-    const activeCards = await db
-      .select({
-        card: cards,
-        stage: stages,
-        workflow: workflows,
-        customerName: customers.name
-      })
-      .from(cards)
-      .innerJoin(stages, eq(cards.stageId, stages.id))
-      .innerJoin(workflows, eq(cards.workflowId, workflows.id))
-      .innerJoin(customers, eq(cards.customerId, customers.id))
-      .where(eq(cards.customerId, customer.id));
+    const activeCards = input.workspaceId
+      ? await db
+          .select({
+            card: cards,
+            stage: stages,
+            workflow: workflows,
+            customerName: customers.name
+          })
+          .from(cards)
+          .innerJoin(stages, eq(cards.stageId, stages.id))
+          .innerJoin(workflows, eq(cards.workflowId, workflows.id))
+          .innerJoin(customers, eq(cards.customerId, customers.id))
+          .where(
+            and(
+              eq(cards.customerId, customer.id),
+              eq(workflows.workspaceId, input.workspaceId),
+              ...(input.workflowId ? [eq(cards.workflowId, input.workflowId)] : [])
+            )
+          )
+      : await db
+          .select({
+            card: cards,
+            stage: stages,
+            workflow: workflows,
+            customerName: customers.name
+          })
+          .from(cards)
+          .innerJoin(stages, eq(cards.stageId, stages.id))
+          .innerJoin(workflows, eq(cards.workflowId, workflows.id))
+          .innerJoin(customers, eq(cards.customerId, customers.id))
+          .where(
+            and(
+              eq(cards.customerId, customer.id),
+              ...(input.workflowId ? [eq(cards.workflowId, input.workflowId)] : [])
+            )
+          );
 
     for (const row of activeCards) {
       matchedCards += 1;
@@ -418,7 +618,7 @@ export const handleInboundWhatsappReply = async (input: { wa: string; message?: 
         .set({ waFollowupsStopped: true, updatedAt: new Date() })
         .where(eq(cards.id, row.card.id));
 
-      await cancelFollowupJobsForCard(row.card.id);
+      await resolveFollowupJobsOnReply(row.card.id);
 
       if (row.stage.onReplyNotify && row.card.assigneeId) {
         await createNotification({
