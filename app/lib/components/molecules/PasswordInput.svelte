@@ -12,6 +12,7 @@
 		strength?: boolean;
 		showPasswordLabel?: string;
 		hidePasswordLabel?: string;
+		strengthLabels?: string[];
 		class?: string;
 	};
 
@@ -23,6 +24,7 @@
 		strength = false,
 		showPasswordLabel = 'Tampilkan kata sandi',
 		hidePasswordLabel = 'Sembunyikan kata sandi',
+		strengthLabels = ['Terlalu lemah', 'Lemah', 'Cukup', 'Kuat', 'Sangat kuat'],
 		class: className,
 		...rest
 	}: Props = $props();
@@ -39,7 +41,7 @@
 		return s;
 	});
 
-	const strengthLabel = $derived(['Terlalu lemah', 'Lemah', 'Cukup', 'Kuat', 'Sangat kuat'][score]);
+	const strengthLabel = $derived(strengthLabels[score] ?? strengthLabels[strengthLabels.length - 1] ?? '');
 </script>
 
 <div class={cn('w-full', className)}>

@@ -17,6 +17,8 @@
     Cancel01Icon,
     UserGroupIcon
   } from '@hugeicons/core-free-icons';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
 
   export type MultiSelectOption = {
     value: string;
@@ -47,8 +49,8 @@
     options,
     values = $bindable([]),
     primary = $bindable(null),
-    placeholder = 'Pilih satu atau beberapa…',
-    emptyText = 'Tidak ada anggota ditemukan',
+    placeholder,
+    emptyText,
     id,
     disabled = false,
     invalid = false,
@@ -58,6 +60,19 @@
     class: className,
     ...rest
   }: Props = $props();
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
+  const resolvedPlaceholder = $derived(placeholder ?? tr('setup.assigneesPlaceholder'));
+  const resolvedEmptyText = $derived(emptyText ?? tr('setup.noMembers'));
+  const primaryLabel = $derived(tr('setup.primary'));
+  const makePrimaryLabel = $derived(tr('setup.makePrimary'));
+  const setPrimaryLabel = $derived(tr('setup.setPrimary'));
+  const removeLabel = $derived(tr('setup.removeSelection'));
+  const clearAllLabel = $derived(tr('setup.clearAll'));
+  const closePanelLabel = $derived(tr('setup.closePanel'));
+  const searchLabel = $derived(tr('setup.searchMembers'));
+  const selectAllLabel = $derived(tr('setup.selectAll'));
+  const clearSelectedLabel = $derived(tr('setup.clearSelected'));
 
   let triggerEl = $state<HTMLDivElement | null>(null);
   let searchInputEl = $state<HTMLInputElement | null>(null);
@@ -232,16 +247,16 @@
             {#if showPrimaryBadge}
               {#if isPrimary}
                 <span class="rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-on-primary">
-                  Utama
+                  {primaryLabel}
                 </span>
               {:else}
                 <button
                   type="button"
-                  title="Jadikan PIC utama"
+                  title={makePrimaryLabel}
                   onclick={(e) => setAsPrimary(option.value, e)}
                   class="text-[10px] text-mute hover:text-primary underline px-0.5 cursor-pointer"
                 >
-                  Set utama
+                  {setPrimaryLabel}
                 </button>
               {/if}
             {/if}
@@ -249,7 +264,7 @@
             {#if !disabled}
               <button
                 type="button"
-                title={`Hapus ${option.label}`}
+                title={`${removeLabel} ${option.label}`}
                 onclick={(e) => removeOption(option.value, e)}
                 class="grid size-4 place-items-center rounded-full text-mute hover:bg-card hover:text-ink transition-colors cursor-pointer"
               >
@@ -261,7 +276,7 @@
       </div>
     {:else}
       <span class="flex-1 px-2 text-xs text-faint select-none">
-        {placeholder}
+        {resolvedPlaceholder}
       </span>
     {/if}
 
@@ -270,7 +285,7 @@
       {#if values.length > 0 && !disabled}
         <button
           type="button"
-          title="Hapus semua pilihan"
+          title={clearAllLabel}
           onclick={clearAll}
           class="grid size-6 place-items-center rounded-md hover:bg-lane hover:text-ink text-mute transition-colors cursor-pointer text-xs"
         >
@@ -295,7 +310,7 @@
         onclick={close}
         role="button"
         tabindex="-1"
-        aria-label="Tutup panel"
+        aria-label={closePanelLabel}
         onkeydown={(e) => e.key === 'Escape' && close()}
       ></div>
 
@@ -318,7 +333,7 @@
             <input
               bind:this={searchInputEl}
               type="text"
-              placeholder="Cari anggota tim..."
+              placeholder={searchLabel}
               bind:value={search}
               onclick={(e) => e.stopPropagation()}
               onkeydown={(e) => {
@@ -331,7 +346,7 @@
           <!-- Quick actions: Pilih Semua / Batal Semua -->
           <div class="flex items-center justify-between px-1 text-[11px] text-mute font-medium">
             <span>
-              {values.length} dari {options.length} dipilih
+              {values.length} {tr('setup.of')} {options.length} {tr('setup.selected')}
             </span>
             <div class="flex items-center gap-2">
               {#if !allSelected}
@@ -343,7 +358,7 @@
                   }}
                   class="text-primary hover:underline font-semibold cursor-pointer"
                 >
-                  Pilih Semua
+                  {selectAllLabel}
                 </button>
               {/if}
               {#if values.length > 0}
@@ -355,7 +370,7 @@
                   }}
                   class="text-status-urgent-ink hover:underline font-medium cursor-pointer"
                 >
-                  Batal Semua
+                  {clearSelectedLabel}
                 </button>
               {/if}
             </div>
@@ -420,7 +435,7 @@
               {#if showPrimaryBadge && isSelected}
                 <button
                   type="button"
-                  title="Jadikan PIC utama"
+                  title={makePrimaryLabel}
                   onclick={(e) => setAsPrimary(option.value, e)}
                   class={cn(
                     'rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors shrink-0 cursor-pointer',
@@ -429,14 +444,14 @@
                       : 'border border-hairline bg-card text-mute hover:border-primary/40 hover:bg-primary-soft hover:text-primary'
                   )}
                 >
-                  {isPrimary ? 'Utama' : 'Set utama'}
+                  {isPrimary ? primaryLabel : setPrimaryLabel}
                 </button>
               {/if}
             </div>
           {:else}
             <div class="py-6 text-center text-xs text-mute space-y-1">
               <HugeiconsIcon icon={UserGroupIcon} size={20} class="mx-auto text-faint" />
-              <p>{emptyText}</p>
+              <p>{resolvedEmptyText}</p>
             </div>
           {/each}
         </div>

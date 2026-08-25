@@ -8,6 +8,8 @@
     type ApiWorkspaceMember,
     type ApiWaitingActionCard
   } from '$lib/api/client';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import {
     Badge,
     Button,
@@ -37,6 +39,9 @@
   import type { LayoutData } from './$types';
 
   let { data }: { data: LayoutData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
 
   let loadingData = $state(true);
   let workflows = $state<ApiWorkflow[]>([]);
@@ -97,7 +102,7 @@
       name = '';
       await goto(`/dashboard/workflows/${workflow.id}/setup`);
     } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Gagal membuat workflow.';
+      error = err instanceof ApiError ? err.message : tr('home.createError');
     } finally {
       loading = false;
     }
@@ -128,7 +133,7 @@
       bulkAssigneeId = '';
       await loadDashboardData();
     } catch (err) {
-      bulkError = err instanceof ApiError ? err.message : 'Gagal reassign massal.';
+      bulkError = err instanceof ApiError ? err.message : tr('home.bulkReassignError');
     } finally {
       bulkLoading = false;
     }
@@ -136,7 +141,7 @@
 </script>
 
 <svelte:head>
-  <title>Dashboard — Flowboard</title>
+  <title>{tr('common.dashboard')} — Flowboard</title>
 </svelte:head>
 
 {#snippet customersIcon()}
@@ -154,23 +159,22 @@
 {#snippet urgentIcon()}
   <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
 {/snippet}
-
 <div class="space-y-8">
   <!-- Clean Header & Direct Actions -->
   <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div class="space-y-1">
-      <h1 class="ds-page-title text-ink">{data.workspace?.name ?? 'Dashboard'}</h1>
-      <p class="ds-caption text-mute">Ringkasan operasional dan alur kerja pelanggan.</p>
+      <h1 class="ds-page-title text-ink">{data.workspace?.name ?? tr('common.dashboard')}</h1>
+      <p class="ds-caption text-mute">{tr('home.description')}</p>
     </div>
 
     <div class="flex items-center gap-3">
       <Button href="/dashboard/members" variant="secondary" size="sm">
         <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
-        <span>Tim</span>
+        <span>{tr('home.teamButton')}</span>
       </Button>
       <Button variant="primary" size="sm" onclick={() => (createOpen = true)}>
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
-        <span>Buat Workflow</span>
+        <span>{tr('home.createWorkflow')}</span>
       </Button>
     </div>
   </header>
@@ -190,25 +194,25 @@
     {:else}
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Total Pelanggan"
+          label={tr('home.totalCustomers')}
           value={String(stats.totalCustomers ?? totalCards)}
           icon={customersIcon}
           class="p-5 rounded-2xl"
         />
         <StatCard
-          label="Workflows"
+          label={tr('home.workflowCount')}
           value={String(workflows.length)}
           icon={workflowsIcon}
           class="p-5 rounded-2xl"
         />
         <StatCard
-          label="Anggota Tim"
+          label={tr('home.teamMembers')}
           value={String(members.length)}
           icon={membersIcon}
           class="p-5 rounded-2xl"
         />
         <StatCard
-          label="Perlu Tindakan"
+          label={tr('home.needsAction')}
           value={String(urgentCount)}
           icon={urgentIcon}
           class="p-5 rounded-2xl"
@@ -222,12 +226,10 @@
     <section class="space-y-4">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 class="ds-section-title text-ink">Perlu Tindakan</h2>
-          <p class="ds-caption text-mute">
-            Card dengan error WA atau follow-up dihentikan — reassign massal ke PIC baru.
-          </p>
+          <h2 class="ds-section-title text-ink">{tr('home.needsAction')}</h2>
+          <p class="ds-caption text-mute">{tr('home.needsActionDescription')}</p>
         </div>
-        <Badge tone="urgent">{waitingCards.length} card</Badge>
+        <Badge tone="urgent">{tr('home.cards', { count: waitingCards.length })}</Badge>
       </div>
 
       <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
@@ -237,14 +239,14 @@
               checked={selectedWaitingIds.length === waitingCards.length && waitingCards.length > 0}
               onchange={(e) => toggleAllWaiting(e.currentTarget.checked)}
             />
-            <span>Pilih semua</span>
+            <span>{tr('home.selectAll')}</span>
           </label>
           <select
             bind:value={bulkAssigneeId}
             class="h-8 rounded-full border border-hairline bg-card px-3 text-xs font-medium text-ink outline-none focus:border-primary"
-            aria-label="PIC tujuan reassign"
+            aria-label={tr('home.bulkAssignee')}
           >
-            <option value="">Hapus assignee</option>
+            <option value="">{tr('home.clearAssignee')}</option>
             {#each members as member (member.id)}
               <option value={member.id}>{member.name}</option>
             {/each}
@@ -256,7 +258,7 @@
             disabled={selectedWaitingIds.length === 0}
             onclick={bulkReassignWaiting}
           >
-            Reassign ({selectedWaitingIds.length})
+            {tr('home.reassign', { count: selectedWaitingIds.length })}
           </Button>
         </div>
 
@@ -277,14 +279,14 @@
                 <div class="flex flex-wrap items-center gap-2">
                   <p class="text-sm font-bold text-ink">{card.customerName}</p>
                   {#if card.waErrorFlag}
-                    <Badge tone="urgent" variant="soft">WA Error</Badge>
+                    <Badge tone="urgent" variant="soft">{tr('home.waError')}</Badge>
                   {:else if card.waFollowupsStopped}
-                    <Badge tone="progress" variant="soft">Follow-up stop</Badge>
+                    <Badge tone="progress" variant="soft">{tr('home.followupStopped')}</Badge>
                   {/if}
                 </div>
                 <p class="ds-caption text-mute">
                   {card.workflowName} · {card.stageName}
-                  {#if card.assigneeName} · PIC: {card.assigneeName}{/if}
+                  {#if card.assigneeName} · {tr('home.picShort', { name: card.assigneeName })}{/if}
                 </p>
               </div>
               <Button
@@ -292,7 +294,7 @@
                 variant="ghost"
                 size="sm"
               >
-                Buka
+                {tr('home.open')}
               </Button>
             </li>
           {/each}
@@ -305,11 +307,11 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="ds-section-title text-ink">Workflows</h2>
-        <p class="ds-caption text-mute">Papan alur proses onboarding pelanggan.</p>
+        <h2 class="ds-section-title text-ink">{tr('common.workflows')}</h2>
+        <p class="ds-caption text-mute">{tr('home.workflowDescription')}</p>
       </div>
       <Button href="/dashboard/workflows" variant="ghost" size="sm">
-        <span>Semua ({workflows.length})</span>
+        <span>{tr('home.allWorkflows', { count: workflows.length })}</span>
         <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
       </Button>
     </div>
@@ -330,9 +332,9 @@
       </div>
     {:else if workflows.length === 0}
       <EmptyStateBlock
-        title="Belum ada workflow"
-        description="Buat workflow pertama untuk mulai tracking onboarding pelanggan."
-        actionLabel="Buat Workflow"
+        title={tr('home.noWorkflow')}
+        description={tr('home.noWorkflowDescription')}
+        actionLabel={tr('home.createWorkflow')}
         onaction={() => (createOpen = true)}
       />
     {:else}
@@ -346,18 +348,18 @@
               <h3 class="text-base font-bold text-ink">{workflow.name}</h3>
 
               <div class="mt-3 flex items-center gap-2">
-                <Avatar name={workflow.ownerName ?? 'PIC'} size={22} />
-                <span class="ds-caption text-mute">{workflow.ownerName ?? 'Belum ada PIC'}</span>
+                <Avatar name={workflow.ownerName ?? tr('common.pic')} size={22} />
+                <span class="ds-caption text-mute">{workflow.ownerName ?? tr('home.noAssignee')}</span>
               </div>
             </div>
 
             <div class="mt-5 flex items-center gap-2 border-t border-hairline pt-3.5">
               <Button href="/dashboard/workflows/{workflow.id}" variant="primary" size="sm" class="flex-1">
                 <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
-                <span>Buka Board</span>
+                <span>{tr('home.openBoard')}</span>
               </Button>
               <Button href="/dashboard/workflows/{workflow.id}/setup" variant="secondary" size="sm">
-                Setup
+                {tr('home.setup')}
               </Button>
             </div>
           </article>
@@ -375,15 +377,15 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} class="text-primary" />
-              <h2 class="ds-section-title text-ink">Tim</h2>
+              <h2 class="ds-section-title text-ink">{tr('home.teamTitle')}</h2>
             </div>
             {#if loadingData}
               <Skeleton shape="rect" class="h-4 w-16 rounded-md" />
             {:else}
-              <span class="ds-caption text-mute">{members.length} anggota</span>
+              <span class="ds-caption text-mute">{tr('home.memberCount', { count: members.length })}</span>
             {/if}
           </div>
-          <p class="ds-caption text-mute">Staf pelaksana dan penanggung jawab alur kerja.</p>
+          <p class="ds-caption text-mute">{tr('home.teamDescription')}</p>
         </div>
 
         {#if loadingData}
@@ -402,7 +404,7 @@
             {/each}
           </div>
         {:else if members.length === 0}
-          <p class="ds-body py-4 text-center text-mute">Belum ada anggota lain.</p>
+          <p class="ds-body py-4 text-center text-mute">{tr('home.noOtherMembers')}</p>
         {:else}
           <ul class="divide-y divide-hairline">
             {#each members.slice(0, 4) as member (member.id)}
@@ -414,7 +416,7 @@
                     <p class="truncate text-xs text-mute">{member.email}</p>
                   </div>
                 </div>
-                <Badge tone={member.role === 'owner' ? 'done' : 'idle'}>{member.role}</Badge>
+                <Badge tone={member.role === 'owner' ? 'done' : 'idle'}>{member.role === 'owner' ? tr('common.owner') : tr('common.member')}</Badge>
               </li>
             {/each}
           </ul>
@@ -423,7 +425,7 @@
 
       <div class="border-t border-hairline pt-3">
         <Button href="/dashboard/members" variant="ghost" size="sm" class="w-full justify-center text-primary">
-          <span>Kelola Tim →</span>
+          <span>{tr('home.manageTeam')}</span>
         </Button>
       </div>
     </section>
@@ -433,9 +435,9 @@
       <div class="space-y-1">
         <div class="flex items-center gap-2">
           <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} class="text-primary" />
-          <h2 class="ds-section-title text-ink">Pintasan</h2>
+          <h2 class="ds-section-title text-ink">{tr('home.shortcuts')}</h2>
         </div>
-        <p class="ds-caption text-mute">Akses cepat modul dan konfigurasi workspace.</p>
+        <p class="ds-caption text-mute">{tr('home.shortcutsDescription')}</p>
       </div>
 
       <div class="grid gap-3 sm:grid-cols-3">
@@ -445,9 +447,9 @@
         >
           <div class="flex items-center gap-2 text-primary">
             <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
-            <span class="text-sm font-semibold text-ink">Setup Tahapan</span>
+            <span class="text-sm font-semibold text-ink">{tr('home.stageSetup')}</span>
           </div>
-          <p class="ds-caption mt-1.5 text-mute">Atur kolom stage & checklist</p>
+          <p class="ds-caption mt-1.5 text-mute">{tr('home.stageSetupDescription')}</p>
         </a>
 
         <a
@@ -456,9 +458,9 @@
         >
           <div class="flex items-center gap-2 text-primary">
             <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
-            <span class="text-sm font-semibold text-ink">Undang Staf</span>
+            <span class="text-sm font-semibold text-ink">{tr('home.inviteStaff')}</span>
           </div>
-          <p class="ds-caption mt-1.5 text-mute">Kelola PIC & anggota</p>
+          <p class="ds-caption mt-1.5 text-mute">{tr('home.inviteStaffDescription')}</p>
         </a>
 
         <a
@@ -467,9 +469,9 @@
         >
           <div class="flex items-center gap-2 text-primary">
             <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
-            <span class="text-sm font-semibold text-ink">Pengaturan</span>
+            <span class="text-sm font-semibold text-ink">{tr('home.settings')}</span>
           </div>
-          <p class="ds-caption mt-1.5 text-mute">Profil akun & keamanan</p>
+          <p class="ds-caption mt-1.5 text-mute">{tr('home.settingsDescription')}</p>
         </a>
       </div>
     </section>
@@ -479,13 +481,13 @@
 <!-- Modal Dialog: Buat Workflow Baru -->
 <Dialog
   bind:open={createOpen}
-  title="Buat Workflow Baru"
-  description="Workflow baru akan dibuat dengan 3 stage standar: Pending, In Progress, dan Done."
+  title={tr('home.createDialogTitle')}
+  description={tr('home.createDialogDescription')}
 >
   <div class="space-y-4">
-    <FormField label="Nama Workflow" required>
+    <FormField label={tr('home.workflowName')} required>
       {#snippet control(args)}
-        <Input {...args} bind:value={name} placeholder="Contoh: Pendaftaran Webinar Apr 2026" />
+        <Input {...args} bind:value={name} placeholder={tr('home.workflowNamePlaceholder')} />
       {/snippet}
     </FormField>
     {#if error}
@@ -494,8 +496,8 @@
   </div>
   {#snippet footer()}
     <div class="flex justify-end gap-2">
-      <Button variant="secondary" onclick={() => (createOpen = false)}>Batal</Button>
-      <Button variant="primary" {loading} onclick={createWorkflow}>Simpan</Button>
+      <Button variant="secondary" onclick={() => (createOpen = false)}>{tr('common.cancel')}</Button>
+      <Button variant="primary" {loading} onclick={createWorkflow}>{tr('common.save')}</Button>
     </div>
   {/snippet}
 </Dialog>

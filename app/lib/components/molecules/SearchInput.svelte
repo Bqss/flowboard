@@ -2,6 +2,8 @@
 	import type { HTMLInputAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import SearchIcon from '@lucide/svelte/icons/search';
+	import { dashboardText } from '$lib/i18n/dashboard.js';
+	import { locale } from '$lib/i18n/index.js';
 	import XIcon from '@lucide/svelte/icons/x';
 
 	type Props = WithElementRef<Omit<HTMLInputAttributes, 'size' | 'type'>, HTMLInputElement> & {
@@ -26,6 +28,9 @@
 		class: className,
 		...rest
 	}: Props = $props();
+	const tr = (key: string) => dashboardText($locale, key);
+	const clearLabel = $derived(tr('common.clearSearch'));
+	const searchLabel = $derived(tr('common.search'));
 
 	function search() {
 		onsearch?.(value);
@@ -79,7 +84,7 @@
 			<button
 				type="button"
 				onclick={clear}
-				aria-label="Bersihkan pencarian"
+				aria-label={clearLabel}
 				class="grid size-6 place-items-center rounded-full text-mute transition-colors hover:bg-primary-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 			>
 				<XIcon class="size-3.5" />
@@ -90,7 +95,7 @@
 			<button
 				type="button"
 				onclick={search}
-				aria-label="Cari"
+				aria-label={searchLabel}
 				class={cn(
 					'grid place-items-center rounded-full bg-primary text-white shadow-xs transition-colors duration-150 ease-out hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
 					size === 'sm' ? 'size-7' : 'size-8'

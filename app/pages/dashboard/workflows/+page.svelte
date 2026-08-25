@@ -1,6 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { api, ApiError, type ApiWorkflow, type ApiWorkspaceMember } from '$lib/api/client';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, Input, Skeleton } from '$lib/components/atoms/index.js';
   import { FormField, EmptyStateBlock, Breadcrumb } from '$lib/components/molecules/index.js';
   import { Dialog } from '$lib/components/organisms/index.js';
@@ -9,6 +11,9 @@
   import type { LayoutData } from '../$types';
 
   let { data }: { data: LayoutData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
 
   let loadingData = $state(true);
   let workflows = $state<ApiWorkflow[]>([]);
@@ -70,32 +75,32 @@
       name = '';
       await goto(`/dashboard/workflows/${workflow.id}/setup`);
     } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Gagal membuat workflow.';
+      error = err instanceof ApiError ? err.message : tr('workflows.createError');
     } finally {
       loading = false;
     }
   }
 </script>
 
-<svelte:head><title>Workflows — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('common.workflows')} — Flowboard</title></svelte:head>
 
 <div class="space-y-8">
   <header class="space-y-3">
     <Breadcrumb
       items={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Workflows' }
+        { label: tr('common.dashboard'), href: '/dashboard' },
+        { label: tr('common.workflows') }
       ]}
       showHomeIcon
     />
     <div class="flex flex-wrap items-start justify-between gap-4 pt-1">
       <div>
-        <h1 class="ds-page-title text-ink">Workflows</h1>
-        <p class="ds-caption mt-1 text-mute">Kelola alur kerja onboarding pelanggan.</p>
+        <h1 class="ds-page-title text-ink">{tr('common.workflows')}</h1>
+        <p class="ds-caption mt-1 text-mute">{tr('workflows.description')}</p>
       </div>
       <Button variant="primary" onclick={openChooser}>
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
-        <span>Buat Workflow</span>
+        <span>{tr('workflows.create')}</span>
       </Button>
     </div>
   </header>
@@ -116,9 +121,9 @@
     </div>
   {:else if workflows.length === 0}
     <EmptyStateBlock
-      title="Belum ada workflow"
-      description="Mulai manual atau generate draf dari deskripsi proses dengan AI."
-      actionLabel="Buat Workflow"
+      title={tr('workflows.empty')}
+      description={tr('workflows.emptyDescription')}
+      actionLabel={tr('workflows.create')}
       onaction={openChooser}
     />
   {:else}
@@ -132,14 +137,14 @@
             <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
             <h2 class="ds-section-title text-ink">{workflow.name}</h2>
             <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-mute">
-              <span>PIC:</span>
+              <span>{tr('workflows.pic')}</span>
               {#if assigned.length > 0}
                 <span class="font-medium text-ink truncate max-w-[180px]">
                   {assigned.map(m => m.name).join(', ')}
                 </span>
                 {#if assigned.length > 1}
                   <Badge tone="queued" variant="soft" class="text-[10px] py-0 px-1.5">
-                    {assigned.length} PIC
+                    {tr('workflows.picCount', { count: assigned.length })}
                   </Badge>
                 {/if}
               {:else}
@@ -150,10 +155,10 @@
           <div class="mt-5 flex flex-wrap items-center gap-2 pt-2">
             <Button href="/dashboard/workflows/{workflow.id}" variant="primary" size="sm">
               <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
-              <span>Buka Board</span>
+              <span>{tr('workflows.openBoard')}</span>
             </Button>
             <Button href="/dashboard/workflows/{workflow.id}/setup" variant="secondary" size="sm">
-              Setup
+              {tr('workflows.setup')}
             </Button>
           </div>
         </article>
@@ -162,7 +167,7 @@
   {/if}
 </div>
 
-<Dialog bind:open={chooseOpen} title="Buat workflow baru" description="Pilih cara setup workflow.">
+<Dialog bind:open={chooseOpen} title={tr('workflows.chooseTitle')} description={tr('workflows.chooseDescription')}>
   <div class="grid gap-3 sm:grid-cols-2">
     <button
       type="button"
@@ -170,8 +175,8 @@
       class="rounded-xl border border-hairline bg-card p-4 text-left shadow-card transition-all hover:border-primary-border hover:shadow-card-hover"
     >
       <HugeiconsIcon icon={Edit02Icon} size={22} strokeWidth={1.8} class="text-primary" />
-      <p class="mt-3 font-semibold text-ink">Manual</p>
-      <p class="ds-caption mt-1 text-mute">Mulai dari 3 stage default, atur sendiri di editor.</p>
+      <p class="mt-3 font-semibold text-ink">{tr('workflows.manual')}</p>
+      <p class="ds-caption mt-1 text-mute">{tr('workflows.manualDescription')}</p>
     </button>
     <button
       type="button"
@@ -179,17 +184,17 @@
       class="rounded-xl border border-primary/30 bg-primary-soft/30 p-4 text-left shadow-card transition-all hover:border-primary hover:shadow-card-hover"
     >
       <HugeiconsIcon icon={AiMagicIcon} size={22} strokeWidth={1.8} class="text-primary" />
-      <p class="mt-3 font-semibold text-ink">Setup dengan AI</p>
-      <p class="ds-caption mt-1 text-mute">Ceritakan proses → draf stage + checklist + WA.</p>
+      <p class="mt-3 font-semibold text-ink">{tr('workflows.aiSetup')}</p>
+      <p class="ds-caption mt-1 text-mute">{tr('workflows.aiDescription')}</p>
     </button>
   </div>
 </Dialog>
 
-<Dialog bind:open={manualOpen} title="Workflow manual" description="Workflow baru dengan 3 stage default.">
+<Dialog bind:open={manualOpen} title={tr('workflows.manualTitle')} description={tr('workflows.manualDescriptionShort')}>
   <div class="space-y-4">
-    <FormField label="Nama workflow" required>
+    <FormField label={tr('workflows.name')} required>
       {#snippet control(args)}
-        <Input {...args} bind:value={name} placeholder="Pendaftaran Webinar" />
+        <Input {...args} bind:value={name} placeholder={tr('workflows.namePlaceholder')} />
       {/snippet}
     </FormField>
     {#if error}
@@ -198,8 +203,8 @@
   </div>
   {#snippet footer()}
     <div class="flex justify-end gap-2">
-      <Button variant="secondary" onclick={() => (manualOpen = false)}>Batal</Button>
-      <Button variant="primary" {loading} onclick={createManualWorkflow}>Simpan</Button>
+      <Button variant="secondary" onclick={() => (manualOpen = false)}>{tr('common.cancel')}</Button>
+      <Button variant="primary" {loading} onclick={createManualWorkflow}>{tr('common.save')}</Button>
     </div>
   {/snippet}
 </Dialog>

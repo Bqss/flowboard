@@ -9,6 +9,8 @@
     type ApiWorkspaceMember,
     type ApiBoardColumn
   } from '$lib/api/client';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import {
     Badge,
     Button,
@@ -44,6 +46,9 @@
   import type { LayoutData } from '../../$types';
 
   let { data }: { data: LayoutData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
 
   const workflowId = $derived(page.params.workflowId);
 
@@ -205,7 +210,7 @@
             badgeTone: resolveTone(card.tag),
             assignee: card.assigneeName ?? undefined,
             progress:
-              card.checklistTotal > 0 ? `${card.checklistDone}/${card.checklistTotal} Selesai` : undefined,
+              card.checklistTotal > 0 ? `${card.checklistDone}/${card.checklistTotal} ${tr('board.progressDone')}` : undefined,
             progressDone: isDone,
             selected: selectedCardId === card.id,
             waError: card.waErrorFlag === true
@@ -257,20 +262,20 @@
     })
   );
 
-  const tableColumns = [
-    { key: 'customerName', label: 'Nama Pelanggan', sortable: true },
-    { key: 'customerWa', label: 'WhatsApp', sortable: true },
-    { key: 'product', label: 'Produk / Sumber' },
-    { key: 'tag', label: 'Tag' },
-    { key: 'stageName', label: 'Tahapan (Stage)', sortable: true },
-    { key: 'assigneeName', label: 'PIC' },
+  const tableColumns = $derived([
+    { key: 'customerName', label: tr('board.customers'), sortable: true },
+    { key: 'customerWa', label: tr('common.whatsapp'), sortable: true },
+    { key: 'product', label: tr('board.productSource') },
+    { key: 'tag', label: tr('board.tagLabel') },
+    { key: 'stageName', label: tr('board.currentStage'), sortable: true },
+    { key: 'assigneeName', label: tr('common.pic') },
     {
       key: 'checklist',
-      label: 'Checklist',
+      label: tr('common.checklist'),
       render: (row: (typeof tableRows)[number]) =>
         row.checklistTotal > 0 ? `${row.checklistDone}/${row.checklistTotal}` : '—'
     }
-  ];
+  ]);
 
   async function openCard(_columnId: string, cardId: string) {
     if (!data.workspace || !workflowId) return;
@@ -281,7 +286,7 @@
       const { detail } = await api.getCardDetail(data.workspace.id, workflowId, cardId);
       cardDetail = detail;
     } catch (err) {
-      detailError = err instanceof ApiError ? err.message : 'Gagal memuat detail card.';
+      detailError = err instanceof ApiError ? err.message : tr('board.detailLoadError');
       cardDetail = null;
     } finally {
       detailLoading = false;
@@ -320,7 +325,7 @@
       );
       await loadWorkflowBoardData();
     } catch (err) {
-      detailError = err instanceof ApiError ? err.message : 'Gagal mengubah checklist.';
+      detailError = err instanceof ApiError ? err.message : tr('board.checklistError');
       await refreshBoard();
     }
   }
@@ -333,7 +338,7 @@
       await api.moveCard(data.workspace.id, workflowId, selectedCardId, { stageId: toStageId });
       await refreshBoard();
     } catch (err) {
-      detailError = err instanceof ApiError ? err.message : 'Gagal memindahkan card.';
+      detailError = err instanceof ApiError ? err.message : tr('board.moveError');
     } finally {
       moveLoading = false;
     }
@@ -345,11 +350,11 @@
     detailError = null;
     try {
       const result = await api.relayCard(data.workspace.id, workflowId, selectedCardId);
-      toast.success(`Card estafet ke "${result.workflow.name}" berhasil dibuat.`);
+      toast.success(tr('board.relaySuccess', { name: result.workflow.name }));
       closeSheet();
       await loadWorkflowBoardData();
     } catch (err) {
-      detailError = err instanceof ApiError ? err.message : 'Gagal estafet ke workflow berikutnya.';
+      detailError = err instanceof ApiError ? err.message : tr('board.relayError');
     } finally {
       relayLoading = false;
     }
@@ -365,7 +370,7 @@
       }
       await loadWorkflowBoardData();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal memindahkan card.');
+      toast.error(err instanceof ApiError ? err.message : tr('board.moveError'));
     } finally {
       boardMoveLoading = false;
     }
@@ -384,7 +389,7 @@
       );
       await refreshBoard();
     } catch (err) {
-      detailError = err instanceof ApiError ? err.message : 'Gagal mengubah assignee.';
+      detailError = err instanceof ApiError ? err.message : tr('board.assigneeError');
     } finally {
       assigneeLoading = false;
     }
@@ -420,7 +425,7 @@
       createAssigneeId = '';
       await refreshBoard();
     } catch (err) {
-      createError = err instanceof ApiError ? err.message : 'Gagal menambah pelanggan.';
+      createError = err instanceof ApiError ? err.message : tr('board.createError');
     } finally {
       createLoading = false;
     }
@@ -442,7 +447,7 @@
         await refreshBoard();
       }
     } catch (err) {
-      importError = err instanceof ApiError ? err.message : 'Gagal import CSV.';
+      importError = err instanceof ApiError ? err.message : tr('board.importError');
     } finally {
       importLoading = false;
     }
@@ -459,7 +464,7 @@
 </script>
 
 <svelte:head>
-  <title>{workflow?.name ?? 'Workflow Board'} — Flowboard</title>
+  <title>{workflow?.name ?? tr('board.title')} — Flowboard</title>
 </svelte:head>
 
 <div class="space-y-6">
@@ -467,8 +472,8 @@
   <header class="space-y-3">
     <Breadcrumb
       items={[
-        { label: 'Workflows', href: '/dashboard/workflows' },
-        { label: workflow?.name ?? 'Workflow Board' }
+        { label: tr('common.workflows'), href: '/dashboard/workflows' },
+        { label: workflow?.name ?? tr('board.title') }
       ]}
       showHomeIcon
     />
@@ -476,10 +481,10 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="space-y-1">
         <h1 class="ds-page-title text-ink tracking-tight">
-          {workflow?.name ?? 'Workflow Board'}
+          {workflow?.name ?? tr('board.title')}
         </h1>
         <p class="ds-caption text-mute">
-          Alur onboarding & follow-up pelanggan{#if workflow?.ownerName} · PIC: <span class="font-medium text-ink-soft">{workflow.ownerName}</span>{/if}
+          {tr('board.description')}{#if workflow?.ownerName} · {tr('common.pic')}: <span class="font-medium text-ink-soft">{workflow.ownerName}</span>{/if}
         </p>
       </div>
 
@@ -491,17 +496,17 @@
           size="sm"
         >
           <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
-          <span>Setup Tahapan</span>
+          <span>{tr('board.setupStages')}</span>
         </Button>
 
         <Button variant="secondary" size="sm" onclick={() => (importOpen = true)}>
           <HugeiconsIcon icon={Upload04Icon} size={16} strokeWidth={1.8} />
-          <span>Import CSV</span>
+          <span>{tr('board.importCsv')}</span>
         </Button>
 
         <Button variant="primary" size="sm" onclick={openCreateModal}>
           <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
-          <span>Tambah Pelanggan</span>
+          <span>{tr('board.addCustomer')}</span>
         </Button>
       </div>
     </div>
@@ -516,12 +521,12 @@
       items={[
         {
           value: 'board',
-          label: 'Kanban Board',
+          label: tr('board.kanban'),
           icon: kanbanIconSnippet
         },
         {
           value: 'table',
-          label: 'Daftar Tabel',
+          label: tr('board.table'),
           icon: tableIconSnippet,
           badge: totalCards > 0 ? String(totalCards) : undefined
         }
@@ -534,7 +539,7 @@
       <div class="w-full sm:w-60">
         <SearchInput
           bind:value={searchQuery}
-          placeholder="Cari pelanggan, no WA, tag…"
+          placeholder={tr('board.search')}
           size="sm"
           submit={false}
         />
@@ -543,10 +548,10 @@
       <select
         bind:value={selectedMemberFilter}
         class="h-8.5 rounded-full border border-hairline bg-card px-3 text-xs font-medium text-ink shadow-control outline-none transition-colors hover:border-hairline-strong focus:border-primary focus:ring-2 focus:ring-primary/15"
-        aria-label="Filter berdasarkan PIC"
+        aria-label={tr('board.filterAssignee')}
       >
-        <option value="all">Semua PIC</option>
-        <option value="unassigned">Belum Di-assign</option>
+        <option value="all">{tr('board.allAssignees')}</option>
+        <option value="unassigned">{tr('board.unassigned')}</option>
         {#each members as member (member.id)}
           <option value={member.id}>{member.name}</option>
         {/each}
@@ -556,9 +561,9 @@
         <select
           bind:value={selectedTagFilter}
           class="h-8.5 rounded-full border border-hairline bg-card px-3 text-xs font-medium text-ink shadow-control outline-none transition-colors hover:border-hairline-strong focus:border-primary focus:ring-2 focus:ring-primary/15"
-          aria-label="Filter berdasarkan tag"
+          aria-label={tr('board.filterTag')}
         >
-          <option value="all">Semua Tag</option>
+          <option value="all">{tr('board.allTags')}</option>
           {#each availableTags as t (t)}
             <option value={t}>{t}</option>
           {/each}
@@ -567,7 +572,7 @@
 
       {#if isFilterActive}
         <Button variant="ghost" size="sm" onclick={resetFilters} class="h-8.5 text-xs text-mute hover:text-ink">
-          Reset Filter
+          {tr('board.resetFilter')}
         </Button>
       {/if}
     </div>
@@ -577,14 +582,14 @@
   {#if isFilterActive}
     <div class="flex items-center justify-between px-1 text-xs text-mute">
       <span>
-        Menampilkan <strong>{totalFilteredCount}</strong> dari {totalCards} pelanggan
+        {tr('board.showing', { shown: totalFilteredCount, total: totalCards })}
       </span>
       <button
         type="button"
         onclick={resetFilters}
         class="font-semibold text-primary hover:underline"
       >
-        Hapus filter
+        {tr('board.clearFilter')}
       </button>
     </div>
   {/if}
@@ -606,9 +611,9 @@
     </div>
   {:else if board.length === 0}
     <EmptyStateBlock
-      title="Belum ada stage di workflow ini"
-      description="Mulai dengan membuat stage (kolom Kanban) pertama di menu setup."
-      actionLabel="Setup Stage & Checklist"
+      title={tr('board.noStages')}
+      description={tr('board.noStagesDescription')}
+      actionLabel={tr('board.setupStageChecklist')}
       onaction={() => (window.location.href = `/dashboard/workflows/${workflowId}/setup`)}
     />
   {:else if viewMode === 'board'}
@@ -616,9 +621,9 @@
     {#if isFilterActive && totalFilteredCount === 0}
       <div class="rounded-2xl border border-hairline bg-card p-12 text-center shadow-card">
         <EmptyStateBlock
-          title="Tidak ada pelanggan yang cocok"
-          description="Coba ubah kata kunci pencarian atau reset filter untuk menampilkan semua data."
-          actionLabel="Reset Semua Filter"
+          title={tr('board.noMatchingCustomers')}
+          description={tr('board.noMatchingDescription')}
+          actionLabel={tr('board.resetAllFilters')}
           onaction={resetFilters}
           class="!border-0 !shadow-none"
         />
@@ -627,7 +632,11 @@
       <div class="w-full">
         <KanbanBoard
           columns={filteredColumns}
-          addLabel="Tambah Pelanggan"
+          addLabel={tr('board.addCustomer')}
+          emptyTitle={tr('board.noMatchingCustomers')}
+          emptyDropHint={tr('board.dropCard')}
+          columnLabel={tr('board.column')}
+          waErrorLabel={tr('home.waError')}
           dragEnabled={!boardMoveLoading}
           oncardclick={openCard}
           oncardmove={handleCardMove}
@@ -641,9 +650,9 @@
       {#if tableRows.length === 0}
         <div class="p-8">
           <EmptyStateBlock
-            title="Tidak ada data ditemukan"
-            description="Tidak ada data pelanggan yang sesuai dengan kriteria filter."
-            actionLabel="Reset Filter"
+            title={tr('board.noData')}
+            description={tr('board.noDataDescription')}
+            actionLabel={tr('board.resetFilter')}
             onaction={resetFilters}
             class="!border-0 !shadow-none"
           />
@@ -653,14 +662,14 @@
           <table class="w-full border-collapse text-left text-sm">
             <thead>
               <tr class="border-b border-hairline bg-canvas-sunken text-xs font-semibold uppercase tracking-wider text-mute">
-                <th class="px-5 py-3.5">Pelanggan</th>
-                <th class="px-5 py-3.5">WhatsApp</th>
-                <th class="px-5 py-3.5">Produk / Sumber</th>
-                <th class="px-5 py-3.5">Tag</th>
-                <th class="px-5 py-3.5">Stage Saat Ini</th>
-                <th class="px-5 py-3.5">PIC</th>
-                <th class="px-5 py-3.5">Checklist</th>
-                <th class="px-5 py-3.5 text-right">Aksi</th>
+                <th class="px-5 py-3.5">{tr('board.customers')}</th>
+                <th class="px-5 py-3.5">{tr('common.whatsapp')}</th>
+                <th class="px-5 py-3.5">{tr('board.productSource')}</th>
+                <th class="px-5 py-3.5">{tr('board.tagLabel')}</th>
+                <th class="px-5 py-3.5">{tr('board.currentStage')}</th>
+                <th class="px-5 py-3.5">{tr('common.pic')}</th>
+                <th class="px-5 py-3.5">{tr('common.checklist')}</th>
+                <th class="px-5 py-3.5 text-right">{tr('common.actions')}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-hairline">
@@ -685,8 +694,8 @@
                         target="_blank"
                         rel="noreferrer"
                         class="rounded p-1 text-mute hover:bg-status-done-soft hover:text-status-done-ink"
-                        title="Chat WhatsApp"
-                        aria-label="Chat WhatsApp"
+                        title={tr('board.openWhatsApp')}
+                        aria-label={tr('board.openWhatsApp')}
                       >
                         <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={1.8} />
                       </a>
@@ -714,7 +723,7 @@
                         <span class="text-xs font-medium">{row.assigneeName}</span>
                       </div>
                     {:else}
-                      <span class="text-xs text-mute">Belum di-assign</span>
+                      <span class="text-xs text-mute">{tr('board.unassigned')}</span>
                     {/if}
                   </td>
                   <td class="px-5 py-3.5">
@@ -732,7 +741,7 @@
                       size="sm"
                       onclick={() => openCard(row.stageId, row.id)}
                     >
-                      Detail
+                      {tr('board.detail')}
                     </Button>
                   </td>
                 </tr>
@@ -749,7 +758,7 @@
 <Sheet
   open={isSheetOpen}
   onclose={closeSheet}
-  title={cardDetail?.customer?.name ?? 'Detail Pelanggan'}
+  title={cardDetail?.customer?.name ?? tr('board.cardDetail')}
 >
   {#if detailLoading}
     <div class="space-y-4 py-4">
@@ -763,13 +772,13 @@
         <div class="rounded-xl border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-xs">
           <p class="font-bold text-status-urgent-ink">
             {#if cardDetail.waErrorFlag}
-              Pengiriman WhatsApp gagal — perlu tindakan manual.
+              {tr('board.whatsappFailed')}
             {:else}
-              Follow-up WhatsApp dihentikan — perlu tindakan staff.
+              {tr('board.followupStopped')}
             {/if}
           </p>
           <p class="mt-1 text-status-urgent-ink/80">
-            Periksa nomor WA pelanggan atau kirim pesan manual, lalu assign ulang jika perlu.
+            {tr('board.manualHint')}
           </p>
         </div>
       {/if}
@@ -797,7 +806,7 @@
             class="flex items-center gap-1.5 rounded-full bg-status-done px-4 py-2 text-xs font-bold text-ink shadow-control transition hover:brightness-95 active:scale-95"
           >
             <HugeiconsIcon icon={WhatsappIcon} size={16} strokeWidth={1.8} />
-            <span>Chat WA</span>
+            <span>{tr('board.chatWhatsApp')}</span>
           </a>
         {/if}
       </section>
@@ -805,7 +814,7 @@
       <!-- Customer Information Card -->
       <section class="space-y-3 rounded-2xl border border-hairline bg-canvas-sunken p-4 text-sm">
         <div class="flex items-center justify-between gap-2">
-          <span class="shrink-0 text-mute">Nomor WhatsApp</span>
+          <span class="shrink-0 text-mute">{tr('board.customerNumber')}</span>
           {#if cardDetail.customer?.wa}
             <CopyToClipboard value={cardDetail.customer.wa} />
           {:else}
@@ -815,14 +824,14 @@
 
         {#if cardDetail.card.product}
           <div class="flex items-center justify-between">
-            <span class="text-mute">Produk / Layanan</span>
+            <span class="text-mute">{tr('board.productService')}</span>
             <span class="font-medium text-ink">{cardDetail.card.product}</span>
           </div>
         {/if}
 
         {#if cardDetail.card.tag}
           <div class="flex items-center justify-between">
-            <span class="text-mute">Tag / Label</span>
+            <span class="text-mute">{tr('board.tagLabel')}</span>
             <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft">
               {cardDetail.card.tag}
             </Badge>
@@ -830,9 +839,9 @@
         {/if}
 
         <div class="flex items-center justify-between">
-          <span class="text-mute">Stage Saat Ini</span>
+          <span class="text-mute">{tr('board.currentStage')}</span>
           <Badge tone={cardDetail.stage?.color === 'emerald' ? 'done' : cardDetail.stage?.color === 'amber' ? 'progress' : cardDetail.stage?.color === 'rose' ? 'urgent' : 'queued'}>
-            {cardDetail.stage?.name ?? 'Stage'}
+            {cardDetail.stage?.name ?? tr('common.stage')}
           </Badge>
         </div>
       </section>
@@ -840,7 +849,7 @@
       <!-- Assignee PIC Selection -->
       <section class="space-y-2">
         <label for="assignee-select" class="ds-label text-ink">
-          Assignee (PIC Pelanggan)
+          {tr('board.assigneeCustomer')}
         </label>
         <select
           id="assignee-select"
@@ -852,7 +861,7 @@
           }}
           class="h-10 w-full rounded-xl border border-hairline bg-card px-3.5 text-sm font-medium text-ink shadow-control outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
         >
-          <option value="">Belum di-assign (Unassigned)</option>
+          <option value="">{tr('board.unassigned')}</option>
           {#each members as member (member.id)}
             <option value={member.id}>{member.name} ({member.email})</option>
           {/each}
@@ -864,14 +873,14 @@
         <div class="flex items-center justify-between">
           <div>
             <h3 class="ds-section-title text-ink">
-              Checklist ({cardDetail.stage?.name ?? ''})
+              {tr('board.checklistStage', { stage: cardDetail.stage?.name ?? '' })}
             </h3>
             <p class="ds-caption mt-0.5 text-mute">
-              Item wajib harus diselesaikan pada tahapan ini.
+              {tr('board.checklistHint')}
             </p>
           </div>
           <span class="ds-caption rounded-full border border-hairline bg-card px-2.5 py-0.5 font-bold text-ink shadow-control">
-            {sheetChecklistDone} / {sheetChecklistTotal} Selesai
+            {sheetChecklistDone} / {sheetChecklistTotal} {tr('board.completed')}
           </span>
         </div>
 
@@ -887,7 +896,7 @@
 
         {#if cardDetail.checklist.length === 0}
           <div class="rounded-xl border border-dashed border-hairline bg-card/60 p-4 text-center">
-            <p class="ds-caption text-mute">Tidak ada checklist template pada stage ini.</p>
+            <p class="ds-caption text-mute">{tr('board.noChecklist')}</p>
           </div>
         {:else}
           <ul class="space-y-2">
@@ -904,7 +913,7 @@
                   </p>
                   {#if item.required}
                     <span class="ds-caption font-semibold text-status-urgent-ink">
-                      Wajib diselesaikan
+                      {tr('board.requiredItem')}
                     </span>
                   {/if}
                 </div>
@@ -916,7 +925,7 @@
 
       <!-- Stage Progression / Movement Section -->
       <section class="space-y-3 border-t border-hairline pt-5">
-        <span class="ds-label text-ink">Pindahkan ke Stage Lain</span>
+        <span class="ds-label text-ink">{tr('board.moveToStage')}</span>
         <div class="flex flex-wrap gap-2 pt-1">
           {#each board as col (col.id)}
             {#if col.id !== cardDetail.stage?.id}
@@ -927,7 +936,7 @@
                 onclick={() => moveStage(col.id)}
                 class="rounded-full shadow-control"
               >
-                <span>Ke {col.name}</span>
+                <span>{tr('board.continueTo', { name: col.name })}</span>
                 <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
               </Button>
             {/if}
@@ -937,9 +946,9 @@
 
       {#if cardDetail.nextWorkflow}
         <section class="space-y-3 border-t border-hairline pt-5">
-          <span class="ds-label text-ink">Estafet ke Workflow Berikutnya</span>
+          <span class="ds-label text-ink">{tr('board.handoffNext')}</span>
           <p class="ds-caption text-mute">
-            Card ini tetap di workflow saat ini. Pelanggan yang sama akan mendapat card baru di workflow tujuan.
+            {tr('board.handoffDescription')}
           </p>
           <Button
             variant="primary"
@@ -949,7 +958,7 @@
             class="rounded-full"
           >
             <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
-            <span>Lanjut ke {cardDetail.nextWorkflow.name}</span>
+            <span>{tr('board.continueTo', { name: cardDetail.nextWorkflow.name })}</span>
           </Button>
         </section>
       {/if}
@@ -960,42 +969,42 @@
 <!-- Modal: Tambah Pelanggan Baru -->
 <Dialog
   bind:open={createOpen}
-  title="Tambah Pelanggan Baru"
-  description="Kartu pelanggan baru akan otomatis dimasukkan ke dalam workflow ini."
+  title={tr('board.addCustomerTitle')}
+  description={tr('board.addCustomerDescription')}
 >
   <div class="space-y-4">
-    <FormField label="Nama Pelanggan" required>
+    <FormField label={tr('board.customerName')} required>
       {#snippet control(args)}
-        <Input {...args} bind:value={customerName} placeholder="Contoh: Siti Aminah" />
+        <Input {...args} bind:value={customerName} placeholder={tr('board.customerNamePlaceholder')} />
       {/snippet}
     </FormField>
 
-    <FormField label="Nomor WhatsApp" required helper="Format: 628123456789 (tanpa spasi / tanda plus)">
+    <FormField label={tr('board.phone')} required helper={tr('board.phoneHelper')}>
       {#snippet control(args)}
-        <Input {...args} bind:value={customerWa} placeholder="628123456789" />
+        <Input {...args} bind:value={customerWa} placeholder="60123456789" />
       {/snippet}
     </FormField>
 
-    <FormField label="Produk / Sumber Layanan" helper="Contoh: Webinar April 2026, Onboarding VIP, dll.">
+    <FormField label={tr('board.productSourceLabel')} helper={tr('board.productSourceHelper')}>
       {#snippet control(args)}
-        <Input {...args} bind:value={product} placeholder="Webinar April 2026" />
+        <Input {...args} bind:value={product} placeholder="April webinar" />
       {/snippet}
     </FormField>
 
-    <FormField label="Tag / Label" helper="Label prioritas atau segmen pelanggan">
+    <FormField label={tr('board.tagLabel')} helper={tr('board.tagHelper')}>
       {#snippet control(args)}
         <Input {...args} bind:value={tag} placeholder="Urgent, VIP, Promo" />
       {/snippet}
     </FormField>
 
-    <FormField label="PIC Assignee (Opsional)">
+    <FormField label={tr('board.assigneeOptional')}>
       {#snippet control(args)}
         <select
           {...args}
           bind:value={createAssigneeId}
           class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         >
-          <option value="">Otomatis (Default PIC Workflow)</option>
+          <option value="">{tr('board.autoDefaultAssignee')}</option>
           {#each members as member (member.id)}
             <option value={member.id}>{member.name} ({member.email})</option>
           {/each}
@@ -1013,10 +1022,10 @@
   {#snippet footer()}
     <div class="flex justify-end gap-2.5">
       <Button variant="secondary" onclick={() => (createOpen = false)}>
-        Batal
+        {tr('common.cancel')}
       </Button>
       <Button variant="primary" loading={createLoading} onclick={createCard}>
-        Simpan Pelanggan
+        {tr('board.saveCustomer')}
       </Button>
     </div>
   {/snippet}
@@ -1025,43 +1034,43 @@
 <!-- Modal: Import CSV -->
 <Dialog
   bind:open={importOpen}
-  title="Import Pelanggan via CSV"
-  description="Salin dan tempel data pelanggan dalam format teks CSV."
+  title={tr('board.importTitle')}
+  description={tr('board.importDescription')}
 >
   <div class="space-y-4">
     <!-- Format Sample Box -->
     <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-1.5 text-xs text-mute">
-      <p class="font-semibold text-ink">Format Data Per Baris:</p>
+      <p class="font-semibold text-ink">{tr('board.rowFormat')}</p>
       <code class="block rounded-lg border border-hairline bg-card p-2 font-mono text-[11px] text-ink">
-        Nama, No WhatsApp, Produk, Tag
+        Customer, WhatsApp, Product, Tag
       </code>
       <p class="pt-1 text-[11px]">
-        Contoh: <code>Siti Aminah, 628123456789, Webinar Apr, VIP</code>
+        {tr('board.example')} <code>Siti Aminah, 60123456789, April webinar, VIP</code>
       </p>
     </div>
 
     <!-- Mode Selector -->
-    <FormField label="Opsi Duplikasi">
+    <FormField label={tr('board.duplicateOption')}>
       {#snippet control(args)}
         <select
           {...args}
           bind:value={importMode}
           class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         >
-          <option value="skip">Lewati jika nomor WhatsApp sudah terdaftar</option>
-          <option value="update">Perbarui data produk & tag jika nomor sudah ada</option>
+          <option value="skip">{tr('board.duplicateSkip')}</option>
+          <option value="update">{tr('board.duplicateUpdate')}</option>
         </select>
       {/snippet}
     </FormField>
 
     <!-- CSV Input Area -->
-    <FormField label="Data Teks CSV" required>
+    <FormField label={tr('board.csvData')} required>
       {#snippet control(args)}
         <textarea
           {...args}
           bind:value={importCsv}
           rows={6}
-          placeholder={`Siti Aminah, 628123456789, Webinar Apr, VIP\nAhmad Dahlan, 628987654321, Onboarding, Urgent`}
+          placeholder={`Siti Aminah, 60123456789, April webinar, VIP\nAhmad Dahlan, 601298765432, Onboarding, Urgent`}
           class="w-full rounded-2xl border border-hairline bg-card p-3 font-mono text-xs text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         ></textarea>
       {/snippet}
@@ -1076,25 +1085,25 @@
     <!-- Result Box -->
     {#if importResult}
       <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 text-xs space-y-2">
-        <p class="font-bold text-ink">Laporan Hasil Import:</p>
+        <p class="font-bold text-ink">{tr('board.importReport')}</p>
         <div class="flex flex-wrap gap-3">
           <span class="rounded-full bg-status-done-soft px-3 py-1 font-semibold text-status-done-ink">
-            ✓ Berhasil dibuat: {importResult.created}
+            ✓ {tr('board.created')}: {importResult.created}
           </span>
           <span class="rounded-full bg-status-progress-soft px-3 py-1 font-semibold text-status-progress-ink">
-            ↻ Diperbarui: {importResult.updated}
+            ↻ {tr('board.updated')}: {importResult.updated}
           </span>
           <span class="rounded-full bg-status-idle-soft px-3 py-1 font-semibold text-status-idle-ink">
-            Dilewati: {importResult.skipped}
+            {tr('board.skipped')}: {importResult.skipped}
           </span>
         </div>
 
         {#if importResult.errors.length > 0}
           <div class="mt-2 rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3">
-            <p class="font-bold text-status-urgent-ink">Error ({importResult.errors.length} baris gagal):</p>
+            <p class="font-bold text-status-urgent-ink">{tr('board.errors', { count: importResult.errors.length })}</p>
             <ul class="mt-1 list-disc pl-4 space-y-0.5 text-status-urgent-ink">
               {#each importResult.errors as err}
-                <li>Baris {err.row}: {err.reason}</li>
+                <li>{tr('board.row', { row: err.row, reason: err.reason })}</li>
               {/each}
             </ul>
           </div>
@@ -1106,10 +1115,10 @@
   {#snippet footer()}
     <div class="flex justify-end gap-2.5">
       <Button variant="secondary" onclick={() => (importOpen = false)}>
-        Tutup
+        {tr('common.close')}
       </Button>
       <Button variant="primary" loading={importLoading} onclick={importCustomers}>
-        Proses Import Data
+        {tr('board.processImport')}
       </Button>
     </div>
   {/snippet}

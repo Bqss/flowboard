@@ -3,6 +3,8 @@
   import { FormField, PasswordInput, Breadcrumb } from '$lib/components/molecules/index.js';
   import { api, ApiError } from '$lib/api/client';
   import { invalidateAll } from '$app/navigation';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     UserCircleIcon,
@@ -14,6 +16,9 @@
   import type { LayoutData } from '../$types';
 
   let { data }: { data: LayoutData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
 
   let loadingProfile = $state(false);
   let name = $state('');
@@ -45,9 +50,9 @@
     try {
       await api.updateUser(data.user.id, { name });
       await invalidateAll();
-      profileSuccess = 'Profil berhasil diperbarui.';
+      profileSuccess = tr('settings.profileSaved');
     } catch (err) {
-      profileError = err instanceof ApiError ? err.message : 'Gagal memperbarui profil.';
+      profileError = err instanceof ApiError ? err.message : tr('settings.profileError');
     } finally {
       loadingProfile = false;
     }
@@ -60,11 +65,11 @@
     passwordError = null;
     try {
       await api.changePassword({ currentPassword, newPassword });
-      passwordSuccess = 'Kata sandi berhasil diubah.';
+      passwordSuccess = tr('settings.passwordSaved');
       currentPassword = '';
       newPassword = '';
     } catch (err) {
-      passwordError = err instanceof ApiError ? err.message : 'Gagal mengubah kata sandi.';
+      passwordError = err instanceof ApiError ? err.message : tr('settings.passwordError');
     } finally {
       loadingPassword = false;
     }
@@ -81,9 +86,9 @@
     try {
       await api.uploadAvatar(file);
       await invalidateAll();
-      profileSuccess = 'Foto profil berhasil diperbarui.';
+      profileSuccess = tr('settings.photoSaved');
     } catch (err) {
-      profileError = err instanceof ApiError ? err.message : 'Gagal mengunggah foto profil.';
+      profileError = err instanceof ApiError ? err.message : tr('settings.photoError');
     } finally {
       uploadingAvatar = false;
     }
@@ -91,30 +96,29 @@
 </script>
 
 <svelte:head>
-  <title>Pengaturan Akun — Flowboard</title>
+  <title>{tr('settings.title')} — Flowboard</title>
 </svelte:head>
 
 <div class="space-y-8">
   <header class="space-y-3">
     <Breadcrumb
       items={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Pengaturan Akun' }
+        { label: tr('common.dashboard'), href: '/dashboard' },
+        { label: tr('settings.title') }
       ]}
       showHomeIcon
     />
     <div class="pt-1">
-      <h1 class="ds-page-title text-ink">Pengaturan Akun</h1>
-      <p class="ds-caption mt-1 text-mute">Kelola data profil pengguna dan keamanan kata sandi.</p>
+      <h1 class="ds-page-title text-ink">{tr('settings.title')}</h1>
+      <p class="ds-caption mt-1 text-mute">{tr('settings.description')}</p>
     </div>
   </header>
 
   <div class="grid gap-6 lg:grid-cols-2">
-    <!-- Profile Info Card -->
     <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={UserCircleIcon} size={20} strokeWidth={1.8} class="text-primary" />
-        <h2 class="ds-section-title text-ink">Informasi Profil</h2>
+        <h2 class="ds-section-title text-ink">{tr('settings.profile')}</h2>
       </div>
 
       <div class="flex items-center gap-5">
@@ -134,9 +138,9 @@
             onclick={() => fileInput.click()}
           >
             <HugeiconsIcon icon={Image01Icon} size={15} strokeWidth={1.8} />
-            <span>{uploadingAvatar ? 'Mengunggah…' : 'Ganti Foto'}</span>
+            <span>{uploadingAvatar ? tr('settings.uploading') : tr('settings.changePhoto')}</span>
           </Button>
-          <p class="ds-caption mt-1.5 text-mute">Format JPG, PNG atau GIF (Maks. 1MB)</p>
+          <p class="ds-caption mt-1.5 text-mute">{tr('settings.photoHint')}</p>
         </div>
       </div>
 
@@ -147,13 +151,13 @@
         }}
         class="space-y-4"
       >
-        <FormField label="Nama Lengkap" required>
+        <FormField label={tr('settings.fullName')} required>
           {#snippet control(args)}
-            <Input {...args} bind:value={name} placeholder="Nama lengkap Anda" />
+            <Input {...args} bind:value={name} placeholder={tr('settings.fullNamePlaceholder')} />
           {/snippet}
         </FormField>
 
-        <FormField label="Alamat Email" helper="Email terdaftar tidak dapat diubah.">
+        <FormField label={tr('settings.emailAddress')} helper={tr('settings.emailLocked')}>
           {#snippet control(args)}
             <Input {...args} value={email} disabled />
           {/snippet}
@@ -174,16 +178,15 @@
         {/if}
 
         <div class="pt-2">
-          <Button variant="primary" type="submit" loading={loadingProfile}>Simpan Perubahan</Button>
+          <Button variant="primary" type="submit" loading={loadingProfile}>{tr('settings.saveChanges')}</Button>
         </div>
       </form>
     </section>
 
-    <!-- Password Card -->
     <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={LockPasswordIcon} size={20} strokeWidth={1.8} class="text-primary" />
-        <h2 class="ds-section-title text-ink">Keamanan & Kata Sandi</h2>
+        <h2 class="ds-section-title text-ink">{tr('settings.security')}</h2>
       </div>
 
       <form
@@ -193,15 +196,35 @@
         }}
         class="space-y-4"
       >
-        <FormField label="Kata Sandi Saat Ini" required>
+        <FormField label={tr('settings.currentPassword')} required>
           {#snippet control(args)}
-            <PasswordInput {...args} bind:value={currentPassword} placeholder="••••••••" />
+            <PasswordInput
+              {...args}
+              bind:value={currentPassword}
+              placeholder="••••••••"
+              showPasswordLabel={tr('settings.showPassword')}
+              hidePasswordLabel={tr('settings.hidePassword')}
+            />
           {/snippet}
         </FormField>
 
-        <FormField label="Kata Sandi Baru" required>
+        <FormField label={tr('settings.newPassword')} required>
           {#snippet control(args)}
-            <PasswordInput {...args} bind:value={newPassword} strength placeholder="••••••••" />
+            <PasswordInput
+              {...args}
+              bind:value={newPassword}
+              strength
+              placeholder="••••••••"
+              showPasswordLabel={tr('settings.showPassword')}
+              hidePasswordLabel={tr('settings.hidePassword')}
+              strengthLabels={[
+                tr('settings.strengthTooWeak'),
+                tr('settings.strengthWeak'),
+                tr('settings.strengthOkay'),
+                tr('settings.strengthStrong'),
+                tr('settings.strengthVeryStrong')
+              ]}
+            />
           {/snippet}
         </FormField>
 
@@ -220,7 +243,7 @@
         {/if}
 
         <div class="pt-2">
-          <Button variant="primary" type="submit" loading={loadingPassword}>Perbarui Kata Sandi</Button>
+          <Button variant="primary" type="submit" loading={loadingPassword}>{tr('settings.updatePassword')}</Button>
         </div>
       </form>
     </section>

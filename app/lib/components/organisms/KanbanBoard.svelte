@@ -15,6 +15,10 @@
 		columns: KanbanColumn[];
 		class?: string;
 		addLabel?: string;
+		emptyTitle?: string;
+		emptyDropHint?: string;
+		columnLabel?: string;
+		waErrorLabel?: string;
 		dragEnabled?: boolean;
 		oncardclick?: (columnId: string, cardId: string) => void;
 		oncardmove?: (cardId: string, fromColumnId: string, toColumnId: string) => void | Promise<void>;
@@ -26,6 +30,10 @@
 		columns,
 		class: className,
 		addLabel = 'Tambah card',
+		emptyTitle = 'Belum ada pelanggan',
+		emptyDropHint = 'Lepaskan card di sini',
+		columnLabel = 'Column',
+		waErrorLabel = 'WA Error',
 		dragEnabled = true,
 		oncardclick,
 		oncardmove,
@@ -138,7 +146,7 @@
 		{@const tone = laneTone(i)}
 		<section
 			role="group"
-			aria-label={`Kolom ${column.title}`}
+			aria-label={`${columnLabel} ${column.title}`}
 			class={cn(
 				'flex w-lane shrink-0 flex-col rounded-lane bg-lane p-4 select-none transition-colors duration-150',
 				dropTargetColumnId === column.id &&
@@ -164,13 +172,12 @@
 				<HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
 				<span>{addLabel}</span>
 			</Button>
-
 			<div class="flex min-h-[140px] flex-1 flex-col gap-3">
 				{#if column.items.length === 0}
 					<div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-hairline-strong/60 bg-card/40 p-6 text-center">
-						<p class="ds-caption font-medium text-mute">Belum ada pelanggan</p>
+						<p class="ds-caption font-medium text-mute">{emptyTitle}</p>
 						{#if dragEnabled && oncardmove}
-							<p class="ds-caption mt-1 text-faint">Lepaskan card di sini</p>
+							<p class="ds-caption mt-1 text-faint">{emptyDropHint}</p>
 						{/if}
 					</div>
 				{:else}
@@ -198,7 +205,7 @@
 							<div class="mb-2 flex items-center justify-between gap-2">
 								<div class="flex flex-wrap items-center gap-1.5">
 									{#if card.waError}
-										<Badge tone="urgent" variant="soft">WA Error</Badge>
+										<Badge tone="urgent" variant="soft">{waErrorLabel}</Badge>
 									{/if}
 									{#if card.badge}
 										<Badge tone={badgeTone} variant="soft">{card.badge}</Badge>

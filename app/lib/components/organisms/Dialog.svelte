@@ -5,6 +5,8 @@
 	import { modalPanelClass } from './shared.js';
 	import { modalBackdrop, modalPanel } from './modal-transitions.js';
 	import XIcon from '@lucide/svelte/icons/x';
+	import { dashboardText } from '$lib/i18n/dashboard.js';
+	import { locale } from '$lib/i18n/index.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		open?: boolean;
@@ -29,6 +31,7 @@
 		footer,
 		...rest
 	}: Props = $props();
+	const closeLabel = $derived(dashboardText($locale, 'common.close'));
 
 	const sizes = {
 		sm: 'max-w-sm',
@@ -67,7 +70,7 @@
 		<button
 			type="button"
 			class="absolute inset-0 bg-[var(--overlay-scrim)] backdrop-blur-[2px]"
-			aria-label="Tutup dialog"
+			aria-label={closeLabel}
 			transition:modalBackdrop={{ duration: 220 }}
 			onclick={close}
 		></button>
@@ -94,7 +97,7 @@
 					<button
 						type="button"
 						onclick={close}
-						aria-label="Tutup"
+						aria-label={closeLabel}
 						class="grid size-8 shrink-0 place-items-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 					>
 						<XIcon class="size-4" />

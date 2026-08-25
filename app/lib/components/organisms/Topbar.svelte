@@ -10,6 +10,12 @@
 		search?: string;
 		showSearch?: boolean;
 		searchPlaceholder?: string;
+		themeLabels?: {
+			light: string;
+			dark: string;
+			system: string;
+			group?: string;
+		};
 		onsearch?: (value: string) => void;
 		class?: string;
 		heading?: import('svelte').Snippet;
@@ -24,12 +30,14 @@
 		search = $bindable(''),
 		showSearch = true,
 		searchPlaceholder = 'Cari…',
+		themeLabels,
 		onsearch,
 		class: className,
 		heading,
 		actions,
 		...rest
 	}: Props = $props();
+
 </script>
 
 <header
@@ -68,6 +76,6 @@
 
 		{@render actions?.()}
 
-		<ThemeToggle size="sm" />
+		<ThemeToggle size="sm" labels={themeLabels} />
 	</div>
 </header>

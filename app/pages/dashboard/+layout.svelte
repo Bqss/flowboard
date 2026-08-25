@@ -8,6 +8,8 @@
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
   import { Avatar } from '$lib/components/atoms/index.js';
   import { DropdownMenu, toast, type MenuItem } from '$lib/components/molecules/index.js';
+  import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale, locales, setLocale } from '$lib/i18n/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Home09Icon,
@@ -22,6 +24,15 @@
   } from '@hugeicons/core-free-icons';
 
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
+  const themeLabels = $derived({
+    light: tr('shell.themeLight'),
+    dark: tr('shell.themeDark'),
+    system: tr('shell.themeSystem'),
+    group: tr('shell.themeGroup')
+  });
 
   let loggingOut = $state(false);
   let switchingWorkspace = $state(false);
@@ -49,25 +60,25 @@
   const navItems = $derived([
     {
       href: '/dashboard',
-      label: 'Dashboard',
+      label: tr('nav.dashboard'),
       active: $page.url.pathname === '/dashboard',
       icon: homeIcon
     },
     {
       href: '/dashboard/workflows',
-      label: 'Workflows',
+      label: tr('nav.workflows'),
       active: $page.url.pathname.startsWith('/dashboard/workflows'),
       icon: workflowsIcon
     },
     {
       href: '/dashboard/members',
-      label: 'Members',
+      label: tr('nav.members'),
       active: $page.url.pathname.startsWith('/dashboard/members'),
       icon: usersIcon
     },
     {
       href: '/dashboard/settings',
-      label: 'Settings',
+      label: tr('nav.settings'),
       active:
         $page.url.pathname === '/dashboard/settings' ||
         $page.url.pathname === '/dashboard/settings/',
@@ -75,7 +86,7 @@
     },
     {
       href: '/dashboard/settings/integrations',
-      label: 'Integrations',
+      label: tr('nav.integrations'),
       active: $page.url.pathname.startsWith('/dashboard/settings/integrations'),
       icon: settingsIcon
     }
@@ -101,7 +112,7 @@
       await invalidateAll();
       await goto('/dashboard');
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal mengganti workspace.');
+      toast.error(err instanceof ApiError ? err.message : tr('shell.switchWorkspace'));
     } finally {
       switchingWorkspace = false;
     }
@@ -130,7 +141,7 @@
         id: item.id,
         title: item.title,
         body: item.body,
-        time: new Date(item.createdAt).toLocaleString('id-ID', {
+        time: new Date(item.createdAt).toLocaleString(dashboardIntlLocale($locale), {
           day: 'numeric',
           month: 'short',
           hour: '2-digit',
@@ -149,6 +160,7 @@
   }
 
   $effect(() => {
+    $locale;
     if (!data.workspace?.id) return;
     void loadNotifications();
     const timer = setInterval(() => {
@@ -165,21 +177,21 @@
 
   const userMenuItems = $derived<MenuItem[]>([
     {
-      label: data.user?.name ?? 'Akun Saya',
+      label: data.user?.name ?? tr('shell.myAccount'),
       disabled: true
     },
     {
-      label: 'Pengaturan Profil',
+      label: tr('shell.profileSettings'),
       icon: settingsIcon,
       onselect: () => goto('/dashboard/settings')
     },
     {
-      label: 'Anggota Workspace',
+      label: tr('shell.workspaceMembers'),
       icon: usersIcon,
       onselect: () => goto('/dashboard/members')
     },
     {
-      label: loggingOut ? 'Keluar…' : 'Keluar (Sign out)',
+      label: loggingOut ? tr('shell.signingOut') : tr('shell.signOut'),
       destructive: true,
       separatorBefore: true,
       icon: logoutIcon,
@@ -215,27 +227,38 @@
 {/snippet}
 
 <div data-theme="app" class="flex min-h-screen w-full bg-canvas text-body">
-  <SidebarRail items={navItems} userName={data.user?.name ?? 'User'} userSrc={data.user?.avatarUrl ?? undefined} />
+  <SidebarRail
+    items={navItems}
+    userName={data.user?.name ?? 'User'}
+    userSrc={data.user?.avatarUrl ?? undefined}
+    labels={{
+      ariaLabel: tr('nav.dashboard'),
+      subtitle: tr('shell.productSubtitle'),
+      admin: tr('nav.admin')
+    }}
+  />
 
   <div class="flex min-w-0 flex-1 flex-col md:pl-[76px]">
     <Topbar
       title={data.workspace?.name ?? 'Flowboard'}
       showSearch={false}
+      searchPlaceholder={tr('shell.search')}
+      themeLabels={themeLabels}
     >
       {#snippet heading()}
         {#if canSwitchWorkspace}
-          <DropdownMenu items={workspaceMenuItems} align="start" label="Pilih workspace">
+          <DropdownMenu items={workspaceMenuItems} align="start" label={tr('shell.chooseWorkspace')}>
             {#snippet trigger({ open, toggle })}
               <button
                 type="button"
                 onclick={toggle}
                 class="flex max-w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                 aria-expanded={open}
-                aria-label="Ganti workspace"
+                aria-label={tr('shell.switchWorkspace')}
                 disabled={switchingWorkspace}
               >
                 <span class="ds-section-title truncate text-ink">
-                  {switchingWorkspace ? 'Mengganti…' : (data.workspace?.name ?? 'Flowboard')}
+                  {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'Flowboard')}
                 </span>
                 <HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8} class="shrink-0 text-mute" />
               </button>
@@ -246,8 +269,25 @@
         {/if}
       {/snippet}
       {#snippet actions()}
+        <div class="inline-flex items-center rounded-full border border-hairline bg-card p-0.5 shadow-control" aria-label={tr('language.label')}>
+          {#each locales as language}
+            <button
+              type="button"
+              class="rounded-full px-2 py-1 text-[10px] font-bold tracking-wide transition-colors {$locale === language.code ? 'bg-primary text-white' : 'text-mute hover:bg-canvas-sunken hover:text-ink'}"
+              aria-label={`${tr('language.label')}: ${tr(`language.${language.code}`)}`}
+              aria-pressed={$locale === language.code}
+              onclick={() => setLocale(language.code)}
+            >
+              {language.short}
+            </button>
+          {/each}
+        </div>
         <NotificationCenter
           items={notificationItems}
+          title={tr('shell.notifications')}
+          emptyText={tr('shell.emptyNotifications')}
+          markAllReadText={tr('shell.markRead')}
+          allReadText={tr('shell.allRead')}
           onmarkAllRead={markAllNotificationsRead}
         />
         <DropdownMenu items={userMenuItems} align="end">
@@ -257,7 +297,7 @@
               onclick={toggle}
               class="flex items-center gap-2.5 rounded-full border border-hairline bg-card py-1 pl-1.5 pr-3 shadow-control transition-all hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
               aria-expanded={open}
-              aria-label="Menu pengguna"
+              aria-label={tr('shell.userMenu')}
             >
               <div class="relative">
                 <Avatar name={data.user?.name} src={data.user?.avatarUrl ?? undefined} size={28} />

@@ -5,6 +5,8 @@
 	import AlertTriangleIcon from '@lucide/svelte/icons/triangle-alert';
 	import InfoIcon from '@lucide/svelte/icons/info';
 	import XIcon from '@lucide/svelte/icons/x';
+	import { dashboardText } from '$lib/i18n/dashboard.js';
+	import { locale } from '$lib/i18n/index.js';
 
 	type Tone = 'positive' | 'negative' | 'warning' | 'info';
 
@@ -27,6 +29,7 @@
 		children,
 		...rest
 	}: Props = $props();
+	const closeLabel = $derived(dashboardText($locale, 'common.close'));
 
 	const toneMap = {
 		positive: {
@@ -75,7 +78,7 @@
 		<button
 			type="button"
 			onclick={onclose}
-			aria-label="Tutup"
+			aria-label={closeLabel}
 			class="grid size-6 shrink-0 place-items-center rounded-full transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 		>
 			<XIcon class="size-3.5" />

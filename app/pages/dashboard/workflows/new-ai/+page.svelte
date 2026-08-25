@@ -1,6 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { api, ApiError, type ApiWorkflowDraft } from '$lib/api/client';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, Input, Skeleton, Textarea } from '$lib/components/atoms/index.js';
   import { Breadcrumb, FormField, Stepper, toast } from '$lib/components/molecules/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -9,6 +11,9 @@
 
   let { data }: { data: LayoutData } = $props();
 
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
+
   let step = $state(1);
   let prompt = $state('');
   let generating = $state(false);
@@ -16,11 +21,11 @@
   let provider = $state<'openai' | 'heuristic'>('heuristic');
   let draft = $state<ApiWorkflowDraft | null>(null);
 
-  const steps = [
-    { id: 'prompt', label: 'Ceritakan proses' },
-    { id: 'preview', label: 'Preview draf' },
-    { id: 'done', label: 'Simpan' }
-  ];
+  const steps = $derived([
+    { id: 'prompt', label: tr('ai.promptStep') },
+    { id: 'preview', label: tr('ai.previewStep') },
+    { id: 'done', label: tr('ai.saveStep') }
+  ]);
 
   async function generateDraft() {
     if (!prompt.trim() || !data.workspace?.id) return;
@@ -31,7 +36,7 @@
       provider = res.provider;
       step = 2;
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal generate draf workflow.');
+      toast.error(err instanceof ApiError ? err.message : tr('ai.generateError'));
     } finally {
       generating = false;
     }
@@ -42,32 +47,30 @@
     saving = true;
     try {
       const res = await api.saveWorkflowDraft(data.workspace.id, draft);
-      toast.success('Workflow dari AI berhasil disimpan.');
+      toast.success(tr('ai.saved'));
       await goto(`/dashboard/workflows/${res.workflow.id}/setup`);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal menyimpan workflow.');
+      toast.error(err instanceof ApiError ? err.message : tr('ai.saveError'));
     } finally {
       saving = false;
     }
   }
 </script>
 
-<svelte:head><title>Setup dengan AI — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('ai.title')} — Flowboard</title></svelte:head>
 
 <div class="space-y-8">
   <header class="space-y-4">
     <Breadcrumb
       items={[
-        { label: 'Workflows', href: '/dashboard/workflows' },
-        { label: 'Setup dengan AI' }
+        { label: tr('common.workflows'), href: '/dashboard/workflows' },
+        { label: tr('ai.title') }
       ]}
       showHomeIcon
     />
     <div>
-      <h1 class="ds-page-title text-ink">Setup Workflow dengan AI</h1>
-      <p class="ds-caption mt-1 text-mute max-w-2xl">
-        Jelaskan proses onboarding dalam 1–2 kalimat. AI akan usulkan stage, checklist, dan template WA — kamu bisa edit setelah simpan.
-      </p>
+      <h1 class="ds-page-title text-ink">{tr('ai.title')}</h1>
+      <p class="ds-caption mt-1 text-mute max-w-2xl">{tr('ai.description')}</p>
     </div>
     <Stepper {steps} current={step - 1} class="max-w-xl" />
   </header>
@@ -75,8 +78,8 @@
   {#if step === 1}
     <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4 max-w-2xl">
       <FormField
-        label="Ceritakan prosesnya"
-        helper="Contoh: Pendaftaran webinar, dari daftar sampai follow-up, reminder H-1 via WA."
+        label={tr('ai.promptLabel')}
+        helper={tr('ai.promptHelper')}
         required
       >
         {#snippet control(args)}
@@ -84,16 +87,16 @@
             {...args}
             bind:value={prompt}
             rows={5}
-            placeholder="Pendaftaran peserta webinar, dari pending sampai converted, dengan reminder H-1 dan follow-up sore jika belum bales..."
+            placeholder={tr('ai.promptPlaceholder')}
           />
         {/snippet}
       </FormField>
 
       <div class="flex flex-wrap gap-2">
-        <Button variant="secondary" href="/dashboard/workflows">Batal</Button>
+        <Button variant="secondary" href="/dashboard/workflows">{tr('common.cancel')}</Button>
         <Button variant="primary" loading={generating} disabled={!prompt.trim()} onclick={generateDraft}>
           <HugeiconsIcon icon={AiMagicIcon} size={18} strokeWidth={1.8} />
-          <span>Generate draf</span>
+          <span>{tr('ai.generate')}</span>
         </Button>
       </div>
     </section>
@@ -101,14 +104,14 @@
     <section class="space-y-4">
       <div class="flex flex-wrap items-center gap-2">
         <Badge tone={provider === 'openai' ? 'progress' : 'queued'} variant="soft">
-          {provider === 'openai' ? 'OpenAI' : 'Template heuristik'}
+          {provider === 'openai' ? 'OpenAI' : tr('ai.heuristic')}
         </Badge>
-        <span class="ds-caption text-mute">Preview — masih bisa diedit di setup setelah simpan</span>
+        <span class="ds-caption text-mute">{tr('ai.previewHint')}</span>
       </div>
 
       <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card">
         <h2 class="ds-section-title text-ink">{draft.name}</h2>
-        <p class="ds-caption text-mute mt-1">{draft.stages.length} stage · {draft.stages.reduce((n, s) => n + s.checklists.length, 0)} checklist</p>
+        <p class="ds-caption text-mute mt-1">{tr('ai.stageCount', { stages: draft.stages.length, checklists: draft.stages.reduce((n, s) => n + s.checklists.length, 0) })}</p>
       </div>
 
       <div class="flex gap-4 overflow-x-auto pb-2">
@@ -123,10 +126,10 @@
             {#if stage.onReplyNotify || stage.overdueReminderHours}
               <div class="flex flex-wrap gap-1">
                 {#if stage.onReplyNotify}
-                  <Badge tone="progress" variant="soft" class="text-[10px]">Reply → notify</Badge>
+                  <Badge tone="progress" variant="soft" class="text-[10px]">{tr('setup.replyNotify')}</Badge>
                 {/if}
                 {#if stage.overdueReminderHours}
-                  <Badge tone="queued" variant="soft" class="text-[10px]">Reminder {stage.overdueReminderHours}j</Badge>
+                  <Badge tone="queued" variant="soft" class="text-[10px]">{tr('setup.reminder', { hours: stage.overdueReminderHours })}</Badge>
                 {/if}
               </div>
             {/if}
@@ -136,10 +139,10 @@
                   <p class="font-semibold text-ink">{item.label}</p>
                   <div class="mt-1 flex flex-wrap gap-1">
                     <Badge tone={item.required ? 'urgent' : 'idle'} variant="soft" class="text-[10px]">
-                      {item.required ? 'Wajib' : 'Opsional'}
+                      {item.required ? tr('common.required') : tr('common.optional')}
                     </Badge>
                     {#if item.action?.kind && item.action.kind !== 'none'}
-                      <Badge tone="progress" variant="soft" class="text-[10px]">WA {item.action.kind}</Badge>
+                      <Badge tone="progress" variant="soft" class="text-[10px]">{tr('setup.waAction', { kind: item.action.kind })}</Badge>
                     {/if}
                   </div>
                   {#if item.action?.messageTemplate}
@@ -153,10 +156,10 @@
       </div>
 
       <div class="flex flex-wrap gap-2 pt-2">
-        <Button variant="secondary" onclick={() => (step = 1)}>Ubah prompt</Button>
+        <Button variant="secondary" onclick={() => (step = 1)}>{tr('ai.editPrompt')}</Button>
         <Button variant="primary" loading={saving} onclick={saveDraft}>
           <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
-          <span>Simpan workflow</span>
+          <span>{tr('ai.saveWorkflow')}</span>
           <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} />
         </Button>
       </div>

@@ -4,6 +4,8 @@
     ApiError,
     type ApiWorkspaceMember
   } from '$lib/api/client';
+  import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import { Avatar, Badge, Button, Input, Skeleton } from '$lib/components/atoms/index.js';
   import {
     FormField,
@@ -37,6 +39,9 @@
   };
 
   let { data }: { data: LayoutData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
 
   let loadingData = $state(true);
   let members = $state<ApiWorkspaceMember[]>([]);
@@ -116,11 +121,11 @@
       });
       const link = `${window.location.origin}/invite/${newInvite.token}`;
       lastInviteLink = link;
-      success = `Undangan berhasil dikirim ke ${newInvite.email}`;
+      success = tr('members.inviteSuccess', { email: newInvite.email });
       email = '';
       await loadMembersData();
     } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Gagal mengirim undangan';
+      error = err instanceof ApiError ? err.message : tr('members.inviteError');
     } finally {
       inviting = false;
     }
@@ -140,7 +145,7 @@
       memberToRemove = null;
       await loadMembersData();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Gagal menghapus anggota');
+      alert(err instanceof ApiError ? err.message : tr('members.removeError'));
     } finally {
       removing = false;
     }
@@ -162,7 +167,7 @@
     if (!dateStr) return '—';
     try {
       const d = new Date(dateStr);
-      return d.toLocaleDateString('id-ID', {
+      return d.toLocaleDateString(dashboardIntlLocale($locale), {
         day: 'numeric',
         month: 'short',
         year: 'numeric'
@@ -174,7 +179,7 @@
 </script>
 
 <svelte:head>
-  <title>Tim & Anggota — Flowboard</title>
+  <title>{tr('members.title')} — Flowboard</title>
 </svelte:head>
 
 {#snippet totalMembersIcon()}
@@ -194,16 +199,16 @@
   <header class="space-y-3">
     <Breadcrumb
       items={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Anggota Tim' }
+        { label: tr('common.dashboard'), href: '/dashboard' },
+        { label: tr('members.title') }
       ]}
       showHomeIcon
     />
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-1">
       <div>
-        <h1 class="ds-page-title text-ink">Anggota Tim</h1>
+        <h1 class="ds-page-title text-ink">{tr('members.title')}</h1>
         <p class="ds-caption mt-1 text-mute">
-          Kelola penanggung jawab (PIC) alur kerja dan akses workspace {data.workspace?.name ?? ''}.
+          {tr('members.description', { workspace: data.workspace?.name ?? '' })}
         </p>
       </div>
 
@@ -217,7 +222,7 @@
           }}
         >
           <HugeiconsIcon icon={UserAdd01Icon} size={16} strokeWidth={1.8} />
-          <span>Undang Anggota</span>
+          <span>{tr('members.invite')}</span>
         </Button>
       {/if}
     </div>
@@ -238,19 +243,19 @@
     {:else}
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          label="Total Anggota"
+          label={tr('members.total')}
           value={String(members.length)}
           icon={totalMembersIcon}
           class="p-5 rounded-2xl"
         />
         <StatCard
-          label="Pemilik Workspace"
+          label={tr('members.owners')}
           value={String(ownersCount)}
           icon={ownersIcon}
           class="p-5 rounded-2xl"
         />
         <StatCard
-          label="Undangan Tertunda"
+          label={tr('members.pendingInvites')}
           value={String(invites.length)}
           icon={pendingInvitesIcon}
           class="p-5 rounded-2xl"
@@ -268,16 +273,16 @@
         size="sm"
         bind:value={roleFilter}
         items={[
-          { label: 'Semua', value: 'all', badge: members.length },
-          { label: 'Owner', value: 'owner', badge: ownersCount },
-          { label: 'Member', value: 'member', badge: staffCount }
+          { label: tr('common.all'), value: 'all', badge: members.length },
+          { label: tr('common.owner'), value: 'owner', badge: ownersCount },
+          { label: tr('common.member'), value: 'member', badge: staffCount }
         ]}
       />
 
       <div class="w-full sm:w-64">
         <SearchInput
           bind:value={searchQuery}
-          placeholder="Cari nama atau email…"
+          placeholder={tr('members.search')}
           size="sm"
           submit={false}
           clearable
@@ -303,19 +308,19 @@
       </div>
     {:else if filteredMembers.length === 0}
       <EmptyStateBlock
-        title="Tidak ada anggota ditemukan"
-        description={searchQuery ? `Tidak ada hasil pencarian untuk "${searchQuery}".` : 'Belum ada anggota yang cocok dengan filter.'}
+        title={tr('members.empty')}
+        description={searchQuery ? tr('members.emptySearch', { query: searchQuery }) : tr('members.emptyFilter')}
       />
     {:else}
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
             <tr>
-              <th scope="col" class="px-6 py-3.5">Nama & Profil</th>
-              <th scope="col" class="px-6 py-3.5">Email</th>
-              <th scope="col" class="px-6 py-3.5">Peran</th>
-              <th scope="col" class="px-6 py-3.5">Bergabung</th>
-              <th scope="col" class="px-6 py-3.5 text-right">Aksi</th>
+              <th scope="col" class="px-6 py-3.5">{tr('members.nameProfile')}</th>
+              <th scope="col" class="px-6 py-3.5">{tr('members.email')}</th>
+              <th scope="col" class="px-6 py-3.5">{tr('members.role')}</th>
+              <th scope="col" class="px-6 py-3.5">{tr('members.joined')}</th>
+              <th scope="col" class="px-6 py-3.5 text-right">{tr('common.actions')}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-hairline">
@@ -335,7 +340,7 @@
                       <p class="font-bold text-ink truncate flex items-center gap-2">
                         {member.name}
                         {#if isMe}
-                          <Badge tone="queued" variant="soft">Anda</Badge>
+                          <Badge tone="queued" variant="soft">{tr('members.you')}</Badge>
                         {/if}
                       </p>
                     </div>
@@ -348,8 +353,8 @@
                       type="button"
                       onclick={() => copyToClipboard(member.email, `copy-${member.id}`)}
                       class="text-faint hover:text-ink transition-colors p-0.5"
-                      title="Salin email"
-                      aria-label="Salin email"
+                      title={tr('members.copyEmail')}
+                      aria-label={tr('members.copyEmail')}
                     >
                       <HugeiconsIcon
                         icon={copiedKey === `copy-${member.id}` ? CheckmarkCircle02Icon : Copy01Icon}
@@ -362,7 +367,7 @@
                 </td>
                 <td class="px-6 py-4">
                   <Badge tone={isMemberOwner ? 'done' : 'idle'} variant="soft">
-                    {isMemberOwner ? 'Owner' : 'Member'}
+                    {isMemberOwner ? tr('common.owner') : tr('common.member')}
                   </Badge>
                 </td>
                 <td class="px-6 py-4 ds-caption text-mute">
@@ -378,7 +383,7 @@
                         onclick={() => triggerRemove(member)}
                       >
                         <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
-                        <span>Hapus</span>
+                        <span>{tr('common.delete')}</span>
                       </Button>
                     {/if}
                   </div>
@@ -395,17 +400,17 @@
   {#if isOwner && invites.length > 0}
     <section class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
       <div class="border-b border-hairline px-6 py-4">
-        <h2 class="ds-section-title text-ink">Undangan Tertunda ({invites.length})</h2>
+        <h2 class="ds-section-title text-ink">{tr('members.invitesTitle', { count: invites.length })}</h2>
       </div>
 
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
             <tr>
-              <th scope="col" class="px-6 py-3.5">Email</th>
-              <th scope="col" class="px-6 py-3.5">Status</th>
-              <th scope="col" class="px-6 py-3.5">Kedaluwarsa</th>
-              <th scope="col" class="px-6 py-3.5 text-right">Aksi</th>
+              <th class="px-6 py-3.5">{tr('members.email')}</th>
+              <th class="px-6 py-3.5">{tr('members.inviteStatus')}</th>
+              <th class="px-6 py-3.5">{tr('members.expires')}</th>
+              <th class="px-6 py-3.5 text-right">{tr('common.actions')}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-hairline">
@@ -415,7 +420,7 @@
                   {invite.email}
                 </td>
                 <td class="px-6 py-4">
-                  <Badge tone="queued" variant="soft">Menunggu Konfirmasi</Badge>
+                  <Badge tone="queued" variant="soft">{tr('members.inviteStatus')}</Badge>
                 </td>
                 <td class="px-6 py-4 ds-caption text-mute">
                   {formatDate(invite.expiresAt)}
@@ -433,7 +438,7 @@
                         strokeWidth={1.8}
                         class={copiedKey === `inv-${invite.id}` ? 'text-status-done' : ''}
                       />
-                      <span>{copiedKey === `inv-${invite.id}` ? 'Disalin' : 'Salin Tautan'}</span>
+                      <span>{copiedKey === `inv-${invite.id}` ? tr('common.copied') : tr('members.copyLink')}</span>
                     </Button>
                   {/if}
                 </td>
@@ -449,8 +454,8 @@
 <!-- Modal Dialog: Undang Anggota Baru -->
 <Dialog
   bind:open={inviteDialogOpen}
-  title="Undang Anggota Tim"
-  description="Kirim undangan pendaftaran melalui email untuk menambahkan anggota ke workspace."
+  title={tr('members.inviteTitle')}
+  description={tr('members.inviteDescription')}
 >
   <form
     onsubmit={(e) => {
@@ -459,13 +464,13 @@
     }}
     class="space-y-4"
   >
-    <FormField label="Alamat Email" required>
+    <FormField label={tr('members.emailAddress')} required>
       {#snippet control(args)}
         <Input
           {...args}
           type="email"
           bind:value={email}
-          placeholder="nama@perusahaan.com"
+          placeholder={tr('members.emailPlaceholder')}
           required
         />
       {/snippet}
@@ -487,7 +492,7 @@
 
     {#if lastInviteLink}
       <div class="rounded-xl border border-hairline bg-lane p-4 text-sm space-y-2">
-        <p class="ds-caption text-mute">Tautan pendaftaran langsung:</p>
+        <p class="ds-caption text-mute">{tr('members.directLink')}</p>
         <code class="block break-all rounded bg-card p-2 text-xs font-mono text-ink-soft border border-hairline">
           {lastInviteLink}
         </code>
@@ -498,14 +503,14 @@
           onclick={() => copyToClipboard(lastInviteLink!, 'modal-link')}
         >
           <HugeiconsIcon icon={copiedKey === 'modal-link' ? CheckmarkCircle02Icon : Copy01Icon} size={14} strokeWidth={1.8} />
-          <span>{copiedKey === 'modal-link' ? 'Disalin' : 'Salin Tautan'}</span>
+          <span>{copiedKey === 'modal-link' ? tr('common.copied') : tr('members.copyLink')}</span>
         </Button>
       </div>
     {/if}
 
     <div class="mt-6 flex justify-end gap-2 border-t border-hairline pt-4">
       <Button variant="secondary" type="button" onclick={() => (inviteDialogOpen = false)}>
-        Tutup
+        {tr('members.close')}
       </Button>
       <Button
         type="submit"
@@ -514,7 +519,7 @@
         disabled={inviting || !email.trim()}
       >
         <HugeiconsIcon icon={MailSend01Icon} size={16} strokeWidth={1.8} />
-        <span>{inviting ? 'Mengirim…' : 'Kirim Undangan'}</span>
+        <span>{inviting ? tr('members.sendingInvite') : tr('members.sendInvite')}</span>
       </Button>
     </div>
   </form>
@@ -523,10 +528,10 @@
 <!-- Confirm Dialog: Hapus Anggota -->
 <ConfirmDialog
   bind:open={removeDialogOpen}
-  title="Hapus Anggota"
-  description={memberToRemove ? `Apakah Anda yakin ingin menghapus ${memberToRemove.name} dari workspace?` : 'Hapus anggota?'}
-  confirmLabel="Hapus"
-  cancelLabel="Batal"
+  title={tr('members.removeTitle')}
+  description={memberToRemove ? tr('members.removeDescription', { name: memberToRemove.name }) : tr('members.removeFallback')}
+  confirmLabel={tr('members.remove')}
+  cancelLabel={tr('common.cancel')}
   destructive
   loading={removing}
   onconfirm={confirmRemove}

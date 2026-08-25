@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import { api } from '$lib/api/client';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import { Avatar, Button, Input } from '$lib/components/atoms/index.js';
   import { FormField, PasswordInput, Breadcrumb } from '$lib/components/molecules/index.js';
   import { Dialog } from '$lib/components/organisms/index.js';
@@ -8,6 +10,9 @@
   import { Add01Icon, Edit02Icon, Delete02Icon } from '@hugeicons/core-free-icons';
   
   let { data }: { data: PageData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
 
   let showModal = $state(false);
   let modalMode = $state<'create' | 'edit'>('create');
@@ -51,7 +56,7 @@
       location.reload();
     } catch (err) {
       console.error(err);
-      alert(err instanceof Error ? err.message : 'Operation failed');
+      alert(err instanceof Error ? err.message : tr('users.operationFailed'));
     } finally {
       loading = false;
     }
@@ -59,26 +64,26 @@
 </script>
 
 <svelte:head>
-  <title>Users Management — Flowboard</title>
+  <title>{tr('users.title')} — Flowboard</title>
 </svelte:head>
 
 <div class="mx-auto max-w-5xl space-y-8">
   <div class="space-y-3">
     <Breadcrumb
       items={[
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Users Management' }
+        { label: tr('common.dashboard'), href: '/dashboard' },
+        { label: tr('users.title') }
       ]}
       showHomeIcon
     />
     <div class="flex flex-wrap items-center justify-between gap-4 pt-1">
       <div>
-        <h1 class="ds-page-title text-ink">Users Management</h1>
-        <p class="ds-body mt-1 text-mute">Manage all registered users in your application.</p>
+        <h1 class="ds-page-title text-ink">{tr('users.title')}</h1>
+        <p class="ds-body mt-1 text-mute">{tr('users.description')}</p>
       </div>
       <Button variant="primary" onclick={openCreate}>
         <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
-        <span>Add User</span>
+        <span>{tr('users.add')}</span>
       </Button>
     </div>
   </div>
@@ -87,10 +92,10 @@
     <table class="w-full text-left">
       <thead class="border-b border-hairline bg-canvas-sunken">
         <tr>
-          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">User</th>
-          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">Email</th>
-          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">ID</th>
-          <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-mute">Actions</th>
+          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.user')}</th>
+          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.email')}</th>
+          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.id')}</th>
+          <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.actions')}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-hairline">
@@ -112,28 +117,28 @@
                   onclick={() => openEdit(user)}
                 >
                   <HugeiconsIcon icon={Edit02Icon} size={16} strokeWidth={1.8} />
-                  Edit
+                  {tr('common.edit')}
                 </Button>
                 <Button 
                   variant="ghost" 
                   size="sm"
                   class="text-status-urgent-ink hover:text-status-urgent-strong"
                   onclick={async () => {
-                    if (confirm('Delete user?')) {
+                    if (confirm(tr('users.deleteConfirm'))) {
                       await api.deleteUser(user.id);
                       location.reload();
                     }
                   }}
                 >
                   <HugeiconsIcon icon={Delete02Icon} size={16} strokeWidth={1.8} />
-                  Delete
+                  {tr('common.delete')}
                 </Button>
               </div>
             </td>
           </tr>
         {:else}
           <tr>
-            <td colspan="4" class="px-6 py-10 text-center ds-body text-mute">No users found.</td>
+            <td colspan="4" class="px-6 py-10 text-center ds-body text-mute">{tr('users.empty')}</td>
           </tr>
         {/each}
       </tbody>
@@ -143,11 +148,11 @@
 
 <Dialog
   bind:open={showModal}
-  title={modalMode === 'create' ? 'Create User' : 'Edit User'}
-  description={modalMode === 'create' ? 'Add a new user account to the platform.' : 'Update user profile details.'}
+  title={modalMode === 'create' ? tr('users.createTitle') : tr('users.editTitle')}
+  description={modalMode === 'create' ? tr('users.createDescription') : tr('users.editDescription')}
 >
   <form onsubmit={(e) => { e.preventDefault(); submitForm(); }} class="space-y-4">
-    <FormField label="Full Name" required>
+    <FormField label={tr('users.fullName')} required>
       {#snippet control(args)}
         <Input 
           {...args} 
@@ -158,7 +163,7 @@
       {/snippet}
     </FormField>
     
-    <FormField label="Email Address" required>
+    <FormField label={tr('users.emailAddress')} required>
       {#snippet control(args)}
         <Input 
           {...args} 
@@ -172,12 +177,21 @@
     </FormField>
 
     {#if modalMode === 'create'}
-      <FormField label="Password" required>
+      <FormField label={tr('users.password')} required>
         {#snippet control(args)}
-          <PasswordInput 
-            {...args} 
-            bind:value={formPassword} 
+          <PasswordInput
+            {...args}
+            bind:value={formPassword}
             placeholder="••••••••"
+            showPasswordLabel={tr('settings.showPassword')}
+            hidePasswordLabel={tr('settings.hidePassword')}
+            strengthLabels={[
+              tr('settings.strengthTooWeak'),
+              tr('settings.strengthWeak'),
+              tr('settings.strengthOkay'),
+              tr('settings.strengthStrong'),
+              tr('settings.strengthVeryStrong')
+            ]}
             required
           />
         {/snippet}
@@ -187,9 +201,9 @@
   
   {#snippet footer()}
     <div class="flex justify-end gap-2">
-      <Button variant="secondary" onclick={closeModal}>Cancel</Button>
+      <Button variant="secondary" onclick={closeModal}>{tr('common.cancel')}</Button>
       <Button variant="primary" {loading} onclick={submitForm}>
-        {modalMode === 'create' ? 'Create User' : 'Save Changes'}
+        {modalMode === 'create' ? tr('users.add') : tr('users.saveChanges')}
       </Button>
     </div>
   {/snippet}

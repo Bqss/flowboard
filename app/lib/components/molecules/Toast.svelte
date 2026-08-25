@@ -10,6 +10,8 @@
 		Cancel01Icon
 	} from '@hugeicons/core-free-icons';
 	import type { ToastTone } from './toast-state.svelte.js';
+	import { dashboardText } from '$lib/i18n/dashboard.js';
+	import { locale } from '$lib/i18n/index.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		id?: string;
@@ -35,6 +37,7 @@
 		class: className,
 		...rest
 	}: Props = $props();
+	const closeLabel = $derived(dashboardText($locale, 'common.close'));
 
 	const toneConfig = {
 		success: {
@@ -102,7 +105,7 @@
 		<button
 			type="button"
 			onclick={onclose}
-			aria-label="Tutup notifikasi"
+			aria-label={closeLabel}
 			class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 		>
 			<HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={1.8} />

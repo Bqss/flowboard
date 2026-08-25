@@ -40,11 +40,16 @@
     Alert02Icon,
     Tick02Icon,
     PlayIcon,
-    WhatsappIcon
+    WhatsappIcon,
   } from '@hugeicons/core-free-icons';
+  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { locale } from '$lib/i18n/index.js';
   import type { LayoutData } from '../../../$types';
 
   let { data }: { data: LayoutData } = $props();
+
+  const tr = (key: string, values?: Record<string, string | number>) =>
+    dashboardText($locale, key, values);
 
   const workflowId = $derived(page.params.workflowId);
 
@@ -68,7 +73,7 @@
       label: m.name,
       description: m.email,
       avatarUrl: m.avatarUrl ?? undefined,
-      role: m.role === 'owner' ? 'Owner' : 'Member'
+      role: m.role === 'owner' ? tr('common.owner') : tr('common.member')
     }))
   );
 
@@ -129,11 +134,11 @@
   // Stage Reordering
   let reordering = $state(false);
 
-  const actionKindOptions = [
-    { value: 'none', label: 'Manual (tanpa WA)' },
-    { value: 'send', label: 'Kirim WA sekali' },
-    { value: 'followup', label: 'Follow-up WA' }
-  ];
+  const actionKindOptions = $derived([
+    { value: 'none', label: tr('setup.manualNoWa') },
+    { value: 'send', label: tr('setup.sendOnce') },
+    { value: 'followup', label: tr('setup.followup') }
+  ]);
 
   // Feedback Alerts
   let alertMessage = $state<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -151,36 +156,36 @@
     data.workspace?.role === 'owner' || (workflow && workflow.ownerId === data.user?.id)
   );
 
-  const stageColorMeta: Record<string, { name: string; description: string; color: string; bgSoft: string; icon: any }> = {
+  const stageColorMeta = $derived<Record<string, { name: string; description: string; color: string; bgSoft: string; icon: any }>>({
     indigo: {
       name: 'Indigo',
-      description: 'Antrean / Masuk',
+      description: tr('setup.colorIndigo'),
       color: '#4f46e5',
       bgSoft: '#eef2ff',
       icon: Clock01Icon
     },
     amber: {
       name: 'Amber',
-      description: 'Pengerjaan / Proses',
+      description: tr('setup.colorAmber'),
       color: '#f59e0b',
       bgSoft: '#fffbeb',
       icon: PlayIcon
     },
     rose: {
       name: 'Rose',
-      description: 'Perhatian / Tertahan',
+      description: tr('setup.colorRose'),
       color: '#f43f5e',
       bgSoft: '#fff1f2',
       icon: Alert02Icon
     },
     emerald: {
-      name: 'Hijau',
-      description: 'Selesai / Closing',
+      name: tr('setup.colorEmerald'),
+      description: tr('setup.colorEmeraldDescription'),
       color: '#22c55e',
       bgSoft: '#f0fdf4',
       icon: Tick02Icon
     }
-  };
+  });
 
   const stageColorOptions = ['indigo', 'amber', 'rose', 'emerald'] as const;
 
@@ -218,7 +223,7 @@
       }
     } catch (err) {
       console.error('Failed to load setup data:', err);
-      showAlert(err instanceof ApiError ? err.message : 'Gagal memuat konfigurasi workflow.', 'error');
+      showAlert(err instanceof ApiError ? err.message : tr('setup.loadError'), 'error');
     } finally {
       loadingData = false;
     }
@@ -250,9 +255,9 @@
         };
       }
       settingsOpen = false;
-      toast.success('Pengaturan workflow berhasil disimpan.');
+      toast.success(tr('setup.settingsSaved'));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal menyimpan pengaturan workflow.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.settingsError'));
     } finally {
       savingWorkflow = false;
     }
@@ -271,9 +276,9 @@
       newStageColor = 'indigo';
       createStageOpen = false;
       await loadSetupData();
-      toast.success('Tahapan baru berhasil ditambahkan.');
+      toast.success(tr('setup.stageCreated'));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal menambah tahapan.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.stageCreateError'));
     } finally {
       creatingStage = false;
     }
@@ -310,9 +315,9 @@
       });
       closeEditStage();
       await loadSetupData();
-      toast.success('Tahapan berhasil diperbarui.');
+      toast.success(tr('setup.stageUpdated'));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal memperbarui tahapan.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.stageUpdateError'));
     } finally {
       updatingStage = false;
     }
@@ -326,9 +331,9 @@
       await api.deleteStage(data.workspace.id, workflowId, stageToDelete.id);
       stageToDelete = null;
       await loadSetupData();
-      toast.success(`Tahapan "${stageName}" berhasil dihapus.`);
+      toast.success(tr('setup.stageDeleted', { name: stageName }));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal menghapus tahapan.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.stageDeleteError'));
     } finally {
       deletingStage = false;
     }
@@ -351,10 +356,10 @@
       await api.reorderStages(data.workspace.id, workflowId, {
         stageIds: newStages.map((s) => s.id)
       });
-      toast.success('Urutan tahapan berhasil diperbarui.');
+      toast.success(tr('setup.stagesReordered'));
     } catch (err) {
       await loadSetupData();
-      toast.error(err instanceof ApiError ? err.message : 'Gagal mengubah urutan tahapan.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.stagesReorderError'));
     } finally {
       reordering = false;
     }
@@ -377,9 +382,9 @@
       });
       checklistInputs[stageId] = { label: '', required: true };
       await loadSetupData();
-      toast.success('Item checklist berhasil ditambahkan.');
+      toast.success(tr('setup.checklistAdded'));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal menambah item checklist.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.checklistAddError'));
     } finally {
       addingChecklistStageId = null;
     }
@@ -395,9 +400,9 @@
         required: !template.required
       });
       await loadSetupData();
-      toast.success(`Aturan checklist diubah menjadi ${!template.required ? 'Wajib' : 'Opsional'}.`);
+      toast.success(tr('setup.requiredChanged', { state: !template.required ? tr('common.required') : tr('common.optional') }));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal mengubah status checklist.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.requiredChangeError'));
     }
   }
 
@@ -417,9 +422,9 @@
       });
       editingChecklistId = null;
       await loadSetupData();
-      toast.success('Item checklist berhasil diperbarui.');
+      toast.success(tr('setup.checklistUpdated'));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal memperbarui item checklist.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.checklistUpdateError'));
     } finally {
       updatingChecklist = false;
     }
@@ -467,9 +472,9 @@
       );
       actionDialogOpen = false;
       await loadSetupData();
-      toast.success('Action checklist disimpan.');
+      toast.success(tr('setup.actionSaved'));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal menyimpan action.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.actionError'));
     } finally {
       savingAction = false;
     }
@@ -483,9 +488,9 @@
       await api.deleteChecklistTemplate(data.workspace.id, workflowId, stageId, templateId);
       checklistToDelete = null;
       await loadSetupData();
-      toast.success(`Checklist "${label}" berhasil dihapus.`);
+      toast.success(tr('setup.checklistDeleted', { label }));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Gagal menghapus item checklist.');
+      toast.error(err instanceof ApiError ? err.message : tr('setup.checklistDeleteError'));
     } finally {
       deletingChecklist = false;
     }
@@ -493,7 +498,7 @@
 </script>
 
 <svelte:head>
-  <title>Setup {workflow?.name ?? 'Workflow'} — Flowboard</title>
+  <title>{tr('setup.title')} {workflow?.name ?? tr('common.workflow')} — Flowboard</title>
 </svelte:head>
 
 <div data-theme="app" class="space-y-6 pb-12">
@@ -501,9 +506,9 @@
   <header class="space-y-4">
     <Breadcrumb
       items={[
-        { label: 'Workflows', href: '/dashboard/workflows' },
-        { label: workflow?.name ?? 'Workflow', href: `/dashboard/workflows/${workflowId}` },
-        { label: 'Setup Tahapan & Checklist' }
+        { label: tr('common.workflows'), href: '/dashboard/workflows' },
+        { label: workflow?.name ?? tr('common.workflow'), href: `/dashboard/workflows/${workflowId}` },
+        { label: tr('setup.breadcrumb') }
       ]}
       showHomeIcon
     />
@@ -511,15 +516,15 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="space-y-1">
         <h1 class="ds-page-title text-ink font-extrabold tracking-tight">
-          {workflow?.name ?? 'Setup Workflow'}
+          {workflow?.name ?? tr('setup.workflowFallback')}
         </h1>
         <p class="ds-caption text-mute max-w-2xl text-sm">
-          Konfigurasi kolom tahapan kanban dan syarat checklist yang harus dipenuhi sebelum kartu berpindah.
+          {tr('setup.description')}
         </p>
 
         {#if assignedMembers.length > 0}
           <div class="flex flex-wrap items-center gap-2 pt-1">
-            <span class="text-xs font-semibold text-mute">PIC Otomatis ({assignedMembers.length}):</span>
+            <span class="text-xs font-semibold text-mute">{tr('setup.autoAssignee', { count: assignedMembers.length })}:</span>
             <div class="flex flex-wrap items-center gap-1.5">
               {#each assignedMembers as member (member.id)}
                 {@const isPrimary = defaultAssigneeId === member.id}
@@ -528,14 +533,14 @@
                   <span>{member.name}</span>
                   {#if isPrimary && assignedMembers.length > 1}
                     <span class="rounded bg-primary/10 px-1 text-[9px] font-bold text-primary">
-                      Utama
+                      {tr('setup.primary')}
                     </span>
                   {/if}
                 </span>
               {/each}
               {#if assignedMembers.length > 1}
                 <Badge tone="queued" variant="soft" class="text-[10px] font-semibold py-0.5">
-                  Round-Robin Aktif
+                  {tr('setup.roundRobin')}
                 </Badge>
               {/if}
             </div>
@@ -551,7 +556,7 @@
           href={`/dashboard/workflows/${workflowId}`}
         >
           <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
-          <span>Lihat Board</span>
+          <span>{tr('setup.viewBoard')}</span>
         </Button>
 
         {#if canManage}
@@ -561,7 +566,7 @@
             onclick={() => (settingsOpen = true)}
           >
             <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
-            <span>Pengaturan</span>
+            <span>{tr('common.settings')}</span>
           </Button>
 
           <Button
@@ -570,7 +575,7 @@
             onclick={() => (createStageOpen = true)}
           >
             <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
-            <span>Tambah Tahapan</span>
+            <span>{tr('setup.addStage')}</span>
           </Button>
         {/if}
       </div>
@@ -607,15 +612,15 @@
   {:else if stages.length === 0}
     <!-- Empty State -->
     <div class="flex flex-col items-center justify-center rounded-2xl bg-lane p-12 text-center">
-      <h2 class="ds-section-title text-ink">Belum Ada Tahapan</h2>
+      <h2 class="ds-section-title text-ink">{tr('setup.emptyTitle')}</h2>
       <p class="ds-body text-mute mt-1 max-w-md text-sm">
-        Workflow ini belum memiliki tahapan kolom kanban. Tambahkan tahapan pertama untuk memulai.
+        {tr('setup.emptyDescription')}
       </p>
       {#if canManage}
         <div class="mt-4">
           <Button variant="primary" onclick={() => (createStageOpen = true)}>
             <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
-            <span>Tambah Tahapan Pertama</span>
+            <span>{tr('setup.addFirstStage')}</span>
           </Button>
         </div>
       {/if}
@@ -651,7 +656,7 @@
               {#if canManage}
                 <div class="flex items-center gap-0.5 shrink-0 text-mute">
                   <IconButton
-                    label="Geser ke kiri"
+                    label={tr('setup.moveLeft')}
                     variant="ghost"
                     size="sm"
                     disabled={index === 0 || reordering}
@@ -662,7 +667,7 @@
                   </IconButton>
 
                   <IconButton
-                    label="Geser ke kanan"
+                    label={tr('setup.moveRight')}
                     variant="ghost"
                     size="sm"
                     disabled={index === stages.length - 1 || reordering}
@@ -673,7 +678,7 @@
                   </IconButton>
 
                   <IconButton
-                    label="Edit Tahapan"
+                    label={tr('setup.editStage')}
                     variant="ghost"
                     size="sm"
                     onclick={() => startEditStage(stage)}
@@ -683,7 +688,7 @@
                   </IconButton>
 
                   <IconButton
-                    label="Hapus Tahapan"
+                    label={tr('setup.deleteStage')}
                     variant="ghost"
                     size="sm"
                     onclick={() => (stageToDelete = stage)}
@@ -701,20 +706,20 @@
                 {stage.name}
               </h2>
               <div class="flex items-center gap-1.5 mt-1 text-[11px] text-mute font-medium">
-                <span>{stage.templates?.length ?? 0} item checklist</span>
+                <span>{tr('setup.checklistCount', { count: stage.templates?.length ?? 0 })}</span>
                 {#if stage.onReplyNotify}
                   <span class="text-faint">•</span>
-                  <span class="text-primary font-semibold">Reply → notify</span>
+                  <span class="text-primary font-semibold">{tr('setup.replyNotify')}</span>
                 {/if}
                 {#if stage.overdueReminderHours}
                   <span class="text-faint">•</span>
-                  <span>Reminder {stage.overdueReminderHours}j</span>
+                  <span>{tr('setup.reminder', { hours: stage.overdueReminderHours })}</span>
                 {/if}
                 {#if (stage.templates?.filter((t) => t.required).length ?? 0) > 0}
                   <span class="text-faint">•</span>
                   <span class="text-status-urgent-ink font-semibold">
-                    {stage.templates?.filter((t) => t.required).length} wajib
-                  </span>
+                    {tr('setup.requiredCount', { count: stage.templates?.filter((t) => t.required).length ?? 0 })}
+                    </span>
                 {/if}
               </div>
             </div>
@@ -726,7 +731,7 @@
               <div class="relative">
                 <Input
                   bind:value={checklistInputs[stage.id].label}
-                  placeholder="Tambah checklist... (Enter)"
+                  placeholder={tr('setup.addChecklistPlaceholder')}
                   class="h-9 text-xs pr-16 bg-card"
                   onkeydown={(e) => {
                     if (e.key === 'Enter') {
@@ -744,7 +749,7 @@
                     onclick={() => addChecklist(stage.id)}
                     class="h-7 px-2 text-xs font-semibold text-primary hover:bg-primary-soft"
                   >
-                    Tambah
+                    {tr('setup.add')}
                   </Button>
                 </div>
               </div>
@@ -752,9 +757,9 @@
               <div class="flex items-center justify-between px-1">
                 <label class="flex items-center gap-1.5 text-xs text-mute cursor-pointer select-none">
                   <Checkbox bind:checked={checklistInputs[stage.id].required} />
-                  <span>Wajib diselesaikan</span>
+                  <span>{tr('setup.requiredComplete')}</span>
                 </label>
-                <span class="text-[11px] text-faint">Syarat pindah stage</span>
+                <span class="text-[11px] text-faint">{tr('setup.stageRequirement')}</span>
               </div>
             </div>
           {/if}
@@ -763,8 +768,8 @@
           <div class="space-y-3 pt-1">
             {#if (stage.templates?.length ?? 0) === 0}
               <div class="rounded-xl border border-dashed border-hairline-strong bg-card/40 p-4 text-center">
-                <p class="text-xs text-mute font-medium">Belum ada checklist</p>
-                <p class="text-[11px] text-faint mt-0.5">Ketik di atas untuk menambah syarat</p>
+                <p class="text-xs text-mute font-medium">{tr('setup.noChecklist')}</p>
+                <p class="text-[11px] text-faint mt-0.5">{tr('setup.typeToAdd')}</p>
               </div>
             {:else}
               {#each stage.templates as template (template.id)}
@@ -782,13 +787,13 @@
                     <div class="space-y-2 pt-1">
                       <Input
                         bind:value={editChecklistLabel}
-                        placeholder="Label checklist..."
+                        placeholder={tr('setup.checklistLabelPlaceholder')}
                         class="h-8 text-xs"
                       />
                       <div class="flex items-center justify-between pt-1">
                         <label class="flex items-center gap-1.5 text-xs text-ink cursor-pointer select-none">
                           <Checkbox bind:checked={editChecklistRequired} />
-                          <span>Wajib</span>
+                          <span>{tr('setup.required')}</span>
                         </label>
                         <div class="flex items-center gap-1">
                           <Button
@@ -797,7 +802,7 @@
                             onclick={() => (editingChecklistId = null)}
                             class="h-7 px-2 text-xs"
                           >
-                            Batal
+                            {tr('setup.cancel')}
                           </Button>
                           <Button
                             variant="primary"
@@ -806,7 +811,7 @@
                             onclick={() => saveEditChecklist(stage.id, template.id)}
                             class="h-7 px-2 text-xs"
                           >
-                            Simpan
+                            {tr('common.save')}
                           </Button>
                         </div>
                       </div>
@@ -822,7 +827,7 @@
                       {#if canManage}
                         <button
                           type="button"
-                          title="Klik untuk mengubah aturan"
+                          title={tr('setup.toggleRule')}
                           onclick={() => toggleChecklistRequired(stage.id, template)}
                           class="cursor-pointer focus:outline-none"
                         >
@@ -831,12 +836,12 @@
                             variant="soft"
                             class="text-[11px] hover:opacity-80 transition-opacity"
                           >
-                            {template.required ? 'Wajib' : 'Opsional'}
+                            {template.required ? tr('setup.required') : tr('common.optional')}
                           </Badge>
                         </button>
                         {#if template.action?.kind && template.action.kind !== 'none'}
                           <Badge tone="progress" variant="soft" class="text-[10px]">
-                            WA {template.action.kind}
+                            {tr('setup.waAction', { kind: template.action.kind })}
                           </Badge>
                         {/if}
                       {:else}
@@ -845,7 +850,7 @@
                           variant="soft"
                           class="text-[11px]"
                         >
-                          {template.required ? 'Wajib' : 'Opsional'}
+                          {template.required ? tr('setup.required') : tr('common.optional')}
                         </Badge>
                       {/if}
                       </div>
@@ -853,7 +858,7 @@
                       {#if canManage}
                         <div class="flex items-center gap-1 text-faint">
                           <IconButton
-                            label="Atur action WA"
+                            label={tr('setup.actionWa')}
                             variant="bare"
                             size="sm"
                             onclick={() => openActionEditor(stage.id, template)}
@@ -862,7 +867,7 @@
                             <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={1.8} />
                           </IconButton>
                           <IconButton
-                            label="Edit item"
+                            label={tr('setup.editItem')}
                             variant="bare"
                             size="sm"
                             onclick={() => startEditChecklist(template)}
@@ -871,7 +876,7 @@
                             <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} />
                           </IconButton>
                           <IconButton
-                            label="Hapus item"
+                            label={tr('setup.deleteItem')}
                             variant="bare"
                             size="sm"
                             onclick={() => promptDeleteChecklist(stage.id, template)}
@@ -893,11 +898,11 @@
   {/if}
 </div>
 
-<!-- Modal: Pengaturan Workflow -->
+<!-- Modal: Workflow Settings -->
 <Dialog
   bind:open={settingsOpen}
-  title="Pengaturan Workflow"
-  description="Atur nama workflow dan penugasan PIC default untuk kartu baru."
+  title={tr('setup.workflowSettings')}
+  description={tr('setup.workflowSettingsDescription')}
   size="md"
 >
   <form
@@ -907,21 +912,21 @@
     }}
     class="space-y-4 py-2"
   >
-    <FormField label="Nama Workflow" required>
+    <FormField label={tr('setup.workflowName')} required>
       {#snippet control(args)}
         <Input
           {...args}
           bind:value={workflowName}
           disabled={!canManage}
-          placeholder="Contoh: Sales & Closing Pipeline"
+          placeholder={tr('setup.workflowNamePlaceholder')}
           class="h-10 text-sm"
         />
       {/snippet}
     </FormField>
 
     <FormField
-      label="PIC / Assignee Otomatis (Bisa Lebih dari 1)"
-      helper="Pilih satu atau lebih PIC tim. Jika memilih lebih dari 1, kartu baru otomatis dibagikan secara bergilir (round-robin)."
+      label={tr('setup.assignees')}
+      helper={tr('setup.assigneesHelper')}
     >
       {#snippet control()}
         <MultiSelectCombobox
@@ -930,15 +935,15 @@
           bind:primary={defaultAssigneeId}
           disabled={!canManage}
           showPrimaryBadge
-          placeholder="Pilih satu atau beberapa PIC workflow…"
-          emptyText="Tidak ada anggota tim ditemukan"
+          placeholder={tr('setup.assigneesPlaceholder')}
+          emptyText={tr('setup.noMembers')}
         />
       {/snippet}
     </FormField>
 
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" onclick={() => (settingsOpen = false)}>
-        Batal
+        {tr('setup.cancel')}
       </Button>
       <Button
         variant="primary"
@@ -946,17 +951,17 @@
         loading={savingWorkflow}
         disabled={!workflowName.trim()}
       >
-        Simpan Pengaturan
+        {tr('setup.saveSettings')}
       </Button>
     </div>
   </form>
 </Dialog>
 
-<!-- Modal: Tambah Stage Baru -->
+<!-- Modal: Add Stage -->
 <Dialog
   bind:open={createStageOpen}
-  title="Tambah Tahapan Baru"
-  description="Tambahkan kolom tahapan baru ke dalam alur pipeline workflow."
+  title={tr('setup.newStage')}
+  description={tr('setup.newStageDescription')}
   size="md"
 >
   <form
@@ -966,12 +971,12 @@
     }}
     class="space-y-4 py-2"
   >
-    <FormField label="Nama Tahapan" required helper="Nama kolom yang menjelaskan aktivitas tahapan.">
+    <FormField label={tr('setup.stageName')} required helper={tr('setup.stageNameHelper')}>
       {#snippet control(args)}
         <Input
           {...args}
           bind:value={newStageName}
-          placeholder="Contoh: Verifikasi Dokumen"
+          placeholder={tr('setup.stageNamePlaceholder')}
           class="h-10 text-sm"
           autofocus
         />
@@ -981,8 +986,8 @@
     <!-- Visual Color & Icon Badge Picker -->
     <div class="space-y-2">
       <div>
-        <span class="ds-label text-ink font-semibold text-xs block">Warna & Ikon Indikator</span>
-        <p class="text-xs text-mute mt-0.5">Pilih tema warna dan ikon untuk menandai visual kolom tahapan ini.</p>
+        <span class="ds-label text-ink font-semibold text-xs block">{tr('setup.colorIcon')}</span>
+        <p class="text-xs text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
         {#each stageColorOptions as colorKey}
@@ -1008,7 +1013,7 @@
 
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" onclick={() => (createStageOpen = false)}>
-        Batal
+        {tr('setup.cancel')}
       </Button>
       <Button
         variant="primary"
@@ -1017,18 +1022,18 @@
         disabled={!newStageName.trim()}
       >
         <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
-        <span>Tambah Tahapan</span>
+        <span>{tr('setup.addStage')}</span>
       </Button>
     </div>
   </form>
 </Dialog>
 
-<!-- Modal: Edit Tahapan -->
+<!-- Modal: Edit Stage -->
 <Dialog
   bind:open={editStageOpen}
   onclose={closeEditStage}
-  title={`Edit Tahapan: ${stageToEdit?.name ?? ''}`}
-  description="Ubah nama kolom tahapan atau tema warna dan ikon indikator."
+  title={tr('setup.editStageTitle', { name: stageToEdit?.name ?? '' })}
+  description={tr('setup.editStageDescription')}
   size="md"
 >
   <form
@@ -1038,12 +1043,12 @@
     }}
     class="space-y-4 py-2"
   >
-    <FormField label="Nama Tahapan" required helper="Nama kolom yang menjelaskan aktivitas tahapan.">
+    <FormField label={tr('setup.stageName')} required helper={tr('setup.stageNameHelper')}>
       {#snippet control(args)}
         <Input
           {...args}
           bind:value={editStageName}
-          placeholder="Contoh: Verifikasi Dokumen"
+          placeholder={tr('setup.stageNamePlaceholder')}
           class="h-10 text-sm"
           autofocus
         />
@@ -1053,8 +1058,8 @@
     <!-- Visual Color & Icon Badge Picker -->
     <div class="space-y-2">
       <div>
-        <span class="ds-label text-ink font-semibold text-xs block">Warna & Ikon Indikator</span>
-        <p class="text-xs text-mute mt-0.5">Pilih tema warna dan ikon untuk menandai visual kolom tahapan ini.</p>
+        <span class="ds-label text-ink font-semibold text-xs block">{tr('setup.colorIcon')}</span>
+        <p class="text-xs text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
         {#each stageColorOptions as colorKey}
@@ -1080,14 +1085,14 @@
 
     <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/50 p-4">
       <div>
-        <span class="ds-label text-ink font-semibold text-xs block">Aturan Stage</span>
-        <p class="text-xs text-mute mt-0.5">Handover ringan & reminder ke staff assignee.</p>
+        <span class="ds-label text-ink font-semibold text-xs block">{tr('setup.stageRules')}</span>
+        <p class="text-xs text-mute mt-0.5">{tr('setup.stageRulesDescription')}</p>
       </div>
       <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
         <Checkbox bind:checked={editOnReplyNotify} />
-        <span>Pelanggan balas WA → notifikasi assignee</span>
+        <span>{tr('setup.replyNotifyAssignee')}</span>
       </label>
-      <FormField label="Reminder overdue (jam)" helper="Kosongkan jika tidak perlu.">
+      <FormField label={tr('setup.overdueReminder')} helper={tr('setup.overdueHelper')}>
         {#snippet control(args)}
           <Input
             {...args}
@@ -1095,14 +1100,14 @@
             min="1"
             max="720"
             bind:value={editOverdueHours}
-            placeholder="Contoh: 24"
+            placeholder={tr('setup.overduePlaceholder')}
             class="h-10 text-sm"
           />
         {/snippet}
       </FormField>
       <FormField
-        label="Estafet ke workflow berikutnya"
-        helper="Saat card di stage ini, staff bisa lanjutkan pelanggan ke workflow tujuan (1 workflow)."
+        label={tr('setup.nextWorkflow')}
+        helper={tr('setup.nextWorkflowHelper')}
       >
         {#snippet control(args)}
           <select
@@ -1110,7 +1115,7 @@
             bind:value={editNextWorkflowId}
             class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           >
-            <option value="">Tidak ada estafet</option>
+            <option value="">{tr('setup.noHandoff')}</option>
             {#each allWorkflows.filter((w) => w.id !== workflowId) as wf (wf.id)}
               <option value={wf.id}>{wf.name}</option>
             {/each}
@@ -1121,7 +1126,7 @@
 
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" onclick={closeEditStage}>
-        Batal
+        {tr('setup.cancel')}
       </Button>
       <Button
         variant="primary"
@@ -1130,32 +1135,32 @@
         disabled={!editStageName.trim()}
       >
         <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
-        <span>Simpan Perubahan</span>
+        <span>{tr('setup.saveChanges')}</span>
       </Button>
     </div>
   </form>
 </Dialog>
 
-<!-- Modal: Konfirmasi Hapus Stage -->
+<!-- Modal: Confirm Delete Stage -->
 <ConfirmDialog
   open={stageToDelete !== null}
-  title={`Hapus Tahapan "${stageToDelete?.name}"?`}
-  description="Tahapan hanya dapat dihapus jika tidak ada kartu aktif di dalamnya. Semua checklist template pada tahapan ini juga akan dihapus."
-  confirmLabel="Hapus Tahapan"
-  cancelLabel="Batal"
+  title={tr('setup.deleteStageTitle', { name: stageToDelete?.name ?? '' })}
+  description={tr('setup.deleteStageDescription')}
+  confirmLabel={tr('setup.deleteStage')}
+  cancelLabel={tr('setup.cancel')}
   destructive
   loading={deletingStage}
   onconfirm={deleteStageConfirmed}
   oncancel={() => (stageToDelete = null)}
 />
 
-<!-- Modal: Konfirmasi Hapus Checklist -->
+<!-- Modal: Confirm Delete Checklist -->
 <ConfirmDialog
   open={checklistToDelete !== null}
-  title={`Hapus Checklist "${checklistToDelete?.label ?? ''}"?`}
-  description="Item checklist template ini akan dihapus dari tahapan workflow. Kartu kanban yang sedang aktif tidak akan terhapus."
-  confirmLabel="Hapus Checklist"
-  cancelLabel="Batal"
+  title={tr('setup.deleteChecklistTitle', { label: checklistToDelete?.label ?? '' })}
+  description={tr('setup.deleteChecklistDescription')}
+  confirmLabel={tr('setup.deleteChecklistConfirm')}
+  cancelLabel={tr('setup.cancel')}
   destructive
   loading={deletingChecklist}
   onconfirm={deleteChecklistConfirmed}
@@ -1164,8 +1169,8 @@
 
 <Dialog
   bind:open={actionDialogOpen}
-  title="Action WhatsApp"
-  description="Otomasi kirim pesan ke pelanggan saat card masuk stage ini."
+  title={tr('setup.whatsappAction')}
+  description={tr('setup.whatsappActionDescription')}
   size="md"
 >
   <form
@@ -1175,7 +1180,7 @@
     }}
     class="space-y-4 py-2"
   >
-    <FormField label="Jenis action">
+    <FormField label={tr('setup.actionType')}>
       {#snippet control()}
         <SelectMenu
           options={actionKindOptions}
@@ -1186,8 +1191,8 @@
 
     {#if actionKind !== 'none'}
       <FormField
-        label="Template pesan"
-        helper="Variabel: {'{{nama}}'}, {'{{wa}}'}, {'{{product}}'}, {'{{tag}}'}, {'{{link}}'}"
+        label={tr('setup.messageTemplate')}
+        helper={tr('setup.templateHelper')}
         required
       >
         {#snippet control(args)}
@@ -1195,12 +1200,12 @@
             {...args}
             bind:value={actionMessage}
             rows={4}
-            placeholder="Halo {'{{nama}}'}, reminder webinar besok jam 19:00."
+            placeholder={tr('setup.templatePlaceholder')}
           />
         {/snippet}
       </FormField>
 
-      <FormField label="Delay (menit setelah masuk stage)">
+      <FormField label={tr('setup.delay')}>
         {#snippet control(args)}
           <Input {...args} type="number" min="0" bind:value={actionDelayMinutes} class="h-10 text-sm" />
         {/snippet}
@@ -1209,14 +1214,14 @@
       {#if actionKind === 'followup'}
         <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
           <Checkbox bind:checked={actionFollowupIfNoReply} />
-          <span>Hanya kirim jika pelanggan belum membalas</span>
+          <span>{tr('setup.onlyIfNoReply')}</span>
         </label>
       {/if}
     {/if}
 
     <div class="flex justify-end gap-2 pt-2">
-      <Button variant="secondary" onclick={() => (actionDialogOpen = false)}>Batal</Button>
-      <Button variant="primary" type="submit" loading={savingAction}>Simpan Action</Button>
+      <Button variant="secondary" onclick={() => (actionDialogOpen = false)}>{tr('setup.cancel')}</Button>
+      <Button variant="primary" type="submit" loading={savingAction}>{tr('setup.saveAction')}</Button>
     </div>
   </form>
 </Dialog>

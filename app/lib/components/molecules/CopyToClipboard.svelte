@@ -3,6 +3,8 @@
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import CopyIcon from '@lucide/svelte/icons/copy';
 	import CheckIcon from '@lucide/svelte/icons/check';
+	import { dashboardText } from '$lib/i18n/dashboard.js';
+	import { locale } from '$lib/i18n/index.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		value: string;
@@ -17,13 +19,16 @@
 	let {
 		ref = $bindable(null),
 		value,
-		label = 'Salin',
+		label,
 		showValue = true,
 		size = 'md',
 		oncopy,
 		class: className,
 		...rest
 	}: Props = $props();
+
+	const copiedLabel = $derived(dashboardText($locale, 'common.copied'));
+	const copyLabel = $derived(label ?? dashboardText($locale, 'common.copy'));
 
 	let copied = $state(false);
 	let timer: ReturnType<typeof setTimeout>;
@@ -60,8 +65,8 @@
 	<button
 		type="button"
 		onclick={copy}
-		aria-label={copied ? 'Tersalin' : label}
-		title={copied ? 'Tersalin' : label}
+		aria-label={copied ? copiedLabel : copyLabel}
+		title={copied ? copiedLabel : copyLabel}
 		class={cn(
 			'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-hairline bg-card text-mute transition-colors duration-150 ease-out hover:border-primary-border hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]',
 			size === 'sm' ? 'h-7 px-2 text-[12px]' : 'h-8 px-2.5 text-[13px]'
@@ -69,10 +74,10 @@
 	>
 		{#if copied}
 			<CheckIcon class="size-3.5 text-status-done-ink" />
-			<span class="font-medium text-status-done-ink">Tersalin</span>
+			<span class="font-medium text-status-done-ink">{copiedLabel}</span>
 		{:else}
 			<CopyIcon class="size-3.5" />
-			<span class="font-medium">{label}</span>
+			<span class="font-medium">{copyLabel}</span>
 		{/if}
 	</button>
 </div>

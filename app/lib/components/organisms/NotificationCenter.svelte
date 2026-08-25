@@ -10,6 +10,8 @@
 		items: NotificationItem[];
 		title?: string;
 		emptyText?: string;
+		markAllReadText?: string;
+		allReadText?: string;
 		onmarkAllRead?: () => void;
 		onOpenChange?: (open: boolean) => void;
 		listTestId?: string;
@@ -23,6 +25,8 @@
 		items,
 		title = 'Notifikasi',
 		emptyText = 'Tidak ada notifikasi terbaru.',
+		markAllReadText = 'Tandai dibaca',
+		allReadText = 'Semua dibaca',
 		onmarkAllRead,
 		onOpenChange,
 		listTestId,
@@ -80,10 +84,10 @@
 						onclick={onmarkAllRead}
 						class="ds-caption text-primary transition-colors hover:text-primary"
 					>
-						Tandai dibaca
+						{markAllReadText}
 					</button>
 				{:else}
-					<span class="ds-caption text-mute">Semua dibaca</span>
+					<span class="ds-caption text-mute">{allReadText}</span>
 				{/if}
 			</div>
 

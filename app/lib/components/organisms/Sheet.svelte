@@ -3,6 +3,8 @@
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import { dismissable } from '$lib/components/molecules/shared.js';
 	import XIcon from '@lucide/svelte/icons/x';
+	import { dashboardText } from '$lib/i18n/dashboard.js';
+	import { locale } from '$lib/i18n/index.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		open?: boolean;
@@ -25,6 +27,7 @@
 		footer,
 		...rest
 	}: Props = $props();
+	const closeLabel = $derived(dashboardText($locale, 'common.close'));
 
 	function close() {
 		open = false;
@@ -55,7 +58,7 @@
 				<button
 					type="button"
 					onclick={close}
-					aria-label="Tutup"
+					aria-label={closeLabel}
 					class="grid size-8 place-items-center rounded-full text-mute hover:bg-lane hover:text-ink"
 				>
 					<XIcon class="size-4" />

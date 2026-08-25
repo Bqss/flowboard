@@ -10,6 +10,11 @@
 		adminItems?: NavLink[];
 		userName?: string;
 		userSrc?: string;
+		labels?: {
+			ariaLabel?: string;
+			subtitle?: string;
+			admin?: string;
+		};
 		class?: string;
 	};
 
@@ -19,9 +24,14 @@
 		adminItems = [],
 		userName = 'User',
 		userSrc,
+		labels = {},
 		class: className,
 		...rest
 	}: Props = $props();
+
+	const ariaLabel = $derived(labels.ariaLabel ?? 'Navigasi utama');
+	const subtitle = $derived(labels.subtitle ?? 'Onboarding desk');
+	const adminLabel = $derived(labels.admin ?? 'Administrasi');
 
 	let expanded = $state(false);
 </script>
@@ -35,7 +45,7 @@
 		expanded ? 'w-[240px] shadow-[var(--shadow-raised)]' : 'w-[76px]',
 		className
 	)}
-	aria-label="Navigasi utama"
+	aria-label={ariaLabel}
 	{...rest}
 >
 	<div
@@ -50,7 +60,7 @@
 		{#if expanded}
 			<div class="min-w-0">
 				<p class="ds-section-title truncate text-ink">Flowboard</p>
-				<p class="ds-caption text-mute">Onboarding desk</p>
+				<p class="ds-caption text-mute">{subtitle}</p>
 			</div>
 		{/if}
 	</div>
@@ -78,7 +88,7 @@
 
 		{#if adminItems.length}
 			{#if expanded}
-				<p class="ds-caption mt-5 mb-1.5 px-3 text-faint">Administrasi</p>
+				<p class="ds-caption mt-5 mb-1.5 px-3 text-faint">{adminLabel}</p>
 			{:else}
 				<div class="mt-5 h-px w-8 bg-hairline" aria-hidden="true"></div>
 			{/if}
