@@ -10,6 +10,7 @@ import { createNotification } from './notification';
 import { cancelFollowupJobsForCard } from './whatsapp';
 import { cards, db } from '@db';
 import { eq } from 'drizzle-orm';
+import { env } from '@config/env';
 
 export type McpToolName =
   | 'create_card'
@@ -75,11 +76,10 @@ export const MCP_TOOLS = [
   }
 ];
 
-export const resolveIntegrationApiKey = () =>
-  process.env.FLOWBOARD_API_KEY ?? 'dev-flowboard-key';
+export const resolveIntegrationApiKey = () => env.flowboardApiKey;
 
 export const isValidIntegrationKey = (provided: string | null | undefined) =>
-  Boolean(provided && provided === resolveIntegrationApiKey());
+  Boolean(provided && resolveIntegrationApiKey() && provided === resolveIntegrationApiKey());
 
 export const callMcpTool = async (
   workspaceId: string,
