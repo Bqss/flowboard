@@ -32,6 +32,50 @@ export type ApiWorkflow = {
   updatedAt?: string;
 };
 
+export type ApiWajomConnection = {
+  id: string;
+  workspaceId: string;
+  defaultWorkflowId: string | null;
+  name: string;
+  instanceId: string;
+  countryCode: string;
+  sendEndpoint: string;
+  healthEndpoint: string | null;
+  enabledTools: string[];
+  enabled: boolean;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  hasSendApiKey: boolean;
+  connectorTokenPrefix: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiWajomJob = {
+  id: string;
+  workspaceId: string;
+  connectionId: string | null;
+  cardId: string;
+  checklistItemId: string | null;
+  templateId: string | null;
+  toWa: string;
+  messageBody: string;
+  scheduledAt: string;
+  status: 'pending' | 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'cancelled';
+  providerMessageId: string | null;
+  providerStatus: string | null;
+  attempts: number;
+  lastAttemptAt: string | null;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ApiBoardColumn = {
   id: string;
   name: string;
@@ -56,6 +100,8 @@ export type ApiBoardColumn = {
 export type ApiCardDetail = {
   card: {
     id: string;
+    handoverReason: string | null;
+    handedOverAt: string | null;
     product: string | null;
     tag: string | null;
     assigneeId: string | null;
@@ -130,7 +176,7 @@ export type ApiWorkflowSetupStage = {
 
 export type ApiNotification = {
   id: string;
-  type: 'wa_failed' | 'customer_replied' | 'card_overdue';
+  type: 'wa_failed' | 'customer_replied' | 'card_overdue' | 'handover';
   title: string;
   body: string;
   cardId: string | null;
@@ -636,5 +682,87 @@ export const api = {
     request<{ ok: true }>(`/workspaces/${workspaceId}/notifications/read-all`, {
       method: 'POST',
       fetch: fetchFn
-    })
+    }),
+
+  listWajomConnections: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ connections: ApiWajomConnection[] }>(
+      `/workspaces/${workspaceId}/integrations/wajom`,
+      { fetch: fetchFn }
+    ),
+
+  listWajomJobs: (workspaceId: string, connectionId?: string, fetchFn?: FetchLike) =>
+    request<{ jobs: ApiWajomJob[] }>(
+      `/workspaces/${workspaceId}/integrations/wajom/jobs${connectionId ? `?connectionId=${connectionId}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  createWajomConnection: (
+    workspaceId: string,
+    body: {
+      name: string;
+      instanceId: string;
+      countryCode?: string;
+      defaultWorkflowId: string;
+      sendEndpoint: string;
+      healthEndpoint?: string | null;
+      sendApiKey?: string | null;
+      enabledTools?: string[];
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ connection: ApiWajomConnection; connectorToken: string }>(
+      `/workspaces/${workspaceId}/integrations/wajom`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateWajomConnection: (
+    workspaceId: string,
+    connectionId: string,
+    body: {
+      name?: string;
+      instanceId?: string;
+      countryCode?: string;
+      defaultWorkflowId?: string;
+      sendEndpoint?: string;
+      healthEndpoint?: string | null;
+      sendApiKey?: string | null;
+      clearSendApiKey?: boolean;
+      enabledTools?: string[];
+      enabled?: boolean;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ connection: ApiWajomConnection }>(
+      `/workspaces/${workspaceId}/integrations/wajom/${connectionId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  revokeWajomConnection: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
+    request<{ connection: ApiWajomConnection }>(
+      `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/revoke`,
+      { method: 'POST', fetch: fetchFn }
+    ),
+
+  rotateWajomConnectorToken: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
+    request<{ connection: ApiWajomConnection; connectorToken: string }>(
+      `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/rotate`,
+      { method: 'POST', fetch: fetchFn }
+    ),
+
+  testWajomConnection: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
+    request<{ result: { ok: boolean; checked: boolean; error?: string; message?: string } }>(
+      `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/test`,
+      { method: 'POST', fetch: fetchFn }
+    ),
+
+  testWajomSend: (
+    workspaceId: string,
+    connectionId: string,
+    body: { to: string; message: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true; result: { status: string; providerMessageId: string | null } }>(
+      `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/test-send`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    )
 };

@@ -68,7 +68,15 @@
     {
       href: '/dashboard/settings',
       label: 'Settings',
-      active: $page.url.pathname.startsWith('/dashboard/settings'),
+      active:
+        $page.url.pathname === '/dashboard/settings' ||
+        $page.url.pathname === '/dashboard/settings/',
+      icon: settingsIcon
+    },
+    {
+      href: '/dashboard/settings/integrations',
+      label: 'Integrations',
+      active: $page.url.pathname.startsWith('/dashboard/settings/integrations'),
       icon: settingsIcon
     }
   ]);
