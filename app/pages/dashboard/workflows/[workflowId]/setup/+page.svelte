@@ -1002,8 +1002,8 @@
                       {template.label}
                     </p>
 
-                    <div class="flex items-center justify-between pt-1 text-xs">
-                      <div class="flex items-center gap-1.5">
+                    <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 pt-1 text-xs">
+                      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                       {#if canManage}
                         <button
                           type="button"
@@ -1036,12 +1036,12 @@
                       </div>
 
                       {#if canManage}
-                        <div class="flex items-center gap-1 text-faint">
+                        <div class="ml-auto flex shrink-0 items-center gap-1 text-faint">
                           <Button
                             variant="ghost"
                             size="sm"
                             onclick={() => openActionEditor(stage.id, template)}
-                            class="h-7 gap-1 px-1.5 text-[10px] font-semibold text-faint hover:text-primary"
+                            class="h-7 shrink-0 gap-1 whitespace-nowrap px-1.5 text-[10px] font-semibold text-faint hover:text-primary"
                           >
                             <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={1.8} />
                             <span>{tr('setup.actionWaShort')}</span>
