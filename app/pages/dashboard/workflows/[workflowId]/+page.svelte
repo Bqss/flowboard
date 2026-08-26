@@ -29,7 +29,7 @@
     CopyToClipboard,
     toast
   } from '$lib/components/molecules/index.js';
-  import { Dialog, KanbanBoard, Sheet, DataTable } from '$lib/components/organisms/index.js';
+  import { ConfirmDialog, Dialog, KanbanBoard, Sheet, DataTable } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Add01Icon,
@@ -40,7 +40,8 @@
     CheckListIcon,
     ArrowRight01Icon,
     WhatsappIcon,
-    Layers01Icon
+    Layers01Icon,
+    Delete02Icon,
   } from '@hugeicons/core-free-icons';
   import type { KanbanColumn } from '$lib/components/organisms/shared.js';
   import type { LayoutData } from '../../$types';
@@ -55,6 +56,8 @@
   let loadingData = $state(true);
   let workflow = $state<ApiWorkflow | null>(null);
   let board = $state<ApiBoardColumn[]>([]);
+  const canManage = $derived(data.workspace?.role === 'owner' || workflow?.ownerId === data.user?.id);
+
   let members = $state<ApiWorkspaceMember[]>([]);
 
   // View mode: kanban board vs table list
@@ -73,6 +76,9 @@
   let relayLoading = $state(false);
   let assigneeLoading = $state(false);
   let boardMoveLoading = $state(false);
+  let deleteLoading = $state(false);
+  let cardToDelete = $state<{ id: string; name: string } | null>(null);
+
 
   // Modal: Tambah Pelanggan state
   let createOpen = $state(false);
@@ -298,6 +304,32 @@
     cardDetail = null;
     detailError = null;
   }
+
+  function requestDeleteCard() {
+    if (!canManage || !cardDetail) return;
+    cardToDelete = {
+      id: cardDetail.card.id,
+      name: cardDetail.customer?.name ?? tr('board.cardDetail')
+    };
+  }
+
+  async function deleteCardConfirmed() {
+    if (!cardToDelete || !data.workspace?.id || !workflowId) return;
+    const card = cardToDelete;
+    deleteLoading = true;
+    try {
+      await api.deleteCard(data.workspace.id, workflowId, card.id);
+      cardToDelete = null;
+      closeSheet();
+      await loadWorkflowBoardData();
+      toast.success(tr('board.customerDeleted', { name: card.name }));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('board.deleteCustomerError'));
+    } finally {
+      deleteLoading = false;
+    }
+  }
+
 
   async function refreshBoard() {
     await loadWorkflowBoardData();
@@ -962,9 +994,36 @@
           </Button>
         </section>
       {/if}
+
+      {#if canManage}
+        <section class="border-t border-hairline pt-5">
+          <Button
+            variant="destructive"
+            size="sm"
+            loading={deleteLoading}
+            onclick={requestDeleteCard}
+            class="w-full justify-center"
+          >
+            <HugeiconsIcon icon={Delete02Icon} size={16} strokeWidth={1.8} />
+            <span>{tr('board.deleteCard')}</span>
+          </Button>
+        </section>
+      {/if}
     </div>
   {/if}
 </Sheet>
+
+<ConfirmDialog
+  open={cardToDelete !== null}
+  title={tr('board.deleteCardTitle', { name: cardToDelete?.name ?? '' })}
+  description={tr('board.deleteCardDescription')}
+  confirmLabel={tr('board.deleteCardConfirm')}
+  cancelLabel={tr('common.cancel')}
+  destructive
+  loading={deleteLoading}
+  onconfirm={deleteCardConfirmed}
+  oncancel={() => (cardToDelete = null)}
+/>
 
 <!-- Modal: Tambah Pelanggan Baru -->
 <Dialog

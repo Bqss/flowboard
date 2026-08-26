@@ -146,6 +146,7 @@ export const createWorkflowsRoutes = () => {
           body: ImportCardsSchema
         })
         .get('/cards/:cardId', workflowHandlers.cardDetail, { params: WorkflowCardParam })
+        .delete('/cards/:cardId', workflowHandlers.deleteCardHandler, { params: WorkflowCardParam })
         .patch('/cards/:cardId/assignee', workflowHandlers.updateAssignee, {
           params: WorkflowCardParam,
           body: UpdateCardAssigneeSchema

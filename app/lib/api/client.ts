@@ -547,6 +547,12 @@ export const api = {
       { fetch: fetchFn }
     ),
 
+  deleteCard: (workspaceId: string, workflowId: string, cardId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true; cardId: string }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
   moveCard: (
     workspaceId: string,
     workflowId: string,

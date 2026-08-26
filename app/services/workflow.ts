@@ -603,6 +603,13 @@ export const getCardInWorkflow = async (workflowId: string, cardId: string) => {
 
   return row ?? null;
 };
+export const deleteCard = async (workflowId: string, cardId: string) => {
+  const card = await getCardInWorkflow(workflowId, cardId);
+  if (!card) throw new WorkflowError('Card not found.', 'not_found');
+
+  const [deleted] = await db.delete(cards).where(eq(cards.id, cardId)).returning();
+  return deleted ?? null;
+};
 
 export const getCardChecklistForStage = async (cardId: string, stageId: string) =>
   db

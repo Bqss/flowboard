@@ -5,6 +5,7 @@ import {
   WorkflowError,
   canManageWorkflow,
   createCard,
+  deleteCard as deleteCardFromWorkflow,
   createChecklistTemplate,
   createStage,
   createWorkflow,
@@ -618,6 +619,33 @@ export async function cardDetail({
   }
 
   return { detail };
+}
+
+export async function deleteCardHandler({
+  user,
+  workflow,
+  membership,
+  params,
+  set
+}: Ctx<unknown, CardParams>) {
+  if (!user || !workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
+
+  try {
+    const deleted = await deleteCardFromWorkflow(workflow.id, params.cardId);
+    if (!deleted) {
+      set.status = 404;
+      return { error: 'Card not found' };
+    }
+    return { ok: true, cardId: deleted.id };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
 }
 
 export async function relayCard({
