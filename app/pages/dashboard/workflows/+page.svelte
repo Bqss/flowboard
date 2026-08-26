@@ -28,7 +28,7 @@
             required: true,
             action: {
               kind: 'send',
-              messageTemplate: 'Halo, apakah benar dengan {{nama}}? Balas "YA" jika benar agar kami bisa lanjut membantu.',
+              messageTemplate: 'Halo, apakah benar dengan {{nama}}? Jika benar, balas "benar" agar kami bisa lanjut membantu.',
               delayMinutes: 0,
               followupIfNoReply: false
             }
