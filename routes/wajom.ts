@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia';
 import * as wajom from '@handlers/wajom';
+import { createRequireAuth } from '@middlewares';
 import { createRequireWorkspaceOwner } from '@middlewares/workspace';
 import { checkIntegrationRateLimit, createRequestId } from '@services/integration-security';
 import { findWajomConnectionByToken } from '@services/wajom-connections';
@@ -49,6 +50,7 @@ export const createWajomRoutes = () =>
   new Elysia()
     .group('/workspaces/:workspaceId/integrations/wajom', (app) =>
       app
+        .use(createRequireAuth())
         .use(createRequireWorkspaceOwner())
         .get('/', wajom.listConnections, { params: WorkspaceIdParam })
         .get('/jobs', wajom.listJobs, { params: WorkspaceIdParam, query: WajomJobsQuery })
