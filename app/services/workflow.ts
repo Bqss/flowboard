@@ -624,6 +624,21 @@ const getChecklistProgress = async (cardId: string, stageId: string) => {
   const done = required.filter((item) => item.done);
   return { done: done.length, total: required.length, items };
 };
+export const advanceCardIfChecklistComplete = async (cardId: string) => {
+  const [card] = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1);
+  if (!card) return null;
+
+  const progress = await getChecklistProgress(card.id, card.stageId);
+  if (progress.total === 0 || progress.done < progress.total) return null;
+
+  const workflowStages = await listStages(card.workflowId);
+  const currentIndex = workflowStages.findIndex((stage) => stage.id === card.stageId);
+  const nextStage = currentIndex >= 0 ? workflowStages[currentIndex + 1] : undefined;
+  if (!nextStage) return null;
+
+  return moveCardToStage(card.workflowId, card.id, nextStage.id);
+};
+
 
 export const getBoard = async (workflowId: string) => {
   const workflowStages = await listStages(workflowId);
@@ -865,6 +880,10 @@ export const toggleChecklistItem = async (
     .where(eq(checklistItems.id, itemId))
     .returning();
 
+  if (done) {
+    await advanceCardIfChecklistComplete(cardId);
+  }
+
   return updated;
 };
 
@@ -897,8 +916,14 @@ export const moveCardToStage = async (workflowId: string, cardId: string, toStag
   const [updated] = await db
     .update(cards)
     .set({ stageId: toStageId, updatedAt: new Date() })
-    .where(eq(cards.id, cardId))
+    .where(and(eq(cards.id, cardId), eq(cards.stageId, card.stageId)))
     .returning();
+
+  if (!updated) {
+    const current = await getCardInWorkflow(workflowId, cardId);
+    if (current?.stageId === toStageId) return current;
+    throw new WorkflowError('Card stage changed. Try again.');
+  }
 
   const existingItems = await getCardChecklistForStage(cardId, toStageId);
   if (existingItems.length === 0) {

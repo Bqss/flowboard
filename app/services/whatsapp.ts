@@ -17,6 +17,7 @@ import { normalizeWa } from './customer';
 import { findWajomConnectionForWorkflow } from './wajom-connections';
 import { sendWajomMessage } from './wajom-transport';
 import { env } from '@config/env';
+import { advanceCardIfChecklistComplete } from './workflow';
 type TemplateVars = {
   nama: string;
   wa: string;
@@ -162,6 +163,9 @@ export const resolveFollowupJobsOnReply = async (cardId: string) => {
       .update(checklistItems)
       .set({ done: true, updatedAt: new Date() })
       .where(inArray(checklistItems.id, checklistItemIds));
+  }
+  if (checklistItemIds.length > 0) {
+    await advanceCardIfChecklistComplete(cardId);
   }
 
   await cancelFollowupJobsForCard(cardId);
@@ -398,6 +402,7 @@ export const processDueWhatsappJobs = async (limit = 50) => {
           .update(checklistItems)
           .set({ done: true, updatedAt: completedAt })
           .where(eq(checklistItems.id, claimed.checklistItemId));
+        await advanceCardIfChecklistComplete(claimed.cardId);
       }
 
       await db
@@ -540,6 +545,7 @@ export const updateWhatsappJobStatus = async (input: {
       .update(checklistItems)
       .set({ done: true, updatedAt: now })
       .where(eq(checklistItems.id, existing.checklistItemId));
+    await advanceCardIfChecklistComplete(existing.cardId);
   }
 
   if (deliveryComplete || input.status === 'failed') {

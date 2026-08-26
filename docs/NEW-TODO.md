@@ -303,7 +303,7 @@ Jika stage pertama memiliki action `send`, customer menerima pesan intro setelah
 - [x] Handover manual/AI = menghentikan follow-up pending tanpa membatalkan pesan yang sudah terkirim.
 - [x] Sukses pengiriman mengubah checklist item terkait menjadi `done`.
 - [x] Gagal pengiriman mempertahankan item terbuka, menandai card error, dan notify assignee.
-- [x] Action tidak otomatis memindahkan stage kecuali ada rule eksplisit dan permission yang sesuai.
+- [x] Checklist wajib yang selesai automatik memajukan card ke stage berikutnya; action tidak memindahkan stage di luar rule checklist ini.
 ### E.3 Outbound contract Flowboard → Wajom
 
 - [x] Buat configurable Wajom send endpoint untuk mengirim pesan dari Flowboard.
