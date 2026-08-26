@@ -83,6 +83,7 @@
   let errorMessage = $state<string | null>(null);
   let successMessage = $state<string | null>(null);
   let issuedToken = $state<string | null>(null);
+  let issuedTokenConnectionId = $state<string | null>(null);
   let tokenCopied = $state(false);
 
   $effect(() => {
@@ -123,6 +124,7 @@
       ) ?? toolNames) as ToolName[]
     };
     issuedToken = null;
+    issuedTokenConnectionId = null;
     tokenCopied = false;
     errorMessage = null;
     successMessage = null;
@@ -182,6 +184,7 @@
     errorMessage = null;
     successMessage = null;
     issuedToken = null;
+    issuedTokenConnectionId = null;
 
     try {
       if (editingId) {
@@ -210,6 +213,7 @@
           enabledTools: form.enabledTools
         });
         issuedToken = response.connectorToken;
+        issuedTokenConnectionId = response.connection.id;
         successMessage = tr('integrations.created');
       }
       await loadData();
@@ -287,10 +291,12 @@
 
     actionId = connection.id;
     issuedToken = null;
+    issuedTokenConnectionId = null;
     errorMessage = null;
     try {
       const response = await api.rotateWajomConnectorToken(workspaceId, connection.id);
       issuedToken = response.connectorToken;
+      issuedTokenConnectionId = connection.id;
       successMessage = tr('integrations.rotated');
       await loadData();
     } catch (error) {
@@ -317,13 +323,23 @@
       const response = await api.exportWajomActions(workspaceId, connection.id);
       const exported = response.export;
       const baseUrl = window.location.origin;
+      const token = issuedTokenConnectionId === connection.id ? issuedToken : null;
+      const resolvedActions = JSON.parse(
+        JSON.stringify(exported.actions)
+          .replaceAll('{{FLOWBOARD_BASE_URL}}', baseUrl)
+          .replaceAll('<FLOWBOARD_DOMAIN>', baseUrl)
+          .replaceAll(
+            '{{FLOWBOARD_CONNECTOR_TOKEN}}',
+            token ?? '{{FLOWBOARD_CONNECTOR_TOKEN}}'
+          )
+          .replaceAll('{{CONNECTOR_TOKEN}}', token ?? '{{CONNECTOR_TOKEN}}')
+          .replaceAll('<CONNECTOR_TOKEN>', token ?? '<CONNECTOR_TOKEN>')
+      ) as typeof exported.actions;
       const payload = {
         ...exported,
         baseUrl,
-        actions: exported.actions.map((action) => ({
-          ...action,
-          endpoint: action.endpoint.replace(exported.baseUrl, baseUrl)
-        }))
+        actions: resolvedActions,
+        ...(token ? { auth: { ...exported.auth, token } } : {})
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -340,7 +356,7 @@
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      successMessage = tr('integrations.exported');
+      successMessage = tr(token ? 'integrations.exportedReady' : 'integrations.exported');
     } catch (error) {
       errorMessage = error instanceof ApiError ? error.message : tr('integrations.exportError');
     } finally {
@@ -459,7 +475,7 @@
           </FormField>
           <FormField label={tr('integrations.sendEndpoint')} required helper={tr('integrations.sendEndpointHelper')}>
             {#snippet control(args)}
-              <Input {...args} bind:value={form.sendEndpoint} type="url" placeholder="https://wajom.example/api/send" />
+            <Input {...args} bind:value={form.sendEndpoint} type="url" placeholder="https://wajom.example/send" />
             {/snippet}
           </FormField>
           <FormField label={tr('integrations.healthEndpoint')} helper={tr('integrations.healthEndpointHelper')}>
@@ -618,7 +634,7 @@
             <div class="mt-5 flex flex-wrap gap-2 border-t border-hairline pt-4">
               {#if canManage}
                 <Button variant="secondary" size="sm" loading={exportingId === connection.id} onclick={() => exportActions(connection)}>
-                  {tr('integrations.exportJson')}
+                  {tr(issuedTokenConnectionId === connection.id ? 'integrations.exportReadyJson' : 'integrations.exportJson')}
                 </Button>
                 <Button variant="secondary" size="sm" onclick={() => resetForm(connection)}>
                   {tr('common.edit')}

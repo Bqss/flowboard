@@ -43,6 +43,7 @@ export const sendWajomMessage = async (connection: WajomConnection | null, job: 
   }
 
   const apiKey = getWajomSendApiKey(connection);
+  if (!apiKey) throw new Error('Wajom send API key belum dikonfigurasi.');
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     'x-flowboard-instance-id': connection.instanceId
@@ -53,15 +54,9 @@ export const sendWajomMessage = async (connection: WajomConnection | null, job: 
     method: 'POST',
     headers,
     body: JSON.stringify({
-      to: job.toWa,
-      message: job.messageBody,
-      idempotencyKey: job.id,
-      metadata: {
-        workspaceId: job.workspaceId,
-        cardId: job.cardId,
-        checklistItemId: job.checklistItemId,
-        jobId: job.id
-      }
+      api_key: apiKey,
+      text: job.messageBody,
+      phone: job.toWa
     })
   });
   const payload = await readJson(response);
@@ -93,7 +88,9 @@ export const sendWajomTestMessage = async (
     return { status: 'sent' as const, providerMessageId: `mock:test:${crypto.randomUUID()}` };
   }
 
+  if (!connection.sendEndpoint) throw new Error('Wajom connection belum dikonfigurasi.');
   const apiKey = getWajomSendApiKey(connection);
+  if (!apiKey) throw new Error('Wajom send API key belum dikonfigurasi.');
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     'x-flowboard-instance-id': connection.instanceId
@@ -104,10 +101,9 @@ export const sendWajomTestMessage = async (
     method: 'POST',
     headers,
     body: JSON.stringify({
-      to: input.to,
-      message: input.message,
-      idempotencyKey: `flowboard-test:${crypto.randomUUID()}`,
-      metadata: { workspaceId: connection.workspaceId, connectionId: connection.id, test: true }
+      api_key: apiKey,
+      text: input.message,
+      phone: input.to
     })
   });
   const payload = await readJson(response);
