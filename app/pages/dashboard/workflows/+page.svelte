@@ -1,19 +1,54 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, ApiError, type ApiWorkflow, type ApiWorkspaceMember } from '$lib/api/client';
+  import { api, ApiError, type ApiWorkflow, type ApiWorkflowDraft, type ApiWorkspaceMember } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, Input, Skeleton } from '$lib/components/atoms/index.js';
   import { FormField, EmptyStateBlock, Breadcrumb, MultiSelectCombobox, toast, type MultiSelectOption } from '$lib/components/molecules/index.js';
   import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
-  import { Add01Icon, KanbanIcon, AiMagicIcon, Edit02Icon, Delete02Icon } from '@hugeicons/core-free-icons';
+  import { Add01Icon, KanbanIcon, AiMagicIcon, Edit02Icon, Delete02Icon, Copy01Icon } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../$types';
 
   let { data }: { data: LayoutData } = $props();
 
   const tr = (key: string, values?: Record<string, string | number>) =>
     dashboardText($locale, key, values);
+
+  const EXAMPLE_WORKFLOW_DRAFT: ApiWorkflowDraft = {
+    name: 'Customer Onboarding Example',
+    stages: [
+      {
+        name: 'New',
+        color: 'indigo',
+        checklists: [
+          { label: 'Validate customer details', required: true },
+          {
+            label: 'Send welcome message',
+            required: true,
+            action: {
+              kind: 'send',
+              messageTemplate: 'Hi {{nama}}, thanks for reaching out. Our team will help you shortly.',
+              delayMinutes: 0,
+              followupIfNoReply: false
+            }
+          }
+        ]
+      },
+      {
+        name: 'In Progress',
+        color: 'amber',
+        onReplyNotify: true,
+        overdueReminderHours: 48,
+        checklists: [{ label: 'Follow up with customer', required: true }]
+      },
+      {
+        name: 'Completed',
+        color: 'emerald',
+        checklists: [{ label: 'Confirm onboarding is complete', required: true }]
+      }
+    ]
+  };
 
   let loadingData = $state(true);
   let workflows = $state<ApiWorkflow[]>([]);
@@ -86,6 +121,22 @@
   function startAi() {
     chooseOpen = false;
     goto('/dashboard/workflows/new-ai');
+  }
+
+  async function createExampleWorkflow() {
+    if (!data.workspace) return;
+    chooseOpen = false;
+    loading = true;
+    error = null;
+    try {
+      const { workflow } = await api.saveWorkflowDraft(data.workspace.id, EXAMPLE_WORKFLOW_DRAFT);
+      await goto(`/dashboard/workflows/${workflow.id}/setup`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('workflows.exampleError'));
+      chooseOpen = true;
+    } finally {
+      loading = false;
+    }
   }
 
   async function createManualWorkflow() {
@@ -271,7 +322,7 @@
 </div>
 
 <Dialog bind:open={chooseOpen} title={tr('workflows.chooseTitle')} description={tr('workflows.chooseDescription')}>
-  <div class="grid gap-3 sm:grid-cols-2">
+  <div class="grid gap-3 sm:grid-cols-3">
     <button
       type="button"
       onclick={startManual}
@@ -289,6 +340,16 @@
       <HugeiconsIcon icon={AiMagicIcon} size={22} strokeWidth={1.8} class="text-primary" />
       <p class="mt-3 font-semibold text-ink">{tr('workflows.aiSetup')}</p>
       <p class="ds-caption mt-1 text-mute">{tr('workflows.aiDescription')}</p>
+    </button>
+    <button
+      type="button"
+      onclick={createExampleWorkflow}
+      disabled={loading}
+      class="rounded-xl border border-status-done/30 bg-status-done-soft/30 p-4 text-left shadow-card transition-all hover:border-status-done hover:shadow-card-hover disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <HugeiconsIcon icon={Copy01Icon} size={22} strokeWidth={1.8} class="text-status-done-ink" />
+      <p class="mt-3 font-semibold text-ink">{tr('workflows.example')}</p>
+      <p class="ds-caption mt-1 text-mute">{tr('workflows.exampleDescription')}</p>
     </button>
   </div>
 </Dialog>

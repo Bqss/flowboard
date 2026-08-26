@@ -51,6 +51,11 @@
   const tr = (key: string, values?: Record<string, string | number>) =>
     dashboardText($locale, key, values);
 
+  type StageAutomationDraft = {
+    onReplyNotify: boolean;
+    overdueReminderHours: string;
+  };
+
   const workflowId = $derived(page.params.workflowId);
 
   // Core Data
@@ -66,6 +71,10 @@
   let defaultAssigneeIds = $state<string[]>([]);
   let defaultAssigneeId = $state<string | null>(null);
   let savingWorkflow = $state(false);
+
+  let stageAutomationDraft = $state<Record<string, StageAutomationDraft>>({});
+  let checklistRequiredDraft = $state<Record<string, boolean>>({});
+  let savingSetupChanges = $state(false);
 
   const memberOptions = $derived<MultiSelectOption[]>(
     members.map((m) => ({
@@ -156,6 +165,38 @@
     data.workspace?.role === 'owner' || (workflow && workflow.ownerId === data.user?.id)
   );
 
+  const checklistIsRequired = (template: ApiWorkflowSetupStage['templates'][number]) =>
+    checklistRequiredDraft[template.id] ?? template.required;
+
+  const hasUnsavedSetupChanges = $derived.by(() => {
+    for (const stage of stages) {
+      const draft = stageAutomationDraft[stage.id];
+      if (draft) {
+        const rawHours = draft.overdueReminderHours.trim();
+        const reminderHours = rawHours ? Number(rawHours) : null;
+        if (
+          draft.onReplyNotify !== Boolean(stage.onReplyNotify) ||
+          reminderHours !== (stage.overdueReminderHours ?? null)
+        ) {
+          return true;
+        }
+      }
+
+      for (const template of stage.templates ?? []) {
+        const required = checklistRequiredDraft[template.id];
+        if (required !== undefined && required !== template.required) return true;
+      }
+    }
+    return false;
+  });
+
+  const parseReminderHours = (value: string): number | null | undefined => {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 720 ? parsed : undefined;
+  };
+
   const stageColorMeta = $derived<Record<string, { name: string; description: string; color: string; bgSoft: string; icon: any }>>({
     indigo: {
       name: 'Indigo',
@@ -198,10 +239,25 @@
         api.listWorkflows(data.workspace.id),
         api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] }))
       ]);
-      stages = setupRes.stages ?? [];
+      const nextStages = setupRes.stages ?? [];
+      const nextStageAutomationDraft: Record<string, StageAutomationDraft> = {};
+      const nextChecklistRequiredDraft: Record<string, boolean> = {};
+      for (const stage of nextStages) {
+        nextStageAutomationDraft[stage.id] = {
+          onReplyNotify: stage.onReplyNotify ?? false,
+          overdueReminderHours:
+            stage.overdueReminderHours != null ? String(stage.overdueReminderHours) : ''
+        };
+        for (const template of stage.templates ?? []) {
+          nextChecklistRequiredDraft[template.id] = template.required;
+        }
+      }
+      stageAutomationDraft = nextStageAutomationDraft;
+      checklistRequiredDraft = nextChecklistRequiredDraft;
+      stages = nextStages;
       allWorkflows = workflowsRes.workflows ?? [];
       const updatedInputs: Record<string, { label: string; required: boolean }> = { ...checklistInputs };
-      for (const s of stages) {
+      for (const s of nextStages) {
         if (!updatedInputs[s.id]) {
           updatedInputs[s.id] = { label: '', required: true };
         }
@@ -213,6 +269,7 @@
 
       if (workflow) {
         workflowName = workflow.name;
+
         defaultAssigneeIds =
           workflow.defaultAssigneeIds && workflow.defaultAssigneeIds.length > 0
             ? workflow.defaultAssigneeIds
@@ -227,6 +284,83 @@
     } finally {
       loadingData = false;
     }
+  }
+  async function saveSetupChanges(showSuccess = true): Promise<boolean> {
+    if (
+      !canManage ||
+      !data.workspace?.id ||
+      !workflowId ||
+      !hasUnsavedSetupChanges ||
+      savingSetupChanges
+    ) {
+      return false;
+    }
+
+    const stageUpdates: Array<{
+      stageId: string;
+      onReplyNotify: boolean;
+      overdueReminderHours: number | null;
+    }> = [];
+
+    for (const stage of stages) {
+      const draft = stageAutomationDraft[stage.id];
+      if (!draft) continue;
+
+      const reminderHours = parseReminderHours(draft.overdueReminderHours);
+      if (reminderHours === undefined) {
+        toast.error(tr('setup.reminderInvalid'));
+        return false;
+      }
+
+      if (
+        draft.onReplyNotify !== Boolean(stage.onReplyNotify) ||
+        reminderHours !== (stage.overdueReminderHours ?? null)
+      ) {
+        stageUpdates.push({
+          stageId: stage.id,
+          onReplyNotify: draft.onReplyNotify,
+          overdueReminderHours: reminderHours
+        });
+      }
+    }
+
+    savingSetupChanges = true;
+    try {
+      for (const update of stageUpdates) {
+        await api.updateStage(data.workspace.id, workflowId, update.stageId, {
+          onReplyNotify: update.onReplyNotify,
+          overdueReminderHours: update.overdueReminderHours
+        });
+      }
+
+      for (const stage of stages) {
+        for (const template of stage.templates ?? []) {
+          const required = checklistRequiredDraft[template.id];
+          if (required === undefined || required === template.required) continue;
+          await api.updateChecklistTemplate(
+            data.workspace.id,
+            workflowId,
+            stage.id,
+            template.id,
+            { required }
+          );
+        }
+      }
+
+      await loadSetupData();
+      if (showSuccess) toast.success(tr('setup.changesSaved'));
+      return true;
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('setup.changesError'));
+      return false;
+    } finally {
+      savingSetupChanges = false;
+    }
+  }
+
+  async function ensureSetupChangesSaved(): Promise<boolean> {
+    if (!hasUnsavedSetupChanges) return true;
+    return saveSetupChanges(false);
   }
 
   $effect(() => {
@@ -266,6 +400,7 @@
   // --- Stage Management ---
   async function createStage() {
     if (!newStageName.trim() || !canManage || !data.workspace?.id || !workflowId) return;
+    if (!(await ensureSetupChangesSaved())) return;
     creatingStage = true;
     try {
       await api.createStage(data.workspace.id, workflowId, {
@@ -288,9 +423,11 @@
     stageToEdit = stage;
     editStageName = stage.name;
     editStageColor = stage.color || 'indigo';
-    editOnReplyNotify = stage.onReplyNotify ?? false;
+    const draft = stageAutomationDraft[stage.id];
+    editOnReplyNotify = draft?.onReplyNotify ?? stage.onReplyNotify ?? false;
     editOverdueHours =
-      stage.overdueReminderHours != null ? String(stage.overdueReminderHours) : '';
+      draft?.overdueReminderHours ??
+      (stage.overdueReminderHours != null ? String(stage.overdueReminderHours) : '');
     editNextWorkflowId = stage.nextWorkflowId ?? '';
     editStageOpen = true;
   }
@@ -302,15 +439,19 @@
 
   async function saveEditStage() {
     if (!stageToEdit || !editStageName.trim() || !canManage || !data.workspace?.id || !workflowId) return;
+    if (!(await ensureSetupChangesSaved())) return;
+    const reminderHours = parseReminderHours(editOverdueHours);
+    if (reminderHours === undefined) {
+      toast.error(tr('setup.reminderInvalid'));
+      return;
+    }
     updatingStage = true;
     try {
       await api.updateStage(data.workspace.id, workflowId, stageToEdit.id, {
         name: editStageName.trim(),
         color: editStageColor,
         onReplyNotify: editOnReplyNotify,
-        overdueReminderHours: editOverdueHours.trim()
-          ? Number(editOverdueHours)
-          : null,
+        overdueReminderHours: reminderHours,
         nextWorkflowId: editNextWorkflowId || null
       });
       closeEditStage();
@@ -325,6 +466,7 @@
 
   async function deleteStageConfirmed() {
     if (!stageToDelete || !canManage || !data.workspace?.id || !workflowId) return;
+    if (!(await ensureSetupChangesSaved())) return;
     deletingStage = true;
     const stageName = stageToDelete.name;
     try {
@@ -341,6 +483,7 @@
 
   async function moveStage(index: number, direction: 'up' | 'down') {
     if (!canManage || !data.workspace?.id || !workflowId || reordering) return;
+    if (!(await ensureSetupChangesSaved())) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= stages.length) return;
 
@@ -368,6 +511,7 @@
   // --- Checklist Management ---
   async function addChecklist(stageId: string) {
     if (!canManage || !data.workspace?.id || !workflowId) return;
+    if (!(await ensureSetupChangesSaved())) return;
     const current = checklistInputs[stageId] ?? { label: '', required: true };
     const label = current.label.trim();
     const required = current.required;
@@ -390,30 +534,20 @@
     }
   }
 
-  async function toggleChecklistRequired(
-    stageId: string,
-    template: ApiWorkflowSetupStage['templates'][number]
-  ) {
-    if (!canManage || !data.workspace?.id || !workflowId) return;
-    try {
-      await api.updateChecklistTemplate(data.workspace.id, workflowId, stageId, template.id, {
-        required: !template.required
-      });
-      await loadSetupData();
-      toast.success(tr('setup.requiredChanged', { state: !template.required ? tr('common.required') : tr('common.optional') }));
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : tr('setup.requiredChangeError'));
-    }
+  function toggleChecklistRequired(template: ApiWorkflowSetupStage['templates'][number]) {
+    if (!canManage) return;
+    checklistRequiredDraft[template.id] = !checklistIsRequired(template);
   }
 
   function startEditChecklist(template: ApiWorkflowSetupStage['templates'][number]) {
     editingChecklistId = template.id;
     editChecklistLabel = template.label;
-    editChecklistRequired = template.required;
+    editChecklistRequired = checklistIsRequired(template);
   }
 
   async function saveEditChecklist(stageId: string, templateId: string) {
     if (!editChecklistLabel.trim() || !canManage || !data.workspace?.id || !workflowId) return;
+    if (!(await ensureSetupChangesSaved())) return;
     updatingChecklist = true;
     try {
       await api.updateChecklistTemplate(data.workspace.id, workflowId, stageId, templateId, {
@@ -456,6 +590,7 @@
 
   async function saveChecklistAction() {
     if (!canManage || !data.workspace?.id || !workflowId || !actionStageId || !actionTemplateId) return;
+    if (!(await ensureSetupChangesSaved())) return;
     savingAction = true;
     try {
       await api.updateChecklistAction(
@@ -482,6 +617,7 @@
 
   async function deleteChecklistConfirmed() {
     if (!checklistToDelete || !canManage || !data.workspace?.id || !workflowId) return;
+    if (!(await ensureSetupChangesSaved())) return;
     deletingChecklist = true;
     const { stageId, templateId, label } = checklistToDelete;
     try {
@@ -561,6 +697,16 @@
 
         {#if canManage}
           <Button
+            variant="primary"
+            size="md"
+            loading={savingSetupChanges}
+            disabled={!hasUnsavedSetupChanges || savingSetupChanges}
+            onclick={() => saveSetupChanges()}
+          >
+            <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
+            <span>{tr('setup.saveChanges')}</span>
+          </Button>
+          <Button
             variant="secondary"
             size="md"
             onclick={() => (settingsOpen = true)}
@@ -630,6 +776,7 @@
     <div class="flex gap-4 overflow-x-auto pb-6 pt-1 items-start">
       {#each stages as stage, index (stage.id)}
         {@const meta = stageColorMeta[stage.color] || stageColorMeta.indigo}
+        {@const stageDraft = stageAutomationDraft[stage.id]}
 
         <!-- 320px Lane Tray -->
         <section
@@ -707,22 +854,55 @@
               </h2>
               <div class="flex items-center gap-1.5 mt-1 text-[11px] text-mute font-medium">
                 <span>{tr('setup.checklistCount', { count: stage.templates?.length ?? 0 })}</span>
-                {#if stage.onReplyNotify}
+                {#if stageDraft?.onReplyNotify}
                   <span class="text-faint">•</span>
                   <span class="text-primary font-semibold">{tr('setup.replyNotify')}</span>
                 {/if}
-                {#if stage.overdueReminderHours}
+                {#if stageDraft?.overdueReminderHours}
                   <span class="text-faint">•</span>
-                  <span>{tr('setup.reminder', { hours: stage.overdueReminderHours })}</span>
+                  <span>{tr('setup.reminder', { hours: stageDraft.overdueReminderHours })}</span>
                 {/if}
-                {#if (stage.templates?.filter((t) => t.required).length ?? 0) > 0}
+                {#if (stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0) > 0}
                   <span class="text-faint">•</span>
                   <span class="text-status-urgent-ink font-semibold">
-                    {tr('setup.requiredCount', { count: stage.templates?.filter((t) => t.required).length ?? 0 })}
-                    </span>
+                    {tr('setup.requiredCount', { count: stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0 })}
+                  </span>
                 {/if}
               </div>
             </div>
+            {#if canManage && stageDraft}
+              <div class="mt-2 space-y-2 rounded-lg border border-hairline/70 bg-lane/50 px-2.5 py-2">
+                <div class="flex items-start justify-between gap-2">
+                  <label class="flex min-w-0 items-start gap-2 text-[11px] font-semibold leading-tight text-ink">
+                    <Checkbox bind:checked={stageDraft.onReplyNotify} />
+                    <span>{tr('setup.replyNotifyAssignee')}</span>
+                  </label>
+                  {#if hasUnsavedSetupChanges}
+                    <span class="shrink-0 text-[10px] font-semibold text-primary">
+                      {tr('setup.unsavedChanges')}
+                    </span>
+                  {/if}
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <label for={`reminder-${stage.id}`} class="text-[11px] font-semibold text-ink">
+                      {tr('setup.overdueReminder')}
+                    </label>
+                    <p class="text-[10px] leading-tight text-mute">{tr('setup.overdueHelper')}</p>
+                  </div>
+                  <Input
+                    id={`reminder-${stage.id}`}
+                    type="number"
+                    min="1"
+                    max="720"
+                    step="1"
+                    bind:value={stageDraft.overdueReminderHours}
+                    placeholder="—"
+                    class="h-8 w-20 shrink-0 bg-card text-xs"
+                  />
+                </div>
+              </div>
+            {/if}
           </div>
 
           <!-- Quick Add Checklist Input inside Lane -->
@@ -779,7 +959,7 @@
                   <!-- 4px Label Bar at Top Edge (Signature Flowboard Detail) -->
                   <div
                     class="h-1 w-7 rounded-full"
-                    style="background-color: {template.required ? '#4f46e5' : '#94a3b8'};"
+                    style="background-color: {checklistIsRequired(template) ? '#4f46e5' : '#94a3b8'};"
                   ></div>
 
                   {#if isEditingThisChecklist}
@@ -828,15 +1008,15 @@
                         <button
                           type="button"
                           title={tr('setup.toggleRule')}
-                          onclick={() => toggleChecklistRequired(stage.id, template)}
+                          onclick={() => toggleChecklistRequired(template)}
                           class="cursor-pointer focus:outline-none"
                         >
                           <Badge
-                            tone={template.required ? 'urgent' : 'idle'}
+                            tone={checklistIsRequired(template) ? 'urgent' : 'idle'}
                             variant="soft"
                             class="text-[11px] hover:opacity-80 transition-opacity"
                           >
-                            {template.required ? tr('setup.required') : tr('common.optional')}
+                            {checklistIsRequired(template) ? tr('setup.required') : tr('common.optional')}
                           </Badge>
                         </button>
                         {#if template.action?.kind && template.action.kind !== 'none'}
@@ -846,26 +1026,26 @@
                         {/if}
                       {:else}
                         <Badge
-                          tone={template.required ? 'urgent' : 'idle'}
+                          tone={checklistIsRequired(template) ? 'urgent' : 'idle'}
                           variant="soft"
                           class="text-[11px]"
                         >
-                          {template.required ? tr('setup.required') : tr('common.optional')}
+                          {checklistIsRequired(template) ? tr('setup.required') : tr('common.optional')}
                         </Badge>
                       {/if}
                       </div>
 
                       {#if canManage}
                         <div class="flex items-center gap-1 text-faint">
-                          <IconButton
-                            label={tr('setup.actionWa')}
-                            variant="bare"
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onclick={() => openActionEditor(stage.id, template)}
-                            class="hover:text-primary"
+                            class="h-7 gap-1 px-1.5 text-[10px] font-semibold text-faint hover:text-primary"
                           >
                             <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={1.8} />
-                          </IconButton>
+                            <span>{tr('setup.actionWaShort')}</span>
+                          </Button>
                           <IconButton
                             label={tr('setup.editItem')}
                             variant="bare"
