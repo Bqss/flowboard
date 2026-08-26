@@ -599,6 +599,12 @@ export const api = {
       fetch: fetchFn
     }),
 
+  deleteWorkflow: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/workflows/${workflowId}`, {
+      method: 'DELETE',
+      fetch: fetchFn
+    }),
+
   createStage: (
     workspaceId: string,
     workflowId: string,

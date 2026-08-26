@@ -4,10 +4,10 @@
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, Input, Skeleton } from '$lib/components/atoms/index.js';
-  import { FormField, EmptyStateBlock, Breadcrumb } from '$lib/components/molecules/index.js';
-  import { Dialog } from '$lib/components/organisms/index.js';
+  import { FormField, EmptyStateBlock, Breadcrumb, MultiSelectCombobox, toast, type MultiSelectOption } from '$lib/components/molecules/index.js';
+  import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
-  import { Add01Icon, KanbanIcon, AiMagicIcon, Edit02Icon } from '@hugeicons/core-free-icons';
+  import { Add01Icon, KanbanIcon, AiMagicIcon, Edit02Icon, Delete02Icon } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../$types';
 
   let { data }: { data: LayoutData } = $props();
@@ -18,6 +18,29 @@
   let loadingData = $state(true);
   let workflows = $state<ApiWorkflow[]>([]);
   let members = $state<ApiWorkspaceMember[]>([]);
+
+  let editingWorkflow = $state<ApiWorkflow | null>(null);
+  let editWorkflowOpen = $state(false);
+  let editWorkflowName = $state('');
+  let editAssigneeIds = $state<string[]>([]);
+  let editPrimaryAssigneeId = $state<string | null>(null);
+  let savingWorkflow = $state(false);
+
+  let workflowToDelete = $state<ApiWorkflow | null>(null);
+  let deletingWorkflow = $state(false);
+
+  const memberOptions = $derived<MultiSelectOption[]>(
+    members.map((member) => ({
+      value: member.id,
+      label: member.name,
+      description: member.email,
+      avatarUrl: member.avatarUrl ?? undefined,
+      role: member.role === 'owner' ? tr('common.owner') : tr('common.member')
+    }))
+  );
+
+  const canManageWorkflow = (workflow: ApiWorkflow) =>
+    data.workspace?.role === 'owner' || workflow.ownerId === data.user?.id;
 
   async function loadWorkflows() {
     if (!data.workspace?.id) return;
@@ -78,6 +101,76 @@
       error = err instanceof ApiError ? err.message : tr('workflows.createError');
     } finally {
       loading = false;
+    }
+  }
+
+  function openEditWorkflow(workflow: ApiWorkflow) {
+    if (!canManageWorkflow(workflow)) return;
+    const assigneeIds =
+      workflow.defaultAssigneeIds && workflow.defaultAssigneeIds.length > 0
+        ? [...workflow.defaultAssigneeIds]
+        : workflow.defaultAssigneeId
+          ? [workflow.defaultAssigneeId]
+          : [];
+    editingWorkflow = workflow;
+    editWorkflowName = workflow.name;
+    editAssigneeIds = assigneeIds;
+    editPrimaryAssigneeId = workflow.defaultAssigneeId ?? assigneeIds[0] ?? null;
+    editWorkflowOpen = true;
+  }
+
+  async function saveWorkflowEdit() {
+    if (!editingWorkflow || !data.workspace?.id || !editWorkflowName.trim()) return;
+    const workflowId = editingWorkflow.id;
+    savingWorkflow = true;
+    try {
+      const defaultAssigneeId =
+        editPrimaryAssigneeId && editAssigneeIds.includes(editPrimaryAssigneeId)
+          ? editPrimaryAssigneeId
+          : editAssigneeIds[0] ?? null;
+      const response = await api.updateWorkflow(data.workspace.id, workflowId, {
+        name: editWorkflowName.trim(),
+        defaultAssigneeIds: editAssigneeIds,
+        defaultAssigneeId
+      });
+      workflows = workflows.map((workflow) =>
+        workflow.id === workflowId
+          ? {
+              ...workflow,
+              ...response.workflow,
+              defaultAssigneeIds: response.workflow.defaultAssigneeIds ?? editAssigneeIds
+            }
+          : workflow
+      );
+      editWorkflowOpen = false;
+      editingWorkflow = null;
+      toast.success(tr('setup.settingsSaved'));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('setup.settingsError'));
+    } finally {
+      savingWorkflow = false;
+    }
+  }
+
+  function openDeleteWorkflow(workflow: ApiWorkflow) {
+    if (!canManageWorkflow(workflow)) return;
+    workflowToDelete = workflow;
+  }
+
+  async function deleteWorkflowConfirmed() {
+    if (!workflowToDelete || !data.workspace?.id) return;
+    const workflowId = workflowToDelete.id;
+    const workflowName = workflowToDelete.name;
+    deletingWorkflow = true;
+    try {
+      await api.deleteWorkflow(data.workspace.id, workflowId);
+      workflows = workflows.filter((workflow) => workflow.id !== workflowId);
+      workflowToDelete = null;
+      toast.success(tr('workflows.deleted', { name: workflowName }));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('workflows.deleteError'));
+    } finally {
+      deletingWorkflow = false;
     }
   }
 </script>
@@ -153,6 +246,16 @@
             </div>
           </div>
           <div class="mt-5 flex flex-wrap items-center gap-2 pt-2">
+            {#if canManageWorkflow(workflow)}
+              <Button variant="secondary" size="sm" onclick={() => openEditWorkflow(workflow)}>
+                <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
+                <span>{tr('common.edit')}</span>
+              </Button>
+              <Button variant="destructive" size="sm" onclick={() => openDeleteWorkflow(workflow)}>
+                <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                <span>{tr('common.delete')}</span>
+              </Button>
+            {/if}
             <Button href="/dashboard/workflows/{workflow.id}" variant="primary" size="sm">
               <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
               <span>{tr('workflows.openBoard')}</span>
@@ -208,3 +311,73 @@
     </div>
   {/snippet}
 </Dialog>
+
+<Dialog
+  bind:open={editWorkflowOpen}
+  title={tr('setup.workflowSettings')}
+  description={tr('setup.workflowSettingsDescription')}
+  size="md"
+>
+  <form
+    onsubmit={(event) => {
+      event.preventDefault();
+      saveWorkflowEdit();
+    }}
+    class="space-y-4 py-2"
+  >
+    <FormField label={tr('setup.workflowName')} required>
+      {#snippet control(args)}
+        <Input
+          {...args}
+          bind:value={editWorkflowName}
+          disabled={savingWorkflow}
+          placeholder={tr('setup.workflowNamePlaceholder')}
+          class="h-10 text-sm"
+        />
+      {/snippet}
+    </FormField>
+
+    <FormField
+      label={tr('setup.assignees')}
+      helper={tr('setup.assigneesHelper')}
+    >
+      {#snippet control()}
+        <MultiSelectCombobox
+          options={memberOptions}
+          bind:values={editAssigneeIds}
+          bind:primary={editPrimaryAssigneeId}
+          disabled={savingWorkflow}
+          showPrimaryBadge
+          placeholder={tr('setup.assigneesPlaceholder')}
+          emptyText={tr('setup.noMembers')}
+        />
+      {/snippet}
+    </FormField>
+
+    <div class="flex justify-end gap-2 pt-2">
+      <Button variant="secondary" type="button" onclick={() => (editWorkflowOpen = false)}>
+        {tr('setup.cancel')}
+      </Button>
+      <Button
+        variant="primary"
+        type="submit"
+        loading={savingWorkflow}
+        disabled={!editWorkflowName.trim()}
+      >
+        {tr('setup.saveSettings')}
+      </Button>
+    </div>
+  </form>
+</Dialog>
+
+<ConfirmDialog
+  open={workflowToDelete !== null}
+  title={tr('workflows.deleteTitle', { name: workflowToDelete?.name ?? '' })}
+  description={tr('workflows.deleteDescription')}
+  confirmLabel={tr('workflows.deleteConfirm')}
+  cancelLabel={tr('common.cancel')}
+  destructive
+  loading={deletingWorkflow}
+  onconfirm={deleteWorkflowConfirmed}
+  oncancel={() => (workflowToDelete = null)}
+/>
