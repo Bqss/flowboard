@@ -23,7 +23,7 @@ import {
 } from '@services/integration-security';
 import { handleInboundWhatsappReply, listWhatsappJobs, updateWhatsappJobStatus } from '@services/whatsapp';
 import { checkWajomConnection, sendWajomTestMessage } from '@services/wajom-transport';
-import { getWajomActionManifest } from '@services/wajom-manifest';
+import { getWajomActionManifest, getWajomCustomActionExport } from '@services/wajom-manifest';
 import {
   WAJOM_TOOL_NAMES,
   type WajomConnectionInput,
@@ -256,6 +256,25 @@ export function listTools({ wajomConnection }: Ctx<unknown>) {
 export function manifest({ wajomConnection }: Ctx<unknown>) {
   if (!wajomConnection) return { provider: 'flowboard', actions: [] };
   return getWajomActionManifest(wajomConnection);
+}
+
+export async function exportActions({
+  user,
+  workspace,
+  membership,
+  params,
+  set
+}: Ctx<unknown, ConnectionParams>) {
+  const denied = requireOwner({ user, workspace, membership, set });
+  if (denied || !workspace) return denied ?? { error: 'Forbidden' };
+
+  const connection = await getWajomConnection(workspace.id, params.connectionId);
+  if (!connection) {
+    set.status = 404;
+    return { error: 'Wajom connection not found' };
+  }
+
+  return { export: getWajomCustomActionExport(connection) };
 }
 
 export async function connectorHealth({ wajomConnection }: Ctx<unknown>) {

@@ -53,6 +53,7 @@ export const createWajomRoutes = () =>
         .use(createRequireAuth())
         .use(createRequireWorkspaceOwner())
         .get('/', wajom.listConnections, { params: WorkspaceIdParam })
+        .get('/:connectionId/export', wajom.exportActions, { params: WajomConnectionParam })
         .get('/jobs', wajom.listJobs, { params: WorkspaceIdParam, query: WajomJobsQuery })
         .post('/', wajom.createConnection, {
           params: WorkspaceIdParam,

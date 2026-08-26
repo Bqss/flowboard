@@ -73,6 +73,7 @@
   let loading = $state(true);
   let saving = $state(false);
   let actionId = $state<string | null>(null);
+  let exportingId = $state<string | null>(null);
   let testSendId = $state<string | null>(null);
   let testTo = $state('');
   let testMessage = $state('');
@@ -303,6 +304,48 @@
     if (!issuedToken || !navigator.clipboard) return;
     await navigator.clipboard.writeText(issuedToken);
     tokenCopied = true;
+  }
+
+  async function exportActions(connection: ApiWajomConnection) {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+
+    exportingId = connection.id;
+    errorMessage = null;
+    successMessage = null;
+    try {
+      const response = await api.exportWajomActions(workspaceId, connection.id);
+      const exported = response.export;
+      const baseUrl = window.location.origin;
+      const payload = {
+        ...exported,
+        baseUrl,
+        actions: exported.actions.map((action) => ({
+          ...action,
+          endpoint: action.endpoint.replace(exported.baseUrl, baseUrl)
+        }))
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const filename =
+        connection.name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || 'flowboard';
+      anchor.href = url;
+      anchor.download = `${filename}-wajom-actions.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      successMessage = tr('integrations.exported');
+    } catch (error) {
+      errorMessage = error instanceof ApiError ? error.message : tr('integrations.exportError');
+    } finally {
+      exportingId = null;
+    }
   }
 
   function formatDate(value: string | null) {
@@ -574,6 +617,9 @@
 
             <div class="mt-5 flex flex-wrap gap-2 border-t border-hairline pt-4">
               {#if canManage}
+                <Button variant="secondary" size="sm" loading={exportingId === connection.id} onclick={() => exportActions(connection)}>
+                  {tr('integrations.exportJson')}
+                </Button>
                 <Button variant="secondary" size="sm" onclick={() => resetForm(connection)}>
                   {tr('common.edit')}
                 </Button>

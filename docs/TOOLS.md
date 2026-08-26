@@ -123,6 +123,17 @@ Authorization: Bearer <CONNECTOR_TOKEN>
 
 Manifest berisi action yang aktif untuk koneksi tersebut. Jika runtime Wajom belum mendukung import manifest, tambahkan lima Custom Action di bawah secara manual.
 
+### JSON preset import/export
+
+Cara paling cepat untuk memasang semua action:
+
+1. Di Flowboard, buka `Settings → Integrations → Wajom`.
+2. Klik **Export JSON** pada koneksi yang ingin dipakai.
+3. Di Wajom Portal, buka tab **Custom Actions** lalu klik **Import JSON**.
+4. Pilih file hasil export. Portal akan meminta connector token Flowboard sekali, lalu membuat atau mengemas kini action berdasarkan `name`.
+
+File export tidak menyimpan token koneksi. Endpoint memakai Flowboard origin saat file dibuat; jika mengimport file mentah yang masih memakai `{{FLOWBOARD_BASE_URL}}`, portal akan meminta base URL.
+
 ---
 
 ## 3. Common Custom Action fields

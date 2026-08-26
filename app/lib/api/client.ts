@@ -76,6 +76,45 @@ export type ApiWajomJob = {
   updatedAt: string;
 };
 
+export type ApiWajomCustomAction = {
+  name: string;
+  description: string;
+  action_type: 'api_call';
+  method: 'POST';
+  endpoint: string;
+  headers: Record<string, string>;
+  payload_template: Record<string, unknown>;
+  query_params: unknown[];
+  parameters: Record<string, Record<string, unknown>>;
+  required_params: string[];
+  is_active: boolean;
+  metadata?: {
+    readOnly: boolean;
+    sideEffect: boolean;
+    requiresConfirmation: boolean;
+  };
+};
+
+export type ApiWajomActionExport = {
+  format: 'wajom-custom-actions';
+  version: number;
+  provider: 'flowboard';
+  preset: string;
+  baseUrl: string;
+  auth: {
+    type: 'bearer';
+    header: 'Authorization';
+    tokenPlaceholder: string;
+  };
+  connection: {
+    id: string;
+    name: string;
+    instanceId: string;
+    enabledTools: string[];
+  };
+  actions: ApiWajomCustomAction[];
+};
+
 export type ApiBoardColumn = {
   id: string;
   name: string;
@@ -683,6 +722,12 @@ export const api = {
       method: 'POST',
       fetch: fetchFn
     }),
+
+  exportWajomActions: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
+    request<{ export: ApiWajomActionExport }>(
+      `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/export`,
+      { fetch: fetchFn }
+    ),
 
   listWajomConnections: (workspaceId: string, fetchFn?: FetchLike) =>
     request<{ connections: ApiWajomConnection[] }>(

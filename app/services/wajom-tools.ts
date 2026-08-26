@@ -112,6 +112,8 @@ export const WAJOM_TOOL_DEFINITIONS = [
   }
 ] as const;
 
+export type WajomToolDefinition = (typeof WAJOM_TOOL_DEFINITIONS)[number];
+
 const requireWorkflow = async (connection: WajomConnection) => {
   if (!connection.defaultWorkflowId) {
     throw new WajomToolError('Koneksi Wajom belum memiliki default workflow.', 'invalid_input');
