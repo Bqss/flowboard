@@ -16,19 +16,19 @@
     dashboardText($locale, key, values);
 
   const EXAMPLE_WORKFLOW_DRAFT: ApiWorkflowDraft = {
-    name: 'Customer Onboarding Example',
+    name: 'Wajom Customer Onboarding Example',
     stages: [
       {
         name: 'New',
         color: 'indigo',
         checklists: [
-          { label: 'Validate customer details', required: true },
+          { label: 'Verifikasi data dan nomor WhatsApp pelanggan', required: true },
           {
-            label: 'Send welcome message',
+            label: 'Kirim pesan verifikasi ke pelanggan',
             required: true,
             action: {
               kind: 'send',
-              messageTemplate: 'Hi {{nama}}, thanks for reaching out. Our team will help you shortly.',
+              messageTemplate: 'Halo, apakah benar dengan {{nama}}? Balas "YA" jika benar agar kami bisa lanjut membantu.',
               delayMinutes: 0,
               followupIfNoReply: false
             }
@@ -40,12 +40,37 @@
         color: 'amber',
         onReplyNotify: true,
         overdueReminderHours: 48,
-        checklists: [{ label: 'Follow up with customer', required: true }]
+        checklists: [
+          { label: 'Tonton video tutorial dasar Wajom', required: true },
+          { label: 'Coba langkah setup pertama Wajom', required: true },
+          {
+            label: 'Follow-up pelanggan setelah tutorial',
+            required: true,
+            action: {
+              kind: 'followup',
+              messageTemplate: 'Halo {{nama}}, sudah sempat melihat tutorial Wajom dan mencoba langkah setup pertama? Kami siap membantu jika ada pertanyaan.',
+              delayMinutes: 1440,
+              followupIfNoReply: true
+            }
+          }
+        ]
       },
       {
         name: 'Completed',
         color: 'emerald',
-        checklists: [{ label: 'Confirm onboarding is complete', required: true }]
+        checklists: [
+          { label: 'Pastikan pelanggan berhasil menggunakan langkah dasar Wajom', required: true },
+          {
+            label: 'Kirim konfirmasi onboarding selesai',
+            required: true,
+            action: {
+              kind: 'send',
+              messageTemplate: 'Halo {{nama}}, onboarding Wajom kamu sudah selesai. Terima kasih sudah mengikuti langkah-langkahnya.',
+              delayMinutes: 0,
+              followupIfNoReply: false
+            }
+          }
+        ]
       }
     ]
   };
