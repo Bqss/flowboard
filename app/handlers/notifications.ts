@@ -5,9 +5,21 @@ import {
   markAllNotificationsRead,
   markNotificationRead
 } from '@services/notification';
+import { getNotificationSettings, upsertNotificationSettings } from '@services/notification-settings';
 
 type WorkspaceParams = { workspaceId: string };
 type NotificationParams = WorkspaceParams & { notificationId: string };
+type NotificationSettingsBody = {
+  waFailed?: boolean;
+  customerReplied?: boolean;
+  cardOverdue?: boolean;
+  handover?: boolean;
+  emailWaFailed?: boolean;
+  emailCustomerReplied?: boolean;
+  emailCardOverdue?: boolean;
+  emailHandover?: boolean;
+  emailDigest?: boolean;
+};
 
 export async function list({ user, workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
   if (!user || !workspace || !membership) {
@@ -61,4 +73,30 @@ export async function markAllRead({ user, workspace, membership, set }: Ctx<unkn
 
   await markAllNotificationsRead(user.id, workspace.id);
   return { ok: true as const };
+}
+
+export async function getSettings({ user, workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+
+  const settings = await getNotificationSettings(workspace.id, user.id);
+  return { settings };
+}
+
+export async function updateSettings({
+  user,
+  workspace,
+  membership,
+  body,
+  set
+}: Ctx<NotificationSettingsBody, WorkspaceParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+
+  const settings = await upsertNotificationSettings(workspace.id, user.id, body);
+  return { settings };
 }

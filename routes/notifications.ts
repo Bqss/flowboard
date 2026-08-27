@@ -2,7 +2,7 @@ import { Elysia } from 'elysia';
 import * as notifications from '@handlers/notifications';
 import { createRequireAuth } from '@middlewares';
 import { resolveWorkspaceMember } from '@middlewares/workspace';
-import { NotificationIdParam, WorkspaceIdParam } from '@validators';
+import { NotificationIdParam, UpdateNotificationSettingsSchema, WorkspaceIdParam } from '@validators';
 
 export const createNotificationsRoutes = () => {
   const workspaceMemberGuard = new Elysia()
@@ -25,7 +25,12 @@ export const createNotificationsRoutes = () => {
     .use(workspaceMemberGuard)
     .get('/', notifications.list, { params: WorkspaceIdParam })
     .post('/read-all', notifications.markAllRead, { params: WorkspaceIdParam })
-    .patch('/:notificationId/read', notifications.markRead, { params: NotificationIdParam });
+    .patch('/:notificationId/read', notifications.markRead, { params: NotificationIdParam })
+    .get('/settings', notifications.getSettings, { params: WorkspaceIdParam })
+    .put('/settings', notifications.updateSettings, {
+      params: WorkspaceIdParam,
+      body: UpdateNotificationSettingsSchema
+    });
 };
 
 export const notificationsRoutes = createNotificationsRoutes();

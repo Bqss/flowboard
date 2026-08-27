@@ -1,5 +1,12 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db, notifications, type NotificationType } from '@db';
+import {
+  getNotificationSettings,
+  getUserEmail,
+  shouldNotifyEmail,
+  shouldNotifyInApp
+} from './notification-settings';
+import { sendEmail } from './email';
 
 export const createNotification = async (input: {
   workspaceId: string;
@@ -9,17 +16,39 @@ export const createNotification = async (input: {
   title: string;
   body: string;
 }) => {
-  const [row] = await db
-    .insert(notifications)
-    .values({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      cardId: input.cardId ?? null,
-      type: input.type,
-      title: input.title,
-      body: input.body
-    })
-    .returning();
+  const settings = await getNotificationSettings(input.workspaceId, input.userId);
+
+  // In-app notification — skip if user disabled this event type.
+  let row = null;
+  if (shouldNotifyInApp(settings, input.type)) {
+    [row] = await db
+      .insert(notifications)
+      .values({
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        cardId: input.cardId ?? null,
+        type: input.type,
+        title: input.title,
+        body: input.body
+      })
+      .returning();
+  }
+
+  // Email notification — skip if user disabled email for this event type,
+  // or if digest mode is on (digest batches are sent by a separate scheduler).
+  if (shouldNotifyEmail(settings, input.type) && !settings.emailDigest) {
+    const email = await getUserEmail(input.userId);
+    if (email) {
+      await sendEmail({
+        to: email,
+        subject: input.title,
+        html: `<p>${input.body}</p>`,
+        text: input.body
+      }).catch((error) => {
+        console.error('[notification] email send failed:', error);
+      });
+    }
+  }
 
   return row;
 };

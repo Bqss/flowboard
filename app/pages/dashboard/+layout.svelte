@@ -20,7 +20,12 @@
     Logout03Icon,
     ArrowDown01Icon,
     Building06Icon,
-    Tick02Icon
+    Tick02Icon,
+    ShieldUserIcon,
+    DashboardSquare02Icon,
+    CreditCardIcon,
+    GiftIcon,
+    Plug02Icon
   } from '@hugeicons/core-free-icons';
 
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
@@ -75,6 +80,15 @@
       label: tr('nav.members'),
       active: $page.url.pathname.startsWith('/dashboard/members'),
       icon: usersIcon
+    }
+  ]);
+
+  const settingsItems = $derived([
+    {
+      href: '/dashboard/settings/integrations',
+      label: tr('nav.integrations'),
+      active: $page.url.pathname.startsWith('/dashboard/settings/integrations'),
+      icon: integrationsIcon
     },
     {
       href: '/dashboard/settings',
@@ -83,14 +97,74 @@
         $page.url.pathname === '/dashboard/settings' ||
         $page.url.pathname === '/dashboard/settings/',
       icon: settingsIcon
-    },
-    {
-      href: '/dashboard/settings/integrations',
-      label: tr('nav.integrations'),
-      active: $page.url.pathname.startsWith('/dashboard/settings/integrations'),
-      icon: settingsIcon
     }
   ]);
+
+  // Admin mode — when ON, sidebar shows admin navigation instead of workspace nav.
+  // Persisted in localStorage so it survives page reloads. Only available to platformAdmins.
+  let adminMode = $state(false);
+
+  $effect(() => {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('flowboard-admin-mode');
+      adminMode = stored === 'true' && Boolean(data.user?.platformAdmin);
+    }
+  });
+
+  function toggleAdminMode() {
+    adminMode = !adminMode;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('flowboard-admin-mode', String(adminMode));
+    }
+    if (adminMode) {
+      goto('/dashboard/admin');
+    } else {
+      goto('/dashboard');
+    }
+  }
+
+  const isAdminPath = $derived($page.url.pathname.startsWith('/dashboard/admin'));
+
+  // Auto-enable admin mode if landing on an admin page while it's off.
+  $effect(() => {
+    if (isAdminPath && !adminMode && data.user?.platformAdmin) {
+      adminMode = true;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('flowboard-admin-mode', 'true');
+      }
+    }
+  });
+
+  const adminNavItems = $derived([
+    {
+      href: '/dashboard/admin',
+      label: tr('admin.nav.overview'),
+      active: $page.url.pathname === '/dashboard/admin',
+      icon: adminOverviewIcon
+    },
+    {
+      href: '/dashboard/admin/users',
+      label: tr('admin.nav.users'),
+      active: $page.url.pathname.startsWith('/dashboard/admin/users'),
+      icon: usersIcon
+    },
+    {
+      href: '/dashboard/admin/subscriptions',
+      label: tr('admin.nav.subscriptions'),
+      active: $page.url.pathname.startsWith('/dashboard/admin/subscriptions'),
+      icon: subscriptionsIcon
+    },
+    {
+      href: '/dashboard/admin/vouchers',
+      label: tr('admin.nav.vouchers'),
+      active: $page.url.pathname.startsWith('/dashboard/admin/vouchers'),
+      icon: vouchersIcon
+    }
+  ]);
+
+  // When admin mode is ON, sidebar shows admin nav. Otherwise normal nav.
+  const sidebarItems = $derived(adminMode ? adminNavItems : navItems);
+  const sidebarSettingsItems = $derived(adminMode ? [] : settingsItems);
 
   async function logout() {
     loggingOut = true;
@@ -213,6 +287,9 @@
 {#snippet settingsIcon()}
   <HugeiconsIcon icon={Settings01Icon} size={20} strokeWidth={1.8} />
 {/snippet}
+{#snippet integrationsIcon()}
+  <HugeiconsIcon icon={Plug02Icon} size={20} strokeWidth={1.8} />
+{/snippet}
 {#snippet designIcon()}
   <HugeiconsIcon icon={Layers01Icon} size={20} strokeWidth={1.8} />
 {/snippet}
@@ -225,15 +302,26 @@
 {#snippet checkIcon()}
   <HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={1.8} />
 {/snippet}
+{#snippet adminOverviewIcon()}
+  <HugeiconsIcon icon={DashboardSquare02Icon} size={20} strokeWidth={1.8} />
+{/snippet}
+{#snippet subscriptionsIcon()}
+  <HugeiconsIcon icon={CreditCardIcon} size={20} strokeWidth={1.8} />
+{/snippet}
+{#snippet vouchersIcon()}
+  <HugeiconsIcon icon={GiftIcon} size={20} strokeWidth={1.8} />
+{/snippet}
 
 <div data-theme="app" class="flex min-h-screen w-full bg-canvas text-body">
   <SidebarRail
-    items={navItems}
+    items={sidebarItems}
+    settingsItems={sidebarSettingsItems}
     userName={data.user?.name ?? 'User'}
     userSrc={data.user?.avatarUrl ?? undefined}
     labels={{
       ariaLabel: tr('nav.dashboard'),
-      subtitle: tr('shell.productSubtitle'),
+      subtitle: adminMode ? tr('admin.shell') : tr('shell.productSubtitle'),
+      settings: tr('nav.settingsGroup'),
       admin: tr('nav.admin')
     }}
   />
@@ -269,6 +357,25 @@
         {/if}
       {/snippet}
       {#snippet actions()}
+        {#if data.user?.platformAdmin}
+          <button
+            type="button"
+            onclick={toggleAdminMode}
+            class="group inline-flex items-center gap-2 rounded-full border border-hairline bg-card px-3 py-1.5 shadow-control transition-colors hover:border-hairline-strong"
+            aria-pressed={adminMode}
+            aria-label={adminMode ? tr('nav.exitAdmin') : tr('nav.adminMode')}
+            title={adminMode ? tr('nav.exitAdmin') : tr('nav.adminMode')}
+          >
+            <span class="text-[11px] font-semibold tracking-wide text-mute transition-colors group-hover:text-ink">
+              {tr('nav.adminMode')}
+            </span>
+            <span class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {adminMode ? 'bg-primary' : 'bg-hairline-strong'}">
+              <span class="absolute left-0.5 inline-flex h-4 w-4 transform items-center justify-center rounded-full bg-white shadow-sm transition-transform {adminMode ? 'translate-x-4' : 'translate-x-0'}">
+                <HugeiconsIcon icon={ShieldUserIcon} size={10} strokeWidth={2.2} class={adminMode ? 'text-primary' : 'text-mute'} />
+              </span>
+            </span>
+          </button>
+        {/if}
         <div class="inline-flex items-center rounded-full border border-hairline bg-card p-0.5 shadow-control" aria-label={tr('language.label')}>
           {#each locales as language}
             <button

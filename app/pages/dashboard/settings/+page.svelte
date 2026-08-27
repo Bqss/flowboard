@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Avatar, Button, Input } from '$lib/components/atoms/index.js';
+  import { Avatar, Button, Checkbox, Input, Skeleton } from '$lib/components/atoms/index.js';
   import { FormField, PasswordInput, Breadcrumb } from '$lib/components/molecules/index.js';
-  import { api, ApiError } from '$lib/api/client';
+  import { api, ApiError, type ApiNotificationSettings } from '$lib/api/client';
   import { invalidateAll } from '$app/navigation';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
@@ -11,7 +11,8 @@
     LockPasswordIcon,
     Image01Icon,
     CheckmarkCircle02Icon,
-    Alert02Icon
+    Alert02Icon,
+    BellRingIcon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../$types';
 
@@ -41,6 +42,67 @@
 
   let fileInput: HTMLInputElement;
   let uploadingAvatar = $state(false);
+
+  // Notification preferences
+  type EventKey = 'waFailed' | 'customerReplied' | 'cardOverdue' | 'handover';
+  const eventKeys: EventKey[] = ['waFailed', 'customerReplied', 'cardOverdue', 'handover'];
+  const eventLabel = (key: EventKey) => {
+    switch (key) {
+      case 'waFailed':
+        return tr('settings.eventWaFailed');
+      case 'customerReplied':
+        return tr('settings.eventCustomerReplied');
+      case 'cardOverdue':
+        return tr('settings.eventCardOverdue');
+      case 'handover':
+        return tr('settings.eventHandover');
+    }
+  };
+
+  let notifSettings = $state<ApiNotificationSettings | null>(null);
+  let notifLoading = $state(true);
+  let notifSaving = $state(false);
+  let notifSuccess = $state<string | null>(null);
+  let notifError = $state<string | null>(null);
+
+  async function loadNotifSettings() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) {
+      notifLoading = false;
+      return;
+    }
+    notifLoading = true;
+    notifError = null;
+    try {
+      const response = await api.getNotificationSettings(workspaceId);
+      notifSettings = response.settings;
+    } catch (err) {
+      notifError = err instanceof ApiError ? err.message : tr('settings.notificationsLoadError');
+    } finally {
+      notifLoading = false;
+    }
+  }
+
+  async function saveNotifSettings() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId || !notifSettings) return;
+    notifSaving = true;
+    notifSuccess = null;
+    notifError = null;
+    try {
+      const response = await api.updateNotificationSettings(workspaceId, notifSettings);
+      notifSettings = response.settings;
+      notifSuccess = tr('settings.notificationsSaved');
+    } catch (err) {
+      notifError = err instanceof ApiError ? err.message : tr('settings.notificationsError');
+    } finally {
+      notifSaving = false;
+    }
+  }
+
+  $effect(() => {
+    if (data.workspace?.id) loadNotifSettings();
+  });
 
   async function updateProfile() {
     if (!data.user) return;
@@ -248,4 +310,99 @@
       </form>
     </section>
   </div>
+
+  <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
+    <div class="flex items-center gap-2">
+      <HugeiconsIcon icon={BellRingIcon} size={20} strokeWidth={1.8} class="text-primary" />
+      <div>
+        <h2 class="ds-section-title text-ink">{tr('settings.notifications')}</h2>
+        <p class="ds-caption mt-1 text-mute">{tr('settings.notificationsDescription')}</p>
+      </div>
+    </div>
+
+    {#if notifLoading}
+      <div class="space-y-3">
+        {#each Array(4) as _}
+          <Skeleton class="h-12 w-full" />
+        {/each}
+      </div>
+    {:else if notifSettings}
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          saveNotifSettings();
+        }}
+        class="space-y-5"
+      >
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-hairline text-left">
+                <th class="pb-3 pr-4 font-medium text-ink">{tr('settings.notifications')}</th>
+                <th class="pb-3 px-4 text-center font-medium text-mute">{tr('settings.inAppColumn')}</th>
+                <th class="pb-3 pl-4 text-center font-medium text-mute">{tr('settings.emailColumn')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each eventKeys as key (key)}
+                <tr class="border-b border-hairline/60">
+                  <td class="py-3 pr-4 text-ink">{eventLabel(key)}</td>
+                  <td class="py-3 px-4 text-center">
+                    <Checkbox
+                      checked={notifSettings[key]}
+                      onchange={() => {
+                        notifSettings = { ...notifSettings!, [key]: !notifSettings![key] };
+                      }}
+                    />
+                  </td>
+                  <td class="py-3 pl-4 text-center">
+                    <Checkbox
+                      checked={notifSettings[`email${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof ApiNotificationSettings] as boolean}
+                      onchange={() => {
+                        const emailKey = `email${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof ApiNotificationSettings;
+                        notifSettings = { ...notifSettings!, [emailKey]: !(notifSettings![emailKey] as boolean) };
+                      }}
+                    />
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+
+        <label class="flex items-start gap-3 rounded-xl border border-hairline bg-lane/45 p-4">
+          <Checkbox
+            checked={notifSettings.emailDigest}
+            onchange={() => {
+              notifSettings = { ...notifSettings!, emailDigest: !notifSettings!.emailDigest };
+            }}
+          />
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-ink">{tr('settings.emailDigest')}</span>
+            <span class="ds-caption block text-mute">{tr('settings.emailDigestHelper')}</span>
+          </span>
+        </label>
+
+        {#if notifError}
+          <div class="flex items-center gap-2 text-sm text-status-urgent-ink">
+            <HugeiconsIcon icon={Alert02Icon} size={16} strokeWidth={1.8} />
+            <span>{notifError}</span>
+          </div>
+        {/if}
+
+        {#if notifSuccess}
+          <div class="flex items-center gap-2 text-sm text-status-done-ink">
+            <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} strokeWidth={1.8} />
+            <span>{notifSuccess}</span>
+          </div>
+        {/if}
+
+        <div class="pt-2">
+          <Button variant="primary" type="submit" loading={notifSaving}>{tr('settings.saveChanges')}</Button>
+        </div>
+      </form>
+    {:else}
+      <p class="text-sm text-mute">{tr('settings.notificationsLoadError')}</p>
+    {/if}
+  </section>
 </div>

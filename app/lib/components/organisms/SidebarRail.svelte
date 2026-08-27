@@ -7,30 +7,36 @@
 
 	type Props = WithElementRef<HTMLAttributes<HTMLElement>> & {
 		items: NavLink[];
+		settingsItems?: NavLink[];
 		adminItems?: NavLink[];
 		userName?: string;
 		userSrc?: string;
 		labels?: {
 			ariaLabel?: string;
 			subtitle?: string;
+			settings?: string;
 			admin?: string;
 		};
 		class?: string;
+		footer?: import('svelte').Snippet;
 	};
 
 	let {
 		ref = $bindable(null),
 		items,
+		settingsItems = [],
 		adminItems = [],
 		userName = 'User',
 		userSrc,
 		labels = {},
 		class: className,
+		footer,
 		...rest
 	}: Props = $props();
 
 	const ariaLabel = $derived(labels.ariaLabel ?? 'Navigasi utama');
 	const subtitle = $derived(labels.subtitle ?? 'Onboarding desk');
+	const settingsLabel = $derived(labels.settings ?? 'Settings');
 	const adminLabel = $derived(labels.admin ?? 'Administrasi');
 
 	let expanded = $state(false);
@@ -50,7 +56,7 @@
 >
 	<div
 		class={cn(
-			'mb-6 flex shrink-0 items-center gap-3',
+			'mb-4 flex shrink-0 items-center gap-3',
 			expanded ? 'px-4' : 'justify-center px-2'
 		)}
 	>
@@ -67,7 +73,7 @@
 
 	<nav
 		class={cn(
-			'flex flex-1 flex-col gap-1 overflow-y-auto px-2',
+			'flex flex-1 flex-col gap-1 overflow-y-auto px-2 pt-2',
 			expanded ? 'items-stretch' : 'items-center'
 		)}
 	>
@@ -85,6 +91,30 @@
 				class={expanded ? 'w-full' : undefined}
 			/>
 		{/each}
+
+		{#if settingsItems.length}
+			{#if expanded}
+				<p class="ds-caption mt-5 mb-1.5 px-3 text-faint">{settingsLabel}</p>
+			{:else}
+				<div class="mt-5 h-px w-8 bg-hairline" aria-hidden="true"></div>
+			{/if}
+			<div class="flex flex-col gap-1">
+				{#each settingsItems as item (item.label)}
+					<NavItem
+						label={item.label}
+						href={item.href}
+						active={item.active}
+						badge={item.badge}
+						disabled={item.disabled}
+						onselect={item.onselect}
+						variant={expanded ? 'expanded' : 'rail'}
+						icon={item.icon}
+						data-testid={item.testId}
+						class={expanded ? 'w-full' : undefined}
+					/>
+				{/each}
+			</div>
+		{/if}
 
 		{#if adminItems.length}
 			{#if expanded}
@@ -109,6 +139,12 @@
 			</div>
 		{/if}
 	</nav>
+
+	{#if footer}
+		<div class={cn('shrink-0', expanded ? 'px-3' : 'flex justify-center px-2')}>
+			{@render footer()}
+		</div>
+	{/if}
 
 	<div class={cn('mt-4 shrink-0', expanded ? 'px-3' : 'flex justify-center')}>
 		{#if expanded}

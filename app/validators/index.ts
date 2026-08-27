@@ -92,6 +92,7 @@ export const WorkflowCardItemParam = t.Object({
 
 export const CreateWorkflowSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
@@ -99,6 +100,7 @@ export const CreateWorkflowSchema = t.Object({
 
 export const UpdateWorkflowSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
@@ -171,18 +173,27 @@ export const GenerateWorkflowDraftSchema = t.Object({
 });
 
 export const McpCallSchema = t.Object({
-  workspaceId: t.String({ format: 'uuid' }),
+  // workspaceId is required for legacy global-key mode (x-workspace-id header).
+  // For DB-managed per-workspace keys, the workspace is resolved from the key
+  // and this field is ignored.
+  workspaceId: t.Optional(t.String({ format: 'uuid' })),
   tool: t.Union([
     t.Literal('create_card'),
     t.Literal('notify_assignee'),
     t.Literal('move_stage'),
-    t.Literal('stop_followups')
+    t.Literal('stop_followups'),
+    t.Literal('toggle_checklist_item'),
+    t.Literal('list_workflows'),
+    t.Literal('get_workflow_stages'),
+    t.Literal('get_card'),
+    t.Literal('find_card_by_wa'),
+    t.Literal('list_cards')
   ]),
   arguments: t.Record(t.String(), t.Unknown())
 });
 
 export const IntegrationCreateCardSchema = t.Object({
-  workspaceId: t.String({ format: 'uuid' }),
+  workspaceId: t.Optional(t.String({ format: 'uuid' })),
   workflowId: t.String({ format: 'uuid' }),
   name: t.String({ minLength: 1, maxLength: 200 }),
   wa: t.String({ minLength: 8, maxLength: 20 }),
@@ -281,9 +292,6 @@ export const CreateWajomConnectionSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
   instanceId: t.String({ minLength: 1, maxLength: 160 }),
   countryCode: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
-  defaultWorkflowId: t.String({ format: 'uuid' }),
-  sendEndpoint: t.String({ minLength: 1, maxLength: 1000 }),
-  healthEndpoint: t.Optional(t.Union([t.String({ maxLength: 1000 }), t.Null()])),
   sendApiKey: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
   enabledTools: WajomEnabledTools
 });
@@ -292,9 +300,6 @@ export const UpdateWajomConnectionSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
   instanceId: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
   countryCode: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
-  defaultWorkflowId: t.Optional(t.String({ format: 'uuid' })),
-  sendEndpoint: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
-  healthEndpoint: t.Optional(t.Union([t.String({ maxLength: 1000 }), t.Null()])),
   sendApiKey: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
   clearSendApiKey: t.Optional(t.Boolean()),
   enabledTools: WajomEnabledTools,
@@ -310,4 +315,123 @@ export const WajomJobParam = t.Object({
 export const WajomTestSendSchema = t.Object({
   to: t.String({ minLength: 8, maxLength: 24 }),
   message: t.String({ minLength: 1, maxLength: 2000 })
+});
+
+/* --------------------------------------------------------------- admin / billing */
+
+export const CreatePlanSchema = t.Object({
+  slug: t.String({ minLength: 2, maxLength: 60 }),
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  description: t.Optional(t.Union([t.String({ maxLength: 500 }), t.Null()])),
+  priceCents: t.Integer({ minimum: 0 }),
+  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+  interval: t.Union([t.Literal('monthly'), t.Literal('yearly')]),
+  seatsLimit: t.Integer({ minimum: 0 }),
+  workflowsLimit: t.Integer({ minimum: 0 }),
+  waMessagesPerMonth: t.Integer({ minimum: 0 }),
+  trialDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
+  sortOrder: t.Optional(t.Integer({ minimum: 0 }))
+});
+
+export const UpdatePlanSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  description: t.Optional(t.Union([t.String({ maxLength: 500 }), t.Null()])),
+  priceCents: t.Optional(t.Integer({ minimum: 0 })),
+  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+  interval: t.Optional(t.Union([t.Literal('monthly'), t.Literal('yearly')])),
+  seatsLimit: t.Optional(t.Integer({ minimum: 0 })),
+  workflowsLimit: t.Optional(t.Integer({ minimum: 0 })),
+  waMessagesPerMonth: t.Optional(t.Integer({ minimum: 0 })),
+  trialDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
+  active: t.Optional(t.Boolean()),
+  sortOrder: t.Optional(t.Integer({ minimum: 0 }))
+});
+
+export const CreateVoucherSchema = t.Object({
+  code: t.String({ minLength: 4, maxLength: 40 }),
+  type: t.Union([t.Literal('percent'), t.Literal('fixed'), t.Literal('trial_days')]),
+  value: t.Integer({ minimum: 0 }),
+  durationCycles: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 120 }), t.Null()])),
+  planId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  maxRedemptions: t.Optional(t.Union([t.Integer({ minimum: 1 }), t.Null()])),
+  maxRedemptionsPerWorkspace: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+  expiresAt: t.Optional(t.Union([t.String({ format: 'date-time' }), t.Null()])),
+  note: t.Optional(t.Union([t.String({ maxLength: 500 }), t.Null()]))
+});
+
+export const UpdateVoucherSchema = t.Object({
+  value: t.Optional(t.Integer({ minimum: 0 })),
+  durationCycles: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 120 }), t.Null()])),
+  planId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  maxRedemptions: t.Optional(t.Union([t.Integer({ minimum: 1 }), t.Null()])),
+  maxRedemptionsPerWorkspace: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+  expiresAt: t.Optional(t.Union([t.String({ format: 'date-time' }), t.Null()])),
+  active: t.Optional(t.Boolean()),
+  note: t.Optional(t.Union([t.String({ maxLength: 500 }), t.Null()]))
+});
+
+export const AdminChangePlanSchema = t.Object({
+  planId: t.String({ format: 'uuid' })
+});
+
+export const AdminExtendTrialSchema = t.Object({
+  days: t.Integer({ minimum: 1, maximum: 365 })
+});
+
+export const AdminSetStatusSchema = t.Object({
+  status: t.Union([
+    t.Literal('trial'),
+    t.Literal('active'),
+    t.Literal('past_due'),
+    t.Literal('canceled')
+  ])
+});
+
+export const PlanIdParam = t.Object({
+  planId: t.String({ format: 'uuid' })
+});
+
+export const VoucherIdParam = t.Object({
+  voucherId: t.String({ format: 'uuid' })
+});
+
+export const AdminWorkspaceIdParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' })
+});
+
+/* --------------------------------------------------------------- MCP API keys */
+
+export const CreateApiKeySchema = t.Object({
+  label: t.String({ minLength: 1, maxLength: 80 }),
+  scopeMode: t.Optional(t.Union([t.Literal('all'), t.Literal('selected')])),
+  enabledTools: t.Optional(t.Array(t.String())),
+  workflowIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
+});
+
+export const ApiKeyParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  keyId: t.String({ format: 'uuid' })
+});
+
+export const UpdateApiKeySchema = t.Object({
+  label: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
+  scopeMode: t.Optional(t.Union([t.Literal('all'), t.Literal('selected')])),
+  enabledTools: t.Optional(t.Array(t.String())),
+  workflowIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
+});
+
+export const RevokeApiKeySchema = t.Object({
+  keyId: t.String({ format: 'uuid' })
+});
+
+export const UpdateNotificationSettingsSchema = t.Object({
+  waFailed: t.Optional(t.Boolean()),
+  customerReplied: t.Optional(t.Boolean()),
+  cardOverdue: t.Optional(t.Boolean()),
+  handover: t.Optional(t.Boolean()),
+  emailWaFailed: t.Optional(t.Boolean()),
+  emailCustomerReplied: t.Optional(t.Boolean()),
+  emailCardOverdue: t.Optional(t.Boolean()),
+  emailHandover: t.Optional(t.Boolean()),
+  emailDigest: t.Optional(t.Boolean())
 });
