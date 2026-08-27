@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia';
 import * as workspaces from '@handlers/workspaces';
+import * as apiKeys from '@handlers/api-keys';
 import { createRequireAuth } from '@middlewares';
 import { resolveWorkspaceMember } from '@middlewares/workspace';
 import {
@@ -8,7 +9,11 @@ import {
   UpdateWorkspaceSchema,
   CreateInviteSchema,
   AcceptInviteSchema,
-  InviteTokenParam
+  InviteTokenParam,
+  CreateApiKeySchema,
+  ApiKeyParam,
+  UpdateApiKeySchema,
+  RevokeApiKeySchema
 } from '@validators';
 
 export const createWorkspacesRoutes = () => {
@@ -45,6 +50,32 @@ export const createWorkspacesRoutes = () => {
         .post('/invites', workspaces.createInvite, {
           params: WorkspaceIdParam,
           body: CreateInviteSchema
+        })
+        // MCP API keys — owner only (guard inside handlers).
+        .get('/api-keys', apiKeys.listApiKeys, { params: WorkspaceIdParam })
+        .post('/api-keys', apiKeys.createApiKeyHandler, {
+          params: WorkspaceIdParam,
+          body: CreateApiKeySchema
+        })
+        .patch('/api-keys/:keyId', apiKeys.updateApiKeyHandler, {
+          params: ApiKeyParam,
+          body: UpdateApiKeySchema
+        })
+        .post('/api-keys/revoke', apiKeys.revokeApiKeyHandler, {
+          params: WorkspaceIdParam,
+          body: RevokeApiKeySchema
+        })
+        .post('/api-keys/rotate', apiKeys.rotateApiKeyHandler, {
+          params: WorkspaceIdParam,
+          body: RevokeApiKeySchema
+        })
+        .post('/api-keys/prompt', apiKeys.getApiKeyPromptHandler, {
+          params: WorkspaceIdParam,
+          body: RevokeApiKeySchema
+        })
+        .post('/api-keys/config', apiKeys.getApiKeyConfigHandler, {
+          params: WorkspaceIdParam,
+          body: RevokeApiKeySchema
         })
     );
 };

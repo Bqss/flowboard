@@ -12,6 +12,7 @@ export type ApiUser = {
   name: string;
   avatarUrl?: string | null;
   activeWorkspaceId?: string | null;
+  platformAdmin?: boolean;
 };
 
 export type ApiWorkspace = {
@@ -24,6 +25,7 @@ export type ApiWorkspace = {
 export type ApiWorkflow = {
   id: string;
   name: string;
+  description?: string | null;
   ownerId: string;
   ownerName?: string;
   defaultAssigneeId: string | null;
@@ -35,7 +37,6 @@ export type ApiWorkflow = {
 export type ApiWajomConnection = {
   id: string;
   workspaceId: string;
-  defaultWorkflowId: string | null;
   name: string;
   instanceId: string;
   countryCode: string;
@@ -223,6 +224,53 @@ export type ApiNotification = {
   createdAt: string;
 };
 
+export type ApiNotificationSettings = {
+  waFailed: boolean;
+  customerReplied: boolean;
+  cardOverdue: boolean;
+  handover: boolean;
+  emailWaFailed: boolean;
+  emailCustomerReplied: boolean;
+  emailCardOverdue: boolean;
+  emailHandover: boolean;
+  emailDigest: boolean;
+};
+
+export type ApiMcpScopeMode = 'all' | 'selected';
+
+export type ApiMcpApiKey = {
+  id: string;
+  label: string;
+  keyPrefix: string;
+  scopeMode: ApiMcpScopeMode;
+  enabledTools: string[];
+  allowedWorkflowIds: string[];
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+export type ApiMcpApiKeyWithSecret = ApiMcpApiKey & { key: string };
+
+export type ApiMcpApiKeyInput = {
+  label: string;
+  scopeMode?: ApiMcpScopeMode;
+  enabledTools?: string[];
+  workflowIds?: string[];
+};
+
+export type ApiMcpApiKeyUpdate = {
+  keyId: string;
+  label?: string;
+  scopeMode?: ApiMcpScopeMode;
+  enabledTools?: string[];
+  workflowIds?: string[];
+};
+
+export type ApiMcpConfig = {
+  mcpServers: Record<string, { url: string; headers: Record<string, string> }>;
+};
+
 export type ApiWaitingActionCard = {
   cardId: string;
   workflowId: string;
@@ -246,6 +294,36 @@ export type ApiDashboardStats = {
   totalCustomers?: number;
 };
 
+export type ApiWorkflowStats = {
+  workflowId: string;
+  totals: {
+    active: number;
+    waiting: number;
+    overdue: number;
+    done: number;
+  };
+  byStage: Array<{
+    stageId: string;
+    stageName: string;
+    position: number;
+    total: number;
+    overdue: number;
+  }>;
+  byAssignee: Array<{
+    assigneeId: string | null;
+    assigneeName: string | null;
+    active: number;
+    overdue: number;
+    waiting: number;
+    done: number;
+  }>;
+  byTime: Array<{
+    bucket: string;
+    created: number;
+    completed: number;
+  }>;
+};
+
 export type ApiWorkspaceMember = {
   id: string;
   email: string;
@@ -258,6 +336,84 @@ export type ApiWorkspaceMember = {
 export type MeResponse = {
   user: ApiUser;
   workspace: ApiWorkspace | null;
+};
+
+/* ----------------------------------------------------------- admin / billing */
+
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled';
+export type VoucherType = 'percent' | 'fixed' | 'trial_days';
+
+export type ApiPlan = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+  currency: string;
+  interval: 'monthly' | 'yearly';
+  seatsLimit: number;
+  workflowsLimit: number;
+  waMessagesPerMonth: number;
+  trialDays: number;
+  active: boolean;
+  sortOrder: number;
+};
+
+export type ApiVoucher = {
+  id: string;
+  code: string;
+  type: VoucherType;
+  value: number;
+  durationCycles: number | null;
+  planId: string | null;
+  maxRedemptions: number | null;
+  maxRedemptionsPerWorkspace: number;
+  redeemedCount: number;
+  expiresAt: string | null;
+  active: boolean;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiAdminOverview = {
+  workspaces: number;
+  users: number;
+  subscriptionsByStatus: Record<SubscriptionStatus, number>;
+};
+
+export type ApiAdminWorkspace = {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+};
+
+export type ApiAdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  platformAdmin: boolean;
+  activeWorkspaceId: string | null;
+  createdAt: string;
+};
+
+export type ApiAdminSubscription = {
+  id: string;
+  status: SubscriptionStatus;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  canceledAt: string | null;
+  graceEndsAt: string | null;
+  plan: {
+    id: string;
+    slug: string;
+    name: string;
+    priceCents: number;
+    currency: string;
+    interval: 'monthly' | 'yearly';
+  };
+  workspace: { id: string; name: string; slug: string };
 };
 
 export class ApiError extends Error {
@@ -430,6 +586,7 @@ export const api = {
     workspaceId: string,
     body: {
       name: string;
+      description?: string | null;
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
@@ -464,13 +621,19 @@ export const api = {
       { fetch: fetchFn }
     ),
 
+  getWorkflowStats: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
+    request<{ stats: ApiWorkflowStats }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stats`,
+      { fetch: fetchFn }
+    ),
+
   getWorkflowSetup: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
     request<{ stages: ApiWorkflowSetupStage[] }>(
       `/workspaces/${workspaceId}/workflows/${workflowId}/setup`,
       { fetch: fetchFn }
     ),
 
-  getWorkflowStats: (workspaceId: string, workflowId?: string, fetchFn?: FetchLike) =>
+  getDashboardWorkflowStats: (workspaceId: string, workflowId?: string, fetchFn?: FetchLike) =>
     request<{ stats: ApiDashboardStats }>(
       `/workspaces/${workspaceId}/workflows/stats${workflowId ? `?workflowId=${workflowId}` : ''}`,
       { fetch: fetchFn }
@@ -593,6 +756,7 @@ export const api = {
     workflowId: string,
     body: {
       name?: string;
+      description?: string | null;
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
@@ -735,6 +899,68 @@ export const api = {
       fetch: fetchFn
     }),
 
+  getNotificationSettings: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ settings: ApiNotificationSettings }>(
+      `/workspaces/${workspaceId}/notifications/settings`,
+      { fetch: fetchFn }
+    ),
+
+  updateNotificationSettings: (
+    workspaceId: string,
+    body: Partial<ApiNotificationSettings>,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ settings: ApiNotificationSettings }>(
+      `/workspaces/${workspaceId}/notifications/settings`,
+      { method: 'PUT', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  /* ------------------------------------------------------------- MCP API keys */
+
+  listApiKeys: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ keys: ApiMcpApiKey[] }>(`/workspaces/${workspaceId}/api-keys`, {
+      fetch: fetchFn
+    }),
+
+  createApiKey: (workspaceId: string, input: ApiMcpApiKeyInput, fetchFn?: FetchLike) =>
+    request<{ key: ApiMcpApiKeyWithSecret }>(`/workspaces/${workspaceId}/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      fetch: fetchFn
+    }),
+
+  updateApiKey: (workspaceId: string, input: ApiMcpApiKeyUpdate, fetchFn?: FetchLike) => {
+    const { keyId, ...body } = input;
+    return request<{ key: ApiMcpApiKey }>(
+      `/workspaces/${workspaceId}/api-keys/${keyId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    );
+  },
+
+  revokeApiKey: (workspaceId: string, keyId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/api-keys/revoke`,
+      { method: 'POST', body: JSON.stringify({ keyId }), fetch: fetchFn }
+    ),
+
+  rotateApiKey: (workspaceId: string, keyId: string, fetchFn?: FetchLike) =>
+    request<{ key: ApiMcpApiKeyWithSecret }>(
+      `/workspaces/${workspaceId}/api-keys/rotate`,
+      { method: 'POST', body: JSON.stringify({ keyId }), fetch: fetchFn }
+    ),
+
+  getApiKeyPrompt: (workspaceId: string, keyId: string, fetchFn?: FetchLike) =>
+    request<{ prompt: string }>(
+      `/workspaces/${workspaceId}/api-keys/prompt`,
+      { method: 'POST', body: JSON.stringify({ keyId }), fetch: fetchFn }
+    ),
+
+  getApiKeyConfig: (workspaceId: string, keyId: string, fetchFn?: FetchLike) =>
+    request<{ config: ApiMcpConfig }>(
+      `/workspaces/${workspaceId}/api-keys/config`,
+      { method: 'POST', body: JSON.stringify({ keyId }), fetch: fetchFn }
+    ),
+
   exportWajomActions: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
     request<{ export: ApiWajomActionExport }>(
       `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/export`,
@@ -759,9 +985,6 @@ export const api = {
       name: string;
       instanceId: string;
       countryCode?: string;
-      defaultWorkflowId: string;
-      sendEndpoint: string;
-      healthEndpoint?: string | null;
       sendApiKey?: string | null;
       enabledTools?: string[];
     },
@@ -779,9 +1002,6 @@ export const api = {
       name?: string;
       instanceId?: string;
       countryCode?: string;
-      defaultWorkflowId?: string;
-      sendEndpoint?: string;
-      healthEndpoint?: string | null;
       sendApiKey?: string | null;
       clearSendApiKey?: boolean;
       enabledTools?: string[];
@@ -821,5 +1041,125 @@ export const api = {
     request<{ ok: true; result: { status: string; providerMessageId: string | null } }>(
       `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/test-send`,
       { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
-    )
+    ),
+
+  /* --------------------------------------------------------- admin / billing */
+
+  adminOverview: (fetchFn?: FetchLike) =>
+    request<ApiAdminOverview>('/admin/overview', { fetch: fetchFn }),
+
+  adminListWorkspaces: (fetchFn?: FetchLike) =>
+    request<{ workspaces: ApiAdminWorkspace[] }>('/admin/workspaces', { fetch: fetchFn }),
+
+  adminListUsers: (fetchFn?: FetchLike) =>
+    request<{ users: ApiAdminUser[] }>('/admin/users', { fetch: fetchFn }),
+
+  adminListSubscriptions: (fetchFn?: FetchLike) =>
+    request<{ subscriptions: ApiAdminSubscription[] }>('/admin/subscriptions', { fetch: fetchFn }),
+
+  adminListPlans: (fetchFn?: FetchLike) =>
+    request<{ plans: ApiPlan[] }>('/admin/plans', { fetch: fetchFn }),
+
+  adminCreatePlan: (
+    body: {
+      slug: string;
+      name: string;
+      description?: string | null;
+      priceCents: number;
+      currency?: string;
+      interval: 'monthly' | 'yearly';
+      seatsLimit: number;
+      workflowsLimit: number;
+      waMessagesPerMonth: number;
+      trialDays?: number;
+      sortOrder?: number;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ plan: ApiPlan }>('/admin/plans', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  adminUpdatePlan: (planId: string, body: Partial<ApiPlan>, fetchFn?: FetchLike) =>
+    request<{ plan: ApiPlan }>(`/admin/plans/${planId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  adminListVouchers: (fetchFn?: FetchLike) =>
+    request<{ vouchers: ApiVoucher[] }>('/admin/vouchers', { fetch: fetchFn }),
+
+  adminCreateVoucher: (
+    body: {
+      code: string;
+      type: VoucherType;
+      value: number;
+      durationCycles?: number | null;
+      planId?: string | null;
+      maxRedemptions?: number | null;
+      maxRedemptionsPerWorkspace?: number;
+      expiresAt?: string | null;
+      note?: string | null;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ voucher: ApiVoucher }>('/admin/vouchers', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  adminUpdateVoucher: (
+    voucherId: string,
+    body: Partial<ApiVoucher> & { expiresAt?: string | null },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ voucher: ApiVoucher }>(`/admin/vouchers/${voucherId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  adminChangePlan: (workspaceId: string, planId: string, fetchFn?: FetchLike) =>
+    request<{ subscription: { id: string; planId: string; status: SubscriptionStatus } }>(
+      `/admin/workspaces/${workspaceId}/change-plan`,
+      { method: 'POST', body: JSON.stringify({ planId }), fetch: fetchFn }
+    ),
+
+  adminExtendTrial: (workspaceId: string, days: number, fetchFn?: FetchLike) =>
+    request<{
+      subscription: { id: string; status: SubscriptionStatus; trialEndsAt: string | null };
+    }>(`/admin/workspaces/${workspaceId}/extend-trial`, {
+      method: 'POST',
+      body: JSON.stringify({ days }),
+      fetch: fetchFn
+    }),
+
+  adminSetStatus: (workspaceId: string, status: SubscriptionStatus, fetchFn?: FetchLike) =>
+    request<{
+      subscription: {
+        id: string;
+        status: SubscriptionStatus;
+        trialEndsAt?: string | null;
+        graceEndsAt?: string | null;
+      };
+    }>(`/admin/workspaces/${workspaceId}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+      fetch: fetchFn
+    }),
+
+  adminListWorkspaceMembers: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{
+      members: Array<{
+        id: string;
+        email: string;
+        name: string;
+        role: 'owner' | 'member';
+        joinedAt: string;
+      }>;
+    }>(`/admin/workspaces/${workspaceId}/members`, { fetch: fetchFn })
 };
