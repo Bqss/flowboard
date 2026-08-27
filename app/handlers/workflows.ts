@@ -17,6 +17,7 @@ import {
   getDashboardStats,
   getStageInWorkflow,
   getWorkflowSetup,
+  getWorkflowStats,
   importCardsFromCsv,
   listWaitingActionCards,
   bulkReassignCards,
@@ -44,6 +45,7 @@ type ReorderStagesBody = {
 
 type CreateWorkflowBody = {
   name: string;
+  description?: string | null;
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
@@ -51,6 +53,7 @@ type CreateWorkflowBody = {
 
 type UpdateWorkflowBody = {
   name?: string;
+  description?: string | null;
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
@@ -172,6 +175,7 @@ export async function create({
 
   const { workflow, stages: createdStages } = await createWorkflow(workspace.id, {
     name: body.name,
+    description: body.description,
     ownerId: body.ownerId ?? user.id,
     defaultAssigneeId: body.defaultAssigneeId,
     defaultAssigneeIds: body.defaultAssigneeIds
@@ -181,6 +185,7 @@ export async function create({
     workflow: {
       id: workflow.id,
       name: workflow.name,
+      description: workflow.description ?? null,
       ownerId: workflow.ownerId,
       defaultAssigneeId: workflow.defaultAssigneeId,
       defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : [])
@@ -204,6 +209,16 @@ export async function dashboardStats({
   return { stats };
 }
 
+export async function workflowStats({ workflow, membership, set }: Ctx<unknown, WorkflowParams>) {
+  if (!workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  const stats = await getWorkflowStats(workflow.id);
+  return { stats };
+}
+
 export function show({ workflow, membership, set }: Ctx<unknown, WorkflowParams>) {
   if (!workflow || !membership) {
     set.status = 404;
@@ -214,6 +229,7 @@ export function show({ workflow, membership, set }: Ctx<unknown, WorkflowParams>
     workflow: {
       id: workflow.id,
       name: workflow.name,
+      description: workflow.description ?? null,
       ownerId: workflow.ownerId,
       defaultAssigneeId: workflow.defaultAssigneeId,
       defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : []),

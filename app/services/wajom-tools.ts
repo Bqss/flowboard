@@ -10,7 +10,6 @@ import { normalizeWa } from './customer';
 import {
   createCard,
   getCardDetail,
-  getWorkflowInWorkspace,
   listStages,
   moveCardToStage,
   toggleChecklistItem,
@@ -38,58 +37,61 @@ export class WajomToolError extends Error {
 export const WAJOM_TOOL_DEFINITIONS = [
   {
     name: 'get_onboarding_status' as const,
-    description: 'Read onboarding cards, stage, checklist, assignee, and follow-up state for a WhatsApp number.',
+    description: 'Read onboarding cards, stage, checklist, assignee, and follow-up state for a WhatsApp number in a specific workflow.',
     inputSchema: {
       type: 'object',
       properties: {
         wa: { type: 'string', minLength: 8 },
         workflow: { type: 'string', minLength: 1, maxLength: 120 }
       },
-      required: ['wa']
+      required: ['wa', 'workflow']
     },
     readOnly: true
   },
   {
     name: 'register_customer' as const,
-    description: 'Register a customer in the connection default workflow and start its first-stage automation.',
+    description: 'Register a customer in a specific workflow and start its first-stage automation.',
     inputSchema: {
       type: 'object',
       properties: {
         name: { type: 'string', minLength: 1, maxLength: 200 },
         wa: { type: 'string', minLength: 8 },
+        workflow: { type: 'string', minLength: 1, maxLength: 120 },
         product: { type: 'string', maxLength: 200 },
         tag: { type: 'string', maxLength: 80 }
       },
-      required: ['name', 'wa']
+      required: ['name', 'wa', 'workflow']
     },
     readOnly: false,
     sideEffect: true
   },
   {
     name: 'complete_onboarding_step' as const,
-    description: 'Mark a checklist step complete or incomplete for the active onboarding card.',
+    description: 'Mark a checklist step complete or incomplete for the active onboarding card in a specific workflow.',
     inputSchema: {
       type: 'object',
       properties: {
         wa: { type: 'string', minLength: 8 },
+        workflow: { type: 'string', minLength: 1, maxLength: 120 },
         step: { type: 'string', minLength: 1, maxLength: 200 },
         done: { type: 'boolean' }
       },
-      required: ['wa', 'step']
+      required: ['wa', 'workflow', 'step']
     },
     readOnly: false,
     sideEffect: true
   },
   {
     name: 'move_customer_stage' as const,
-    description: 'Move the active customer card to another stage while enforcing required checklist rules.',
+    description: 'Move the active customer card to another stage in a specific workflow while enforcing required checklist rules.',
     inputSchema: {
       type: 'object',
       properties: {
         wa: { type: 'string', minLength: 8 },
+        workflow: { type: 'string', minLength: 1, maxLength: 120 },
         stage: { type: 'string', minLength: 1, maxLength: 120 }
       },
-      required: ['wa', 'stage']
+      required: ['wa', 'workflow', 'stage']
     },
     readOnly: false,
     sideEffect: true,
@@ -97,14 +99,15 @@ export const WAJOM_TOOL_DEFINITIONS = [
   },
   {
     name: 'handover_to_staff' as const,
-    description: 'Stop pending customer follow-ups and notify the assigned staff member with a handover reason.',
+    description: 'Stop pending customer follow-ups in a specific workflow and notify the assigned staff member with a handover reason.',
     inputSchema: {
       type: 'object',
       properties: {
         wa: { type: 'string', minLength: 8 },
+        workflow: { type: 'string', minLength: 1, maxLength: 120 },
         reason: { type: 'string', minLength: 1, maxLength: 1000 }
       },
-      required: ['wa', 'reason']
+      required: ['wa', 'workflow', 'reason']
     },
     readOnly: false,
     sideEffect: true,
@@ -114,13 +117,23 @@ export const WAJOM_TOOL_DEFINITIONS = [
 
 export type WajomToolDefinition = (typeof WAJOM_TOOL_DEFINITIONS)[number];
 
-const requireWorkflow = async (connection: WajomConnection) => {
-  if (!connection.defaultWorkflowId) {
-    throw new WajomToolError('Koneksi Wajom belum memiliki default workflow.', 'invalid_input');
+const requireWorkflow = async (connection: WajomConnection, workflowName?: string) => {
+  if (!workflowName || !workflowName.trim()) {
+    throw new WajomToolError('workflow wajib diisi.', 'invalid_input');
   }
 
-  const workflow = await getWorkflowInWorkspace(connection.workspaceId, connection.defaultWorkflowId);
-  if (!workflow) throw new WajomToolError('Default workflow tidak ditemukan.', 'not_found');
+  const [workflow] = await db
+    .select()
+    .from(workflows)
+    .where(
+      and(
+        eq(workflows.workspaceId, connection.workspaceId),
+        eq(workflows.name, workflowName.trim())
+      )
+    )
+    .limit(1);
+
+  if (!workflow) throw new WajomToolError('Workflow tidak ditemukan di workspace ini.', 'not_found');
   return workflow;
 };
 
@@ -135,7 +148,10 @@ const findCardForConnection = async (
   rawWa: string,
   requestedWorkflowName?: string
 ) => {
-  const defaultWorkflow = await requireWorkflow(connection);
+  if (!requestedWorkflowName || !requestedWorkflowName.trim()) {
+    throw new WajomToolError('workflow wajib diisi.', 'invalid_input');
+  }
+  const workflow = await requireWorkflow(connection, requestedWorkflowName);
   const wa = normalizeWa(rawWa, connection.countryCode);
   if (!wa) throw new WajomToolError('Nomor WhatsApp tidak valid.', 'invalid_input');
 
@@ -152,38 +168,23 @@ const findCardForConnection = async (
       )
     );
 
-  const requested = requestedWorkflowName?.trim().toLowerCase();
-  const selectedWorkflow = requested
-    ? rows.find((row) => row.workflow.name.trim().toLowerCase() === requested)?.workflow
-    : defaultWorkflow;
-  if (requested && !selectedWorkflow) {
-    throw new WajomToolError('Workflow onboarding tidak ditemukan.', 'not_found');
-  }
-
-  const workflow = selectedWorkflow ?? defaultWorkflow;
   const row = rows.find((candidate) => candidate.workflow.id === workflow.id) ?? null;
-  return { workflow, defaultWorkflow, wa, row, rows };
+  return { workflow, wa, row, rows };
 };
 
 const getStatus = async (connection: WajomConnection, args: Record<string, unknown>) => {
   const rawWa = typeof args.wa === 'string' ? args.wa.trim() : '';
   if (!rawWa) throw new WajomToolError('wa wajib diisi.', 'invalid_input');
 
-  let requestedWorkflow: string | undefined;
-  if (args.workflow !== undefined) {
-    if (typeof args.workflow !== 'string' || !args.workflow.trim()) {
-      throw new WajomToolError('workflow harus berupa teks.', 'invalid_input');
-    }
-    requestedWorkflow = args.workflow;
+  if (typeof args.workflow !== 'string' || !args.workflow.trim()) {
+    throw new WajomToolError('workflow wajib diisi.', 'invalid_input');
   }
-  const { workflow, defaultWorkflow, wa, row, rows } = await findCardForConnection(
+  const { workflow, wa, row, rows } = await findCardForConnection(
     connection,
     rawWa,
-    requestedWorkflow
+    args.workflow
   );
-  const relevantRows = requestedWorkflow
-    ? rows.filter((candidate) => candidate.workflow.id === workflow.id)
-    : rows;
+  const relevantRows = rows.filter((candidate) => candidate.workflow.id === workflow.id);
   const orderedRows = row
     ? [row, ...relevantRows.filter((candidate) => candidate.card.id !== row.card.id)]
     : relevantRows;
@@ -192,7 +193,6 @@ const getStatus = async (connection: WajomConnection, args: Record<string, unkno
       found: false,
       wa,
       workflow: { id: workflow.id, name: workflow.name },
-      defaultWorkflow: { id: defaultWorkflow.id, name: defaultWorkflow.name },
       cards: []
     };
   }
@@ -238,7 +238,6 @@ const getStatus = async (connection: WajomConnection, args: Record<string, unkno
     found: true,
     customer: selected.detail.customer,
     workflow: { id: selected.row.workflow.id, name: selected.row.workflow.name },
-    defaultWorkflow: { id: defaultWorkflow.id, name: defaultWorkflow.name },
     card: cardsResult[0].card,
     stage: cardsResult[0].stage,
     assignee: cardsResult[0].assignee,
@@ -255,7 +254,10 @@ const getStatus = async (connection: WajomConnection, args: Record<string, unkno
 };
 
 const registerCustomer = async (connection: WajomConnection, args: Record<string, unknown>) => {
-  const workflow = await requireWorkflow(connection);
+  if (typeof args.workflow !== 'string' || !args.workflow.trim()) {
+    throw new WajomToolError('workflow wajib diisi.', 'invalid_input');
+  }
+  const workflow = await requireWorkflow(connection, args.workflow);
   const name = typeof args.name === 'string' ? args.name.trim() : '';
   const rawWa = typeof args.wa === 'string' ? args.wa.trim() : '';
   const wa = normalizeWa(rawWa, connection.countryCode);
@@ -268,7 +270,7 @@ const registerCustomer = async (connection: WajomConnection, args: Record<string
   const initialStage = workflowStages[0];
   if (!initialStage) throw new WajomToolError('Workflow tidak memiliki stage.', 'not_found');
 
-  const existing = await findCardForConnection(connection, wa);
+  const existing = await findCardForConnection(connection, wa, args.workflow);
   if (existing.row) {
     return {
       created: false,
@@ -320,11 +322,12 @@ const completeOnboardingStep = async (connection: WajomConnection, args: Record<
   const step = typeof args.step === 'string' ? args.step.trim().toLowerCase() : '';
   const wa = typeof args.wa === 'string' ? args.wa : '';
   const done = args.done === undefined ? true : args.done;
+  const workflowName = typeof args.workflow === 'string' ? args.workflow : undefined;
   if (!step || !wa || typeof done !== 'boolean') {
     throw new WajomToolError('wa, step, dan done yang valid wajib diisi.', 'invalid_input');
   }
 
-  const { workflow, row } = await findCardForConnection(connection, wa);
+  const { workflow, row } = await findCardForConnection(connection, wa, workflowName);
   if (!row) throw new WajomToolError('Customer belum terdaftar di workflow ini.', 'not_found');
 
   const detail = await getCardDetail(workflow.id, row.card.id);
@@ -335,16 +338,17 @@ const completeOnboardingStep = async (connection: WajomConnection, args: Record<
   return {
     cardId: row.card.id,
     checklistItem: { id: updated.id, label: updated.label, done: updated.done, required: updated.required },
-    progress: await getStatus(connection, { wa: row.customer.wa })
+    progress: await getStatus(connection, { wa: row.customer.wa, workflow: workflowName })
   };
 };
 
 const moveCustomerStage = async (connection: WajomConnection, args: Record<string, unknown>) => {
   const target = typeof args.stage === 'string' ? args.stage.trim().toLowerCase() : '';
   const wa = typeof args.wa === 'string' ? args.wa : '';
+  const workflowName = typeof args.workflow === 'string' ? args.workflow : undefined;
   if (!target || !wa) throw new WajomToolError('wa dan stage wajib diisi.', 'invalid_input');
 
-  const { workflow, row } = await findCardForConnection(connection, wa);
+  const { workflow, row } = await findCardForConnection(connection, wa, workflowName);
   if (!row) throw new WajomToolError('Customer belum terdaftar di workflow ini.', 'not_found');
 
   const stages = await listStages(workflow.id);
@@ -359,7 +363,7 @@ const moveCustomerStage = async (connection: WajomConnection, args: Record<strin
       fromStage: fromStage ? { id: fromStage.id, name: fromStage.name } : null,
       fromStageId: row.card.stageId,
       toStage: { id: targetStage.id, name: targetStage.name },
-      status: await getStatus(connection, { wa: row.customer.wa })
+      status: await getStatus(connection, { wa: row.customer.wa, workflow: workflowName })
     };
   } catch (error) {
     if (error instanceof WorkflowError) {
@@ -371,9 +375,10 @@ const moveCustomerStage = async (connection: WajomConnection, args: Record<strin
 const handoverToStaff = async (connection: WajomConnection, args: Record<string, unknown>) => {
   const reason = typeof args.reason === 'string' ? args.reason.trim() : '';
   const wa = typeof args.wa === 'string' ? args.wa : '';
+  const workflowName = typeof args.workflow === 'string' ? args.workflow : undefined;
   if (!reason || !wa) throw new WajomToolError('wa dan reason wajib diisi.', 'invalid_input');
 
-  const { workflow, row } = await findCardForConnection(connection, wa);
+  const { workflow, row } = await findCardForConnection(connection, wa, workflowName);
   if (!row) throw new WajomToolError('Customer belum terdaftar di workflow ini.', 'not_found');
 
   if (
@@ -414,7 +419,7 @@ const handoverToStaff = async (connection: WajomConnection, args: Record<string,
       title: 'Handover customer dari WhatsApp',
       body: `${row.customer.name}: ${reason}`
     });
-    notificationId = notification.id;
+    notificationId = notification?.id ?? null;
   }
 
   return {

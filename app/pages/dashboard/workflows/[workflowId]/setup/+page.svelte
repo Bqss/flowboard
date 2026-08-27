@@ -68,6 +68,7 @@
   // Workflow Settings Modal
   let settingsOpen = $state(false);
   let workflowName = $state('');
+  let workflowDescription = $state('');
   let defaultAssigneeIds = $state<string[]>([]);
   let defaultAssigneeId = $state<string | null>(null);
   let savingWorkflow = $state(false);
@@ -269,6 +270,7 @@
 
       if (workflow) {
         workflowName = workflow.name;
+        workflowDescription = workflow.description ?? '';
 
         defaultAssigneeIds =
           workflow.defaultAssigneeIds && workflow.defaultAssigneeIds.length > 0
@@ -376,6 +378,7 @@
     try {
       const res = await api.updateWorkflow(data.workspace.id, workflowId, {
         name: workflowName.trim(),
+        description: workflowDescription.trim() || null,
         defaultAssigneeIds,
         defaultAssigneeId: defaultAssigneeId ?? (defaultAssigneeIds[0] ?? null)
       });
@@ -384,6 +387,7 @@
           ...workflow,
           ...res.workflow,
           name: res.workflow.name,
+          description: res.workflow.description ?? null,
           defaultAssigneeId: res.workflow.defaultAssigneeId,
           defaultAssigneeIds: res.workflow.defaultAssigneeIds ?? defaultAssigneeIds
         };
@@ -1101,6 +1105,22 @@
           placeholder={tr('setup.workflowNamePlaceholder')}
           class="h-10 text-sm"
         />
+      {/snippet}
+    </FormField>
+
+    <FormField
+      label={tr('setup.workflowDescription')}
+      helper={tr('setup.workflowDescriptionHelper')}
+    >
+      {#snippet control(args)}
+        <textarea
+          {...args}
+          bind:value={workflowDescription}
+          disabled={!canManage}
+          placeholder={tr('setup.workflowDescriptionPlaceholder')}
+          rows={3}
+          class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-mute focus:border-ink focus:outline-none disabled:opacity-50"
+        ></textarea>
       {/snippet}
     </FormField>
 

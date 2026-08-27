@@ -437,8 +437,7 @@ export async function inboundReply({ wajomConnection, body, set }: Ctx<ReplyBody
     const result = await handleInboundWhatsappReply({
       ...body,
       workspaceId: wajomConnection.workspaceId,
-      countryCode: wajomConnection.countryCode,
-      workflowId: wajomConnection.defaultWorkflowId ?? undefined
+      countryCode: wajomConnection.countryCode
     });
     const response = { ok: true as const, ...result };
     if (key) await completeIdempotencyKey(wajomConnection.id, key, response, 200);

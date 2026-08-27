@@ -2,7 +2,6 @@ import { and, eq, isNull } from 'drizzle-orm';
 import {
   db,
   wajomConnections,
-  workflows,
   type WajomConnection
 } from '@db';
 import {
@@ -12,6 +11,7 @@ import {
   getTokenPrefix,
   hashConnectorToken
 } from './integration-secrets';
+import { env } from '@config/env';
 
 export const WAJOM_TOOL_NAMES = [
   'get_onboarding_status',
@@ -23,13 +23,19 @@ export const WAJOM_TOOL_NAMES = [
 
 export type WajomToolName = (typeof WAJOM_TOOL_NAMES)[number];
 
+/**
+ * Send endpoint is fixed at api.wajom.co/send.
+ * Health endpoint is fixed at portal.wajom.co/api/internal/whatsapp/:instanceId/status.
+ * Users do not configure them per-connection.
+ */
+const SEND_ENDPOINT = `${env.wajomApiBaseUrl}/send`;
+const healthEndpointFor = (instanceId: string) =>
+  `https://portal.wajom.co/api/internal/whatsapp/${instanceId}/status`;
+
 export type WajomConnectionInput = {
   name: string;
   instanceId: string;
   countryCode?: string;
-  defaultWorkflowId?: string;
-  sendEndpoint: string;
-  healthEndpoint?: string | null;
   sendApiKey?: string | null;
   enabledTools?: WajomToolName[];
 };
@@ -37,7 +43,6 @@ export type WajomConnectionInput = {
 export type PublicWajomConnection = {
   id: string;
   workspaceId: string;
-  defaultWorkflowId: string | null;
   name: string;
   instanceId: string;
   countryCode: string;
@@ -60,33 +65,15 @@ const cleanTools = (tools?: WajomToolName[]) => {
   return requested?.length ? requested : [...WAJOM_TOOL_NAMES];
 };
 
-const validateEndpoint = (value: string, label: string) => {
-  const url = new URL(value);
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error(`${label} harus memakai HTTP atau HTTPS.`);
-  }
-  return url.toString().replace(/\/$/, '');
-};
-
 const validateCountryCode = (value?: string) => {
-  const countryCode = value?.replace(/\D/g, '') || '62';
+  const countryCode = value?.replace(/\D/g, '') || '60';
   if (countryCode.length < 1 || countryCode.length > 3) throw new Error('Kode negara WhatsApp tidak valid.');
   return countryCode;
-};
-
-const getBoundWorkflow = async (workspaceId: string, workflowId: string) => {
-  const [workflow] = await db
-    .select()
-    .from(workflows)
-    .where(and(eq(workflows.id, workflowId), eq(workflows.workspaceId, workspaceId)))
-    .limit(1);
-  return workflow ?? null;
 };
 
 const toPublicConnection = (row: WajomConnection): PublicWajomConnection => ({
   id: row.id,
   workspaceId: row.workspaceId,
-  defaultWorkflowId: row.defaultWorkflowId,
   name: row.name,
   instanceId: row.instanceId,
   countryCode: row.countryCode,
@@ -128,24 +115,17 @@ export const createWajomConnection = async (workspaceId: string, input: WajomCon
   const name = input.name.trim();
   const instanceId = input.instanceId.trim();
   if (!name || !instanceId) throw new Error('Nama koneksi dan instance ID wajib diisi.');
-  if (!input.defaultWorkflowId) throw new Error('Workflow default wajib dipilih.');
-
-  const workflow = await getBoundWorkflow(workspaceId, input.defaultWorkflowId);
-  if (!workflow) throw new Error('Workflow default tidak ditemukan di workspace ini.');
 
   const connectorToken = createConnectorToken();
   const [row] = await db
     .insert(wajomConnections)
     .values({
       workspaceId,
-      defaultWorkflowId: input.defaultWorkflowId,
       name,
       instanceId,
       countryCode: validateCountryCode(input.countryCode),
-      sendEndpoint: validateEndpoint(input.sendEndpoint, 'Send endpoint'),
-      healthEndpoint: input.healthEndpoint?.trim()
-        ? validateEndpoint(input.healthEndpoint, 'Health endpoint')
-        : null,
+      sendEndpoint: SEND_ENDPOINT,
+      healthEndpoint: healthEndpointFor(instanceId),
       sendApiKeyEncrypted: input.sendApiKey?.trim() ? encryptSecret(input.sendApiKey.trim()) : null,
       connectorTokenHash: hashConnectorToken(connectorToken),
       connectorTokenPrefix: getTokenPrefix(connectorToken),
@@ -164,28 +144,12 @@ export const updateWajomConnection = async (
   const existing = await getWajomConnection(workspaceId, connectionId);
   if (!existing) return null;
 
-  if (input.defaultWorkflowId !== undefined) {
-    const workflow = await getBoundWorkflow(workspaceId, input.defaultWorkflowId);
-    if (!workflow) throw new Error('Workflow default tidak ditemukan di workspace ini.');
-  }
-
   const [updated] = await db
     .update(wajomConnections)
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.instanceId !== undefined ? { instanceId: input.instanceId.trim() } : {}),
       ...(input.countryCode !== undefined ? { countryCode: validateCountryCode(input.countryCode) } : {}),
-      ...(input.defaultWorkflowId !== undefined ? { defaultWorkflowId: input.defaultWorkflowId } : {}),
-      ...(input.sendEndpoint !== undefined
-        ? { sendEndpoint: validateEndpoint(input.sendEndpoint, 'Send endpoint') }
-        : {}),
-      ...(input.healthEndpoint !== undefined
-        ? {
-            healthEndpoint: input.healthEndpoint?.trim()
-              ? validateEndpoint(input.healthEndpoint, 'Health endpoint')
-              : null
-          }
-        : {}),
       ...(input.sendApiKey !== undefined
         ? {
             sendApiKeyEncrypted: input.sendApiKey?.trim()
@@ -255,18 +219,23 @@ export const findWajomConnectionByToken = async (token: string) => {
   return row;
 };
 
-export const findWajomConnectionForWorkflow = async (workspaceId: string, workflowId: string) => {
+/**
+ * Find the active Wajom connection bound to a workspace.
+ * Used by the WhatsApp scheduler to pick the channel that sends messages
+ * for any workflow action (send/followup) in that workspace.
+ */
+export const findWajomConnectionForWorkspace = async (workspaceId: string) => {
   const [row] = await db
     .select()
     .from(wajomConnections)
     .where(
       and(
         eq(wajomConnections.workspaceId, workspaceId),
-        eq(wajomConnections.defaultWorkflowId, workflowId),
         eq(wajomConnections.enabled, true),
         isNull(wajomConnections.revokedAt)
       )
     )
+    .orderBy(wajomConnections.createdAt)
     .limit(1);
 
   return row ?? null;
@@ -288,8 +257,3 @@ export const updateWajomHealth = async (connectionId: string, result: { ok: bool
 
 export const hasWajomTool = (connection: WajomConnection, tool: WajomToolName) =>
   (connection.enabledTools ?? []).includes(tool);
-
-export const getWorkflowForConnection = async (connection: WajomConnection) => {
-  if (!connection.defaultWorkflowId) return null;
-  return getBoundWorkflow(connection.workspaceId, connection.defaultWorkflowId);
-};

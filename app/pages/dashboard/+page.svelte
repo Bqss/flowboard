@@ -65,7 +65,7 @@
     try {
       const [{ workflows: wf }, { stats: st }, membersRes, waitingRes] = await Promise.all([
         api.listWorkflows(data.workspace.id),
-        api.getWorkflowStats(data.workspace.id),
+        api.getDashboardWorkflowStats(data.workspace.id),
         api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
         api.listWaitingAction(data.workspace.id).catch(() => ({ cards: [] }))
       ]);

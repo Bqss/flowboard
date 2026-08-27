@@ -1,15 +1,9 @@
 import { type Ctx } from '@core';
-import { MCP_TOOLS, callMcpTool, type McpToolName } from '@services/integration';
+import { callMcpTool, McpScopeError } from '@services/integration';
+import type { ResolvedApiKey } from '@services/api-keys';
 import { WorkflowError } from '@services/workflow';
 
-type McpCallBody = {
-  workspaceId: string;
-  tool: McpToolName;
-  arguments: Record<string, unknown>;
-};
-
 type IntegrationCreateCardBody = {
-  workspaceId: string;
   workflowId: string;
   name: string;
   wa: string;
@@ -18,26 +12,21 @@ type IntegrationCreateCardBody = {
   source?: 'mcp' | 'manual';
 };
 
-export function listTools() {
-  return { tools: MCP_TOOLS };
-}
-
-export async function callTool({ body, set }: Ctx<McpCallBody>) {
-  try {
-    const result = await callMcpTool(body.workspaceId, body.tool, body.arguments ?? {});
-    return { ok: true as const, result };
-  } catch (error) {
-    if (error instanceof WorkflowError) {
-      set.status = error.code === 'not_found' ? 404 : 400;
-      return { error: error.message };
-    }
-    throw error;
+export async function createCardIntegration({
+  body,
+  integrationApiKey,
+  integrationAuth,
+  set
+}: Ctx<IntegrationCreateCardBody> & { integrationApiKey?: string | null; integrationAuth?: ResolvedApiKey | null }) {
+  if (!integrationApiKey || !integrationAuth) {
+    set.status = 401;
+    return { error: 'Unauthorized' };
   }
-}
 
-export async function createCardIntegration({ body, set }: Ctx<IntegrationCreateCardBody>) {
+  const auth = integrationAuth;
+
   try {
-    const result = await callMcpTool(body.workspaceId, 'create_card', {
+    const result = await callMcpTool(auth, 'create_card', {
       workflowId: body.workflowId,
       name: body.name,
       wa: body.wa,
@@ -47,6 +36,10 @@ export async function createCardIntegration({ body, set }: Ctx<IntegrationCreate
     });
     return { ok: true as const, ...result };
   } catch (error) {
+    if (error instanceof McpScopeError) {
+      set.status = 403;
+      return { error: error.message, code: error.code };
+    }
     if (error instanceof WorkflowError) {
       set.status = error.code === 'not_found' ? 404 : 400;
       return { error: error.message };

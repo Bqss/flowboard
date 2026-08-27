@@ -46,56 +46,65 @@ const connectorGuard = new Elysia()
     }
   });
 
+/**
+ * Workspace-scoped Wajom management routes (session auth + owner guard).
+ * Uses `prefix` so `createRequireAuth()` runs at the instance level —
+ * Elysia 1.1.x does not reliably pass cookies to plugins `.use()`-ed
+ * inside `.group()`.
+ */
+const wajomWorkspaceRoutes = () =>
+  new Elysia({ prefix: '/workspaces/:workspaceId/integrations/wajom' })
+    .use(createRequireAuth())
+    .use(createRequireWorkspaceOwner())
+    .get('/', wajom.listConnections, { params: WorkspaceIdParam })
+    .get('/:connectionId/export', wajom.exportActions, { params: WajomConnectionParam })
+    .get('/jobs', wajom.listJobs, { params: WorkspaceIdParam, query: WajomJobsQuery })
+    .post('/', wajom.createConnection, {
+      params: WorkspaceIdParam,
+      body: CreateWajomConnectionSchema
+    })
+    .patch('/:connectionId', wajom.updateConnection, {
+      params: WajomConnectionParam,
+      body: UpdateWajomConnectionSchema
+    })
+    .post('/:connectionId/revoke', wajom.revokeConnection, { params: WajomConnectionParam })
+    .post('/:connectionId/rotate', wajom.rotateConnection, { params: WajomConnectionParam })
+    .post('/:connectionId/test', wajom.testConnection, { params: WajomConnectionParam })
+    .post('/:connectionId/test-send', wajom.testSend, {
+      params: WajomConnectionParam,
+      body: WajomTestSendSchema
+    });
+
+/**
+ * Connector-facing routes (Bearer token auth via connectorGuard).
+ */
+const wajomConnectorRoutes = () =>
+  new Elysia({ prefix: '/integrations/wajom' })
+    .use(connectorGuard)
+    .onError({ as: 'scoped' }, ({ code, request, set }) => {
+      if (code === 'VALIDATION') {
+        const requestId = createRequestId(request.headers.get('x-request-id') ?? undefined);
+        set.status = 422;
+        set.headers['x-request-id'] = requestId;
+        return {
+          ok: false,
+          error: 'Invalid connector request.',
+          code: 'invalid_input',
+          requestId
+        };
+      }
+    })
+    .get('/tools', wajom.listTools)
+    .get('/manifest', wajom.manifest)
+    .get('/health', wajom.connectorHealth)
+    .post('/call', wajom.callTool, { body: WajomToolCallSchema })
+    .post('/inbound/reply', wajom.inboundReply, { body: WajomInboundReplySchema })
+    .post('/jobs/:jobId/status', wajom.deliveryStatus, {
+      params: WajomJobParam,
+      body: WajomDeliveryStatusSchema
+    });
+
 export const createWajomRoutes = () =>
-  new Elysia()
-    .group('/workspaces/:workspaceId/integrations/wajom', (app) =>
-      app
-        .use(createRequireAuth())
-        .use(createRequireWorkspaceOwner())
-        .get('/', wajom.listConnections, { params: WorkspaceIdParam })
-        .get('/:connectionId/export', wajom.exportActions, { params: WajomConnectionParam })
-        .get('/jobs', wajom.listJobs, { params: WorkspaceIdParam, query: WajomJobsQuery })
-        .post('/', wajom.createConnection, {
-          params: WorkspaceIdParam,
-          body: CreateWajomConnectionSchema
-        })
-        .patch('/:connectionId', wajom.updateConnection, {
-          params: WajomConnectionParam,
-          body: UpdateWajomConnectionSchema
-        })
-        .post('/:connectionId/revoke', wajom.revokeConnection, { params: WajomConnectionParam })
-        .post('/:connectionId/rotate', wajom.rotateConnection, { params: WajomConnectionParam })
-        .post('/:connectionId/test', wajom.testConnection, { params: WajomConnectionParam })
-        .post('/:connectionId/test-send', wajom.testSend, {
-          params: WajomConnectionParam,
-          body: WajomTestSendSchema
-        })
-    )
-    .group('/integrations/wajom', (app) =>
-      app
-        .use(connectorGuard)
-        .onError({ as: 'scoped' }, ({ code, request, set }) => {
-          if (code === 'VALIDATION') {
-            const requestId = createRequestId(request.headers.get('x-request-id') ?? undefined);
-            set.status = 422;
-            set.headers['x-request-id'] = requestId;
-            return {
-              ok: false,
-              error: 'Invalid connector request.',
-              code: 'invalid_input',
-              requestId
-            };
-          }
-        })
-        .get('/tools', wajom.listTools)
-        .get('/manifest', wajom.manifest)
-        .get('/health', wajom.connectorHealth)
-        .post('/call', wajom.callTool, { body: WajomToolCallSchema })
-        .post('/inbound/reply', wajom.inboundReply, { body: WajomInboundReplySchema })
-        .post('/jobs/:jobId/status', wajom.deliveryStatus, {
-          params: WajomJobParam,
-          body: WajomDeliveryStatusSchema
-        })
-    );
+  new Elysia().use(wajomWorkspaceRoutes()).use(wajomConnectorRoutes());
 
 export const wajomRoutes = createWajomRoutes();

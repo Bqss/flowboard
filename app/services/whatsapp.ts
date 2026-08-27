@@ -14,7 +14,7 @@ import {
 } from '@db';
 import { createNotification, hasRecentNotification } from './notification';
 import { normalizeWa } from './customer';
-import { findWajomConnectionForWorkflow } from './wajom-connections';
+import { findWajomConnectionForWorkspace } from './wajom-connections';
 import { sendWajomMessage } from './wajom-transport';
 import { env } from '@config/env';
 import { advanceCardIfChecklistComplete } from './workflow';
@@ -187,9 +187,8 @@ export const scheduleJobsForCard = async (cardId: string, stageId: string, stage
 
   if (!context || context.card.stageId !== stageId) return [];
 
-  const connection = await findWajomConnectionForWorkflow(
-    context.workflow.workspaceId,
-    context.workflow.id
+  const connection = await findWajomConnectionForWorkspace(
+    context.workflow.workspaceId
   );
   const templates = await db
     .select({

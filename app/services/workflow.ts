@@ -54,6 +54,7 @@ export const listWorkflows = async (workspaceId: string) =>
     .select({
       id: workflows.id,
       name: workflows.name,
+      description: workflows.description,
       ownerId: workflows.ownerId,
       defaultAssigneeId: workflows.defaultAssigneeId,
       defaultAssigneeIds: workflows.defaultAssigneeIds,
@@ -70,6 +71,7 @@ export const createWorkflow = async (
   workspaceId: string,
   input: {
     name: string;
+    description?: string | null;
     ownerId: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
@@ -92,6 +94,7 @@ export const createWorkflow = async (
     .values({
       workspaceId,
       name: input.name.trim(),
+      description: input.description ?? null,
       ownerId: input.ownerId,
       defaultAssigneeId,
       defaultAssigneeIds
@@ -177,6 +180,7 @@ export const updateWorkflow = async (
   workflowId: string,
   input: {
     name?: string;
+    description?: string | null;
     ownerId?: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
@@ -195,6 +199,7 @@ export const updateWorkflow = async (
     .update(workflows)
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
       ...(defaultAssigneeId !== undefined ? { defaultAssigneeId } : {}),
       ...(defaultAssigneeIds !== undefined ? { defaultAssigneeIds } : {}),
@@ -983,6 +988,171 @@ export const getDashboardStats = async (workspaceId: string, workflowId?: string
     progress,
     waiting,
     done
+  };
+};
+
+export type WorkflowStageStat = {
+  stageId: string;
+  stageName: string;
+  position: number;
+  total: number;
+  overdue: number;
+};
+
+export type WorkflowAssigneeStat = {
+  assigneeId: string | null;
+  assigneeName: string | null;
+  active: number;
+  overdue: number;
+  waiting: number;
+  done: number;
+};
+
+export type WorkflowTimeBucket = {
+  bucket: string;
+  created: number;
+  completed: number;
+};
+
+export type WorkflowStats = {
+  workflowId: string;
+  totals: {
+    active: number;
+    waiting: number;
+    overdue: number;
+    done: number;
+  };
+  byStage: WorkflowStageStat[];
+  byAssignee: WorkflowAssigneeStat[];
+  byTime: WorkflowTimeBucket[];
+};
+
+const TIME_BUCKETS = [
+  { key: '7d', days: 7 },
+  { key: '30d', days: 30 },
+  { key: '90d', days: 90 }
+] as const;
+
+export const getWorkflowStats = async (workflowId: string): Promise<WorkflowStats> => {
+  const workflowStages = await listStages(workflowId);
+  if (workflowStages.length === 0) {
+    return {
+      workflowId,
+      totals: { active: 0, waiting: 0, overdue: 0, done: 0 },
+      byStage: [],
+      byAssignee: [],
+      byTime: []
+    };
+  }
+
+  const firstStageId = workflowStages[0].id;
+  const lastStageId = workflowStages[workflowStages.length - 1].id;
+
+  const allCards = await db.select().from(cards).where(eq(cards.workflowId, workflowId));
+
+  let active = 0;
+  let waiting = 0;
+  let overdue = 0;
+  let done = 0;
+
+  const stageStatsMap = new Map<string, WorkflowStageStat>();
+  for (const stage of workflowStages) {
+    stageStatsMap.set(stage.id, {
+      stageId: stage.id,
+      stageName: stage.name,
+      position: stage.position,
+      total: 0,
+      overdue: 0
+    });
+  }
+
+  const now = Date.now();
+  for (const card of allCards) {
+    const stageStat = stageStatsMap.get(card.stageId);
+    if (stageStat) stageStat.total += 1;
+
+    if (card.waErrorFlag || card.waFollowupsStopped) {
+      waiting += 1;
+    } else if (card.stageId === firstStageId) {
+      active += 1;
+    } else if (card.stageId === lastStageId) {
+      done += 1;
+    } else {
+      active += 1;
+    }
+
+    // Overdue: card stuck in a stage longer than stage.overdueReminderHours
+    const stage = workflowStages.find((s) => s.id === card.stageId);
+    if (stage?.overdueReminderHours && stage.overdueReminderHours > 0) {
+      const cutoff = now - stage.overdueReminderHours * 60 * 60 * 1000;
+      if (card.stageEnteredAt.getTime() <= cutoff) {
+        overdue += 1;
+        if (stageStat) stageStat.overdue += 1;
+      }
+    }
+  }
+
+  // Per-assignee breakdown
+  const assigneeMap = new Map<string, WorkflowAssigneeStat>();
+  for (const card of allCards) {
+    const key = card.assigneeId ?? 'unassigned';
+    const existing = assigneeMap.get(key) ?? {
+      assigneeId: card.assigneeId,
+      assigneeName: null,
+      active: 0,
+      overdue: 0,
+      waiting: 0,
+      done: 0
+    };
+
+    if (card.waErrorFlag || card.waFollowupsStopped) {
+      existing.waiting += 1;
+    } else if (card.stageId === lastStageId) {
+      existing.done += 1;
+    } else {
+      existing.active += 1;
+    }
+
+    const stage = workflowStages.find((s) => s.id === card.stageId);
+    if (stage?.overdueReminderHours && stage.overdueReminderHours > 0) {
+      const cutoff = now - stage.overdueReminderHours * 60 * 60 * 1000;
+      if (card.stageEnteredAt.getTime() <= cutoff) {
+        existing.overdue += 1;
+      }
+    }
+
+    assigneeMap.set(key, existing);
+  }
+
+  // Resolve assignee names
+  const assigneeIds = [...assigneeMap.keys()].filter((id) => id !== 'unassigned');
+  if (assigneeIds.length > 0) {
+    const assigneeRows = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, assigneeIds));
+    for (const row of assigneeRows) {
+      const entry = assigneeMap.get(row.id);
+      if (entry) entry.assigneeName = row.name;
+    }
+  }
+
+  // Per-time-range breakdown
+  const byTime: WorkflowTimeBucket[] = TIME_BUCKETS.map(({ key, days }) => {
+    const since = new Date(now - days * 24 * 60 * 60 * 1000);
+    const created = allCards.filter((c) => c.createdAt >= since).length;
+    const completed = allCards.filter(
+      (c) => c.stageId === lastStageId && c.stageEnteredAt >= since
+    ).length;
+    return { bucket: key, created, completed };
+  });
+
+  return {
+    workflowId,
+    totals: { active, waiting, overdue, done },
+    byStage: [...stageStatsMap.values()].sort((a, b) => a.position - b.position),
+    byAssignee: [...assigneeMap.values()],
+    byTime
   };
 };
 

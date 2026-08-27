@@ -107,6 +107,7 @@ export const createWorkflowsRoutes = () => {
         .delete('/', workflowHandlers.remove, { params: WorkflowIdParam })
         .get('/setup', workflowHandlers.setup, { params: WorkflowIdParam })
         .get('/board', workflowHandlers.board, { params: WorkflowIdParam })
+        .get('/stats', workflowHandlers.workflowStats, { params: WorkflowIdParam })
         .post('/stages', workflowHandlers.createStageHandler, {
           params: WorkflowIdParam,
           body: CreateStageSchema

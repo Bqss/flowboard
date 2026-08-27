@@ -130,9 +130,9 @@ export const checkWajomConnection = async (connection: WajomConnection) => {
   }
 
   try {
-    const apiKey = getWajomSendApiKey(connection);
-    const headers: Record<string, string> = { 'x-flowboard-instance-id': connection.instanceId };
-    if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+    const headers: Record<string, string> = {
+      'x-internal-api-token': env.wajomInternalApiToken
+    };
     const response = await withTimeout(connection.healthEndpoint, { headers });
     const payload = await readJson(response);
     if (!response.ok) throw new Error(`Health endpoint returned ${response.status}.`);

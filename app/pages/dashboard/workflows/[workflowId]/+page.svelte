@@ -7,7 +7,8 @@
     type ApiWorkflow,
     type ApiDashboardStats,
     type ApiWorkspaceMember,
-    type ApiBoardColumn
+    type ApiBoardColumn,
+    type ApiWorkflowStats
   } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
@@ -27,6 +28,7 @@
     SearchInput,
     Tabs,
     CopyToClipboard,
+    StatCard,
     toast
   } from '$lib/components/molecules/index.js';
   import { ConfirmDialog, Dialog, KanbanBoard, Sheet, DataTable } from '$lib/components/organisms/index.js';
@@ -42,6 +44,10 @@
     WhatsappIcon,
     Layers01Icon,
     Delete02Icon,
+    AlertCircleIcon,
+    ClockAlertIcon,
+    UserGroupIcon,
+    Calendar03Icon,
   } from '@hugeicons/core-free-icons';
   import type { KanbanColumn } from '$lib/components/organisms/shared.js';
   import type { LayoutData } from '../../$types';
@@ -59,6 +65,10 @@
   const canManage = $derived(data.workspace?.role === 'owner' || workflow?.ownerId === data.user?.id);
 
   let members = $state<ApiWorkspaceMember[]>([]);
+
+  // Workflow statistics
+  let stats = $state<ApiWorkflowStats | null>(null);
+  let statsLoading = $state(false);
 
   // View mode: kanban board vs table list
   let viewMode = $state<'board' | 'table'>('board');
@@ -110,14 +120,16 @@
     if (!data.workspace?.id || !workflowId) return;
     loadingData = true;
     try {
-      const [boardRes, workflowsRes, membersRes] = await Promise.all([
+      const [boardRes, workflowsRes, membersRes, statsRes] = await Promise.all([
         api.getWorkflowBoard(data.workspace.id, workflowId),
         api.listWorkflows(data.workspace.id),
-        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] }))
+        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
+        api.getWorkflowStats(data.workspace.id, workflowId).catch(() => ({ stats: null }))
       ]);
       board = boardRes.board?.columns ?? [];
       workflow = workflowsRes.workflows?.find((w) => w.id === workflowId) ?? null;
       members = membersRes.members ?? [];
+      stats = statsRes.stats ?? null;
     } catch (err) {
       console.error('Failed to load workflow board data:', err);
     } finally {
@@ -543,6 +555,127 @@
       </div>
     </div>
   </header>
+
+  {#if stats && !loadingData}
+    <section class="space-y-4">
+      <h2 class="ds-section-title text-ink">{tr('board.stats')}</h2>
+
+      <!-- Totals: 4 stat cards -->
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label={tr('board.statsActive')}
+          value={String(stats.totals.active)}
+          class="p-5 rounded-2xl"
+        >
+          {#snippet icon()}
+            <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
+          {/snippet}
+        </StatCard>
+        <StatCard
+          label={tr('board.statsWaiting')}
+          value={String(stats.totals.waiting)}
+          class="p-5 rounded-2xl"
+        >
+          {#snippet icon()}
+            <HugeiconsIcon icon={AlertCircleIcon} size={18} strokeWidth={1.8} />
+          {/snippet}
+        </StatCard>
+        <StatCard
+          label={tr('board.statsOverdue')}
+          value={String(stats.totals.overdue)}
+          class="p-5 rounded-2xl"
+        >
+          {#snippet icon()}
+            <HugeiconsIcon icon={ClockAlertIcon} size={18} strokeWidth={1.8} />
+          {/snippet}
+        </StatCard>
+        <StatCard
+          label={tr('board.statsDone')}
+          value={String(stats.totals.done)}
+          class="p-5 rounded-2xl"
+        >
+          {#snippet icon()}
+            <HugeiconsIcon icon={CheckmarkCircle02Icon} size={18} strokeWidth={1.8} />
+          {/snippet}
+        </StatCard>
+      </div>
+
+      <!-- Breakdown: by stage + by assignee -->
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
+          <h3 class="ds-label text-ink">{tr('board.statsByStage')}</h3>
+          <div class="space-y-2">
+            {#each stats.byStage as stage (stage.stageId)}
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="min-w-0 truncate text-ink-soft">{stage.stageName}</span>
+                <div class="flex shrink-0 items-center gap-3">
+                  <span class="font-semibold text-ink">{stage.total}</span>
+                  {#if stage.overdue > 0}
+                    <Badge tone="urgent">{stage.overdue} {tr('board.statsOverdue')}</Badge>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
+          <div class="flex items-center gap-2">
+            <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} class="text-mute" />
+            <h3 class="ds-label text-ink">{tr('board.statsByAssignee')}</h3>
+          </div>
+          <div class="space-y-2">
+            {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="min-w-0 truncate text-ink-soft">
+                  {assignee.assigneeName ?? tr('board.statsUnassigned')}
+                </span>
+                <div class="flex shrink-0 items-center gap-2">
+                  <Badge tone="progress">{assignee.active} {tr('board.statsActive')}</Badge>
+                  {#if assignee.waiting > 0}
+                    <Badge tone="urgent">{assignee.waiting} {tr('board.statsWaiting')}</Badge>
+                  {/if}
+                  {#if assignee.overdue > 0}
+                    <Badge tone="urgent">{assignee.overdue} {tr('board.statsOverdue')}</Badge>
+                  {/if}
+                  {#if assignee.done > 0}
+                    <Badge tone="done">{assignee.done} {tr('board.statsDone')}</Badge>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity over time -->
+      <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
+        <div class="flex items-center gap-2">
+          <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={1.8} class="text-mute" />
+          <h3 class="ds-label text-ink">{tr('board.statsByTime')}</h3>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          {#each stats.byTime as bucket (bucket.bucket)}
+            <div class="rounded-xl border border-hairline bg-lane/40 p-4 text-sm">
+              <p class="ds-caption text-mute">
+                {bucket.bucket === '7d' ? tr('board.statsLast7d') : bucket.bucket === '30d' ? tr('board.statsLast30d') : tr('board.statsLast90d')}
+              </p>
+              <div class="mt-2 flex items-center justify-between">
+                <div>
+                  <p class="ds-caption text-mute">{tr('board.statsCreated')}</p>
+                  <p class="ds-stat text-ink">{bucket.created}</p>
+                </div>
+                <div>
+                  <p class="ds-caption text-mute">{tr('board.statsCompleted')}</p>
+                  <p class="ds-stat text-ink">{bucket.completed}</p>
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </section>
+  {/if}
 
   <!-- Clean View Controls & Filter Toolbar -->
   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-hairline pb-3">
