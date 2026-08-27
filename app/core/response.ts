@@ -7,14 +7,16 @@ export type PublicUser = {
   name: string;
   avatarUrl: string | null;
   activeWorkspaceId: string | null;
+  platformAdmin: boolean;
 };
 
 export const toPublicUser = (
-  u: Pick<User, 'id' | 'email' | 'name' | 'avatarUrl' | 'activeWorkspaceId'>
+  u: Pick<User, 'id' | 'email' | 'name' | 'avatarUrl' | 'activeWorkspaceId' | 'platformAdmin'>
 ): PublicUser => ({
   id: u.id,
   email: u.email,
   name: u.name,
   avatarUrl: u.avatarUrl,
-  activeWorkspaceId: u.activeWorkspaceId
+  activeWorkspaceId: u.activeWorkspaceId,
+  platformAdmin: u.platformAdmin
 });

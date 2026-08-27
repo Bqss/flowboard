@@ -9,6 +9,7 @@ import { createNotificationsRoutes } from './notifications';
 import { createWebhooksRoutes } from './webhooks';
 import { createIntegrationsRoutes } from './integrations';
 import { createWajomRoutes } from './wajom';
+import { createAdminRoutes } from './admin';
 
 /**
  * The API surface. `createApiApp()` provides the `/api` prefix plus shared
@@ -25,7 +26,8 @@ export const buildApi = () =>
     .use(createNotificationsRoutes())
     .use(createWebhooksRoutes())
     .use(createIntegrationsRoutes())
-    .use(createWajomRoutes());
+    .use(createWajomRoutes())
+    .use(createAdminRoutes());
 
 export type Api = ReturnType<typeof buildApi>;
 
@@ -55,3 +57,4 @@ if (import.meta.hot) {
 }
 
 export const api = getApi();
+

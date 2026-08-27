@@ -30,6 +30,14 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'handover'
 ]);
 export const cardSourceEnum = pgEnum('card_source', ['manual', 'csv', 'mcp', 'estafet']);
+export const subscriptionStatusEnum = pgEnum('subscription_status', [
+  'trial',
+  'active',
+  'past_due',
+  'canceled'
+]);
+export const planIntervalEnum = pgEnum('plan_interval', ['monthly', 'yearly']);
+export const voucherTypeEnum = pgEnum('voucher_type', ['percent', 'fixed', 'trial_days']);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -38,6 +46,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   avatarUrl: text('avatar_url'),
   activeWorkspaceId: uuid('active_workspace_id'),
+  platformAdmin: boolean('platform_admin').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
@@ -97,6 +106,7 @@ export const workflows = pgTable('workflows', {
     .notNull()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  description: text('description'),
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'restrict' }),
@@ -113,12 +123,9 @@ export const wajomConnections = pgTable(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
-    defaultWorkflowId: uuid('default_workflow_id').references(() => workflows.id, {
-      onDelete: 'set null'
-    }),
     name: text('name').notNull(),
     instanceId: text('instance_id').notNull(),
-    countryCode: text('country_code').notNull().default('62'),
+    countryCode: text('country_code').notNull().default('60'),
     sendEndpoint: text('send_endpoint').notNull(),
     healthEndpoint: text('health_endpoint'),
     sendApiKeyEncrypted: text('send_api_key_encrypted'),
@@ -138,13 +145,7 @@ export const wajomConnections = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
   },
-  (table) => [
-    index('wajom_connections_workspace_idx').on(table.workspaceId),
-    uniqueIndex('wajom_connections_workspace_workflow_idx').on(
-      table.workspaceId,
-      table.defaultWorkflowId
-    )
-  ]
+  (table) => [index('wajom_connections_workspace_idx').on(table.workspaceId)]
 );
 
 export const integrationAuditLogs = pgTable(
@@ -207,6 +208,7 @@ export const stages = pgTable(
     position: integer('position').notNull().default(0),
     onReplyNotify: boolean('on_reply_notify').notNull().default(false),
     overdueReminderHours: integer('overdue_reminder_hours'),
+    autoMoveOnComplete: boolean('auto_move_on_complete').notNull().default(false),
     nextWorkflowId: uuid('next_workflow_id').references(() => workflows.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -221,6 +223,7 @@ export const checklistTemplates = pgTable('checklist_templates', {
     .references(() => stages.id, { onDelete: 'cascade' }),
   label: text('label').notNull(),
   required: boolean('required').notNull().default(true),
+  deadlineHours: integer('deadline_hours'),
   position: integer('position').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
@@ -349,6 +352,200 @@ export const notifications = pgTable('notifications', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+export const notificationSettings = pgTable(
+  'notification_settings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    waFailed: boolean('wa_failed').notNull().default(true),
+    customerReplied: boolean('customer_replied').notNull().default(true),
+    cardOverdue: boolean('card_overdue').notNull().default(true),
+    handover: boolean('handover').notNull().default(true),
+    emailWaFailed: boolean('email_wa_failed').notNull().default(false),
+    emailCustomerReplied: boolean('email_customer_replied').notNull().default(false),
+    emailCardOverdue: boolean('email_card_overdue').notNull().default(true),
+    emailHandover: boolean('email_handover').notNull().default(true),
+    emailDigest: boolean('email_digest').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [uniqueIndex('notification_settings_workspace_user_idx').on(table.workspaceId, table.userId)]
+);
+
+export const plans = pgTable(
+  'plans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: text('slug').notNull().unique(),
+    name: text('name').notNull(),
+    description: text('description'),
+    priceCents: integer('price_cents').notNull().default(0),
+    currency: text('currency').notNull().default('MYR'),
+    interval: planIntervalEnum('interval').notNull().default('monthly'),
+    seatsLimit: integer('seats_limit').notNull().default(0),
+    workflowsLimit: integer('workflows_limit').notNull().default(0),
+    waMessagesPerMonth: integer('wa_messages_per_month').notNull().default(0),
+    trialDays: integer('trial_days').notNull().default(0),
+    active: boolean('active').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('plans_active_sort_idx').on(table.active, table.sortOrder)]
+);
+
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .unique()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    planId: uuid('plan_id')
+      .notNull()
+      .references(() => plans.id, { onDelete: 'restrict' }),
+    status: subscriptionStatusEnum('status').notNull().default('trial'),
+    trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+    currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
+    currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+    canceledAt: timestamp('canceled_at', { withTimezone: true }),
+    graceEndsAt: timestamp('grace_ends_at', { withTimezone: true }),
+    chipPurchaseId: text('chip_purchase_id'),
+    chipRecurringToken: text('chip_recurring_token'),
+    chipClientEmail: text('chip_client_email'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('subscriptions_status_idx').on(table.status)]
+);
+
+export const vouchers = pgTable(
+  'vouchers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    type: voucherTypeEnum('type').notNull(),
+    value: integer('value').notNull(),
+    // For percent/fixed: how many billing cycles the discount applies (null = forever).
+    durationCycles: integer('duration_cycles'),
+    // Optional: restrict redemption to a specific plan.
+    planId: uuid('plan_id').references(() => plans.id, { onDelete: 'set null' }),
+    maxRedemptions: integer('max_redemptions'),
+    maxRedemptionsPerWorkspace: integer('max_redemptions_per_workspace').notNull().default(1),
+    redeemedCount: integer('redeemed_count').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    active: boolean('active').notNull().default(true),
+    note: text('note'),
+    createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('vouchers_active_idx').on(table.active)]
+);
+
+export const voucherRedemptions = pgTable(
+  'voucher_redemptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    voucherId: uuid('voucher_id')
+      .notNull()
+      .references(() => vouchers.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    subscriptionId: uuid('subscription_id').references(() => subscriptions.id, {
+      onDelete: 'set null'
+    }),
+    redeemedById: uuid('redeemed_by_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('voucher_redemptions_voucher_workspace_idx').on(table.voucherId, table.workspaceId),
+    index('voucher_redemptions_workspace_idx').on(table.workspaceId)
+  ]
+);
+
+export const workflowInboundEndpoints = pgTable(
+  'workflow_inbound_endpoints',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    apiKeyHash: text('api_key_hash').notNull().unique(),
+    apiKeyPrefix: text('api_key_prefix').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    lastRequestAt: timestamp('last_request_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('workflow_inbound_endpoints_workflow_idx').on(table.workflowId),
+    index('workflow_inbound_endpoints_workspace_idx').on(table.workspaceId)
+  ]
+);
+
+export const inboundRequestLogs = pgTable(
+  'inbound_request_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    endpointId: uuid('endpoint_id')
+      .notNull()
+      .references(() => workflowInboundEndpoints.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    source: text('source'),
+    payloadSummary: jsonb('payload_summary'),
+    success: boolean('success').notNull(),
+    statusCode: integer('status_code').notNull(),
+    cardId: uuid('card_id').references(() => cards.id, { onDelete: 'set null' }),
+    customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'set null' }),
+    idempotentReplay: boolean('idempotent_replay').notNull().default(false),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('inbound_request_logs_endpoint_created_idx').on(table.endpointId, table.createdAt),
+    index('inbound_request_logs_workspace_created_idx').on(table.workspaceId, table.createdAt)
+  ]
+);
+
+export const inboundIdempotencyKeys = pgTable(
+  'inbound_idempotency_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    endpointId: uuid('endpoint_id')
+      .notNull()
+      .references(() => workflowInboundEndpoints.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    status: text('status').notNull().default('processing'),
+    response: jsonb('response'),
+    statusCode: integer('status_code'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('inbound_idempotency_endpoint_key_idx').on(table.endpointId, table.key)
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
@@ -368,7 +565,59 @@ export type WajomConnection = typeof wajomConnections.$inferSelect;
 export type IntegrationAuditLog = typeof integrationAuditLogs.$inferSelect;
 export type IntegrationIdempotencyKey = typeof integrationIdempotencyKeys.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type WorkflowInboundEndpoint = typeof workflowInboundEndpoints.$inferSelect;
+export type InboundRequestLog = typeof inboundRequestLogs.$inferSelect;
+export type InboundIdempotencyKey = typeof inboundIdempotencyKeys.$inferSelect;
+export type Plan = typeof plans.$inferSelect;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type Voucher = typeof vouchers.$inferSelect;
+export type VoucherRedemption = typeof voucherRedemptions.$inferSelect;
+export type SubscriptionStatus = (typeof subscriptionStatusEnum.enumValues)[number];
+export type PlanInterval = (typeof planIntervalEnum.enumValues)[number];
+export type VoucherType = (typeof voucherTypeEnum.enumValues)[number];
 export type ChecklistActionKind = (typeof checklistActionKindEnum.enumValues)[number];
 export type WhatsappJobStatus = (typeof whatsappJobStatusEnum.enumValues)[number];
 export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
+export type NotificationSettings = typeof notificationSettings.$inferSelect;
 export type CardSource = (typeof cardSourceEnum.enumValues)[number];
+
+export const mcpApiKeys = pgTable(
+  'mcp_api_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    keyHash: text('key_hash').notNull().unique(),
+    keyPrefix: text('key_prefix').notNull(),
+    scopeMode: text('scope_mode').notNull().default('all'),
+    enabledTools: text('enabled_tools').array().notNull().default(sql`'{}'::text[]`),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('mcp_api_keys_workspace_idx').on(table.workspaceId)]
+);
+
+export type McpApiKey = typeof mcpApiKeys.$inferSelect;
+
+export const mcpApiKeyWorkflows = pgTable(
+  'mcp_api_key_workflows',
+  {
+    apiKeyId: uuid('api_key_id')
+      .notNull()
+      .references(() => mcpApiKeys.id, { onDelete: 'cascade' }),
+    workflowId: uuid('workflow_id')
+      .notNull()
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('mcp_api_key_workflows_key_workflow_idx').on(table.apiKeyId, table.workflowId),
+    index('mcp_api_key_workflows_workflow_idx').on(table.workflowId)
+  ]
+);
+
+export type McpApiKeyWorkflow = typeof mcpApiKeyWorkflows.$inferSelect;

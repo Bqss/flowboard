@@ -22,7 +22,13 @@ export const createWithUser = () =>
 
 export const createRequireAuth = () =>
   new Elysia()
-    .derive({ as: 'scoped' }, async (ctx) => ({ user: await resolveUser(ctx) }))
+    .derive({ as: 'scoped' }, async (ctx) => {
+      const sid = ctx.cookie[env.sessionCookie]?.value as string | undefined;
+      console.log('[auth] requireAuth derive — sid:', sid ? `${sid.slice(0, 8)}...` : 'MISSING');
+      const user = await resolveUser(ctx);
+      console.log('[auth] requireAuth derive — user:', user ? user.email : 'NULL');
+      return { user };
+    })
     .onBeforeHandle({ as: 'scoped' }, ({ user, set }) => {
       if (!user) {
         set.status = 401;

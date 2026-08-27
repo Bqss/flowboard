@@ -9,3 +9,4 @@ export {
   createRequireWorkspaceOwner
 } from './workspace';
 export { withWorkflow, requireWorkflow, createWithWorkflow, createRequireWorkflow } from './workflow';
+export { requirePlatformAdmin, createRequirePlatformAdmin } from './platform-admin';

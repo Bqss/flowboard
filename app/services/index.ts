@@ -41,3 +41,13 @@ export {
   recordFailedAttempt,
   clearAttempts
 } from './throttle';
+
+export {
+  resolveApiKey,
+  listWorkspaceApiKeys,
+  createApiKey,
+  revokeApiKey,
+  type ApiKeyWithContext,
+  type CreatedApiKey,
+  type ResolvedApiKey
+} from './api-keys';
