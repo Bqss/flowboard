@@ -56,7 +56,8 @@
     Alert02Icon,
     Clock01Icon,
     BarChartIcon,
-    SparklesIcon
+    SparklesIcon,
+    File02Icon
   } from '@hugeicons/core-free-icons';
   import type { KanbanColumn } from '$lib/components/organisms/shared.js';
   import type { LayoutData } from '../../$types';
@@ -144,6 +145,7 @@
   let importLoading = $state(false);
   let importError = $state<string | null>(null);
   let importCsv = $state('');
+  let importFileName = $state<string | null>(null);
   let importMode = $state<'skip' | 'update'>('skip');
   let importResult = $state<{
     created: number;
@@ -564,6 +566,29 @@
     } finally {
       importLoading = false;
     }
+
+  function handleFileUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? '').trim();
+      if (text) {
+        importCsv = text;
+        importFileName = file.name;
+        importError = null;
+      }
+    };
+    reader.onerror = () => {
+      importError = tr('board.importError');
+    };
+    reader.readAsText(file);
+  }
+
+  function clearImportFile() {
+    importCsv = '';
+    importFileName = null;
   }
 
   // Checklist statistics for active sheet card
@@ -1610,16 +1635,52 @@
       {/snippet}
     </FormField>
 
-    <!-- CSV Input Area -->
+    <!-- File Upload + CSV Input Area -->
     <FormField label={tr('board.csvData')} required>
       {#snippet control(args)}
-        <textarea
-          {...args}
-          bind:value={importCsv}
-          rows={6}
-          placeholder={`Siti Aminah, 60123456789, April webinar, VIP\nAhmad Dahlan, 601298765432, Onboarding, Urgent`}
-          class="w-full rounded-2xl border border-hairline bg-card p-3 font-mono text-[13px] text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
-        ></textarea>
+        <div class="space-y-2.5">
+          <!-- File dropzone -->
+          <label
+            class="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-3 transition-all hover:border-primary hover:bg-primary-soft/30"
+          >
+            <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
+              <HugeiconsIcon icon={File02Icon} size={18} strokeWidth={1.8} />
+            </span>
+            <div class="min-w-0 flex-1">
+              {#if importFileName}
+                <p class="truncate text-sm font-semibold text-ink">{importFileName}</p>
+                <p class="text-xs text-mute">{tr('board.fileLoaded')}</p>
+              {:else}
+                <p class="text-sm font-semibold text-ink">{tr('board.uploadFile')}</p>
+                <p class="text-xs text-mute">{tr('board.uploadFileHint')}</p>
+              {/if}
+            </div>
+            {#if importFileName}
+              <button
+                type="button"
+                onclick={(e) => { e.preventDefault(); clearImportFile(); }}
+                class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent"
+              >
+                {tr('common.clear')}
+              </button>
+            {/if}
+            <input
+              type="file"
+              accept=".csv,.txt,text/csv,text/plain"
+              class="hidden"
+              onchange={handleFileUpload}
+            />
+          </label>
+
+          <!-- Textarea for paste/edit -->
+          <textarea
+            {...args}
+            bind:value={importCsv}
+            rows={6}
+            placeholder={`Siti Aminah, 60123456789, April webinar, VIP\nAhmad Dahlan, 601298765432, Onboarding, Urgent`}
+            class="w-full rounded-2xl border border-hairline bg-card p-3 font-mono text-[13px] text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+          ></textarea>
+        </div>
       {/snippet}
     </FormField>
 
