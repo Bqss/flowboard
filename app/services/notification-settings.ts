@@ -122,6 +122,8 @@ export const shouldNotifyInApp = (settings: PublicNotificationSettings, type: No
       return settings.cardOverdue;
     case 'handover':
       return settings.handover;
+    case 'workflow_action':
+      return true;
     default:
       return true;
   }
@@ -140,6 +142,8 @@ export const shouldNotifyEmail = (settings: PublicNotificationSettings, type: No
       return settings.emailCardOverdue;
     case 'handover':
       return settings.emailHandover;
+    case 'workflow_action':
+      return false;
     default:
       return false;
   }

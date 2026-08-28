@@ -1,5 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm';
-import { db, notifications, type NotificationType } from '@db';
+import { db, notifications, workspaceMembers, type NotificationType } from '@db';
 import {
   getNotificationSettings,
   getUserEmail,
@@ -8,6 +8,28 @@ import {
 } from './notification-settings';
 import { sendEmail } from './email';
 
+
+/** Returns the userId of the first workspace owner, or null if none. */
+export const getWorkspaceOwnerUserId = async (workspaceId: string): Promise<string | null> => {
+  const [owner] = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.role, 'owner')))
+    .limit(1);
+  return owner?.userId ?? null;
+};
+
+/**
+ * Resolves who should receive a notification for a card:
+ * the assignee if set, otherwise the workspace owner.
+ */
+export const resolveNotifyTarget = async (
+  workspaceId: string,
+  assigneeId: string | null
+): Promise<string | null> => {
+  if (assigneeId) return assigneeId;
+  return getWorkspaceOwnerUserId(workspaceId);
+};
 export const createNotification = async (input: {
   workspaceId: string;
   userId: string;

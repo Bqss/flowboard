@@ -16,7 +16,7 @@ import {
   WorkflowError
 } from './workflow';
 import { cancelFollowupJobsForCard } from './whatsapp';
-import { createNotification } from './notification';
+import { createNotification, resolveNotifyTarget } from './notification';
 import { hasWajomTool, type WajomToolName } from './wajom-connections';
 
 export class WajomToolError extends Error {
@@ -410,10 +410,11 @@ const handoverToStaff = async (connection: WajomConnection, args: Record<string,
   await cancelFollowupJobsForCard(row.card.id);
 
   let notificationId: string | null = null;
-  if (row.card.assigneeId) {
+  const targetUserId = await resolveNotifyTarget(workflow.workspaceId, row.card.assigneeId);
+  if (targetUserId) {
     const notification = await createNotification({
       workspaceId: workflow.workspaceId,
-      userId: row.card.assigneeId,
+      userId: targetUserId,
       cardId: row.card.id,
       type: 'handover',
       title: 'Handover customer dari WhatsApp',

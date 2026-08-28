@@ -21,7 +21,7 @@ import {
   toggleChecklistItem,
   WorkflowError
 } from './workflow';
-import { createNotification } from './notification';
+import { createNotification, resolveNotifyTarget } from './notification';
 import { cancelFollowupJobsForCard } from './whatsapp';
 import { findCustomerByWa, normalizeWa } from './customer';
 import { cards, customers, db } from '@db';
@@ -138,13 +138,15 @@ export const callMcpTool = async (
       await assertCardInAllowedWorkflow(auth, workflowId, cardId);
       const card = await getCardInWorkflow(workflowId, cardId);
       if (!card) throw new WorkflowError('Card not found.', 'not_found');
-      if (!card.assigneeId) throw new WorkflowError('Card tidak punya assignee.');
+
+      const targetUserId = await resolveNotifyTarget(workspaceId, card.assigneeId);
+      if (!targetUserId) throw new WorkflowError('Tidak ada penerima notifikasi.');
 
       const notification = await createNotification({
         workspaceId,
-        userId: card.assigneeId,
+        userId: targetUserId,
         cardId: card.id,
-        type: 'customer_replied',
+        type: 'workflow_action',
         title,
         body
       });

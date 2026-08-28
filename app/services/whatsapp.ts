@@ -12,7 +12,7 @@ import {
   workflows,
   type ChecklistActionKind
 } from '@db';
-import { createNotification, hasRecentNotification } from './notification';
+import { createNotification, hasRecentNotification, resolveNotifyTarget } from './notification';
 import { normalizeWa } from './customer';
 import { findWajomConnectionForWorkspace } from './wajom-connections';
 import { sendWajomMessage } from './wajom-transport';
@@ -284,8 +284,9 @@ const notifyAssignee = async (
   title: string,
   body: string
 ) => {
-  if (!assigneeId) return;
-  await createNotification({ workspaceId, userId: assigneeId, cardId, type, title, body });
+  const targetUserId = await resolveNotifyTarget(workspaceId, assigneeId);
+  if (!targetUserId) return;
+  await createNotification({ workspaceId, userId: targetUserId, cardId, type, title, body });
 };
 
 export const processDueWhatsappJobs = async (limit = 50) => {
@@ -480,10 +481,11 @@ export const processOverdueCardReminders = async () => {
       .where(and(eq(cards.stageId, stage.id), lte(cards.stageEnteredAt, cutoff)));
 
     for (const row of stuckCards) {
-      if (!row.card.assigneeId) continue;
+      const targetUserId = await resolveNotifyTarget(row.workflow.workspaceId, row.card.assigneeId);
+      if (!targetUserId) continue;
 
       const recent = await hasRecentNotification(
-        row.card.assigneeId,
+        targetUserId,
         row.card.id,
         'card_overdue',
         hours
@@ -492,7 +494,7 @@ export const processOverdueCardReminders = async () => {
 
       await createNotification({
         workspaceId: row.workflow.workspaceId,
-        userId: row.card.assigneeId,
+        userId: targetUserId,
         cardId: row.card.id,
         type: 'card_overdue',
         title: 'Card tertahan di stage',
@@ -625,15 +627,18 @@ export const handleInboundWhatsappReply = async (input: {
 
       await resolveFollowupJobsOnReply(row.card.id);
 
-      if (row.stage.onReplyNotify && row.card.assigneeId) {
-        await createNotification({
-          workspaceId: row.workflow.workspaceId,
-          userId: row.card.assigneeId,
-          cardId: row.card.id,
-          type: 'customer_replied',
-          title: 'Pelanggan membalas WhatsApp',
-          body: `${row.customerName} membalas${input.message ? `: "${input.message.slice(0, 80)}"` : '.'}`
-        });
+      if (row.stage.onReplyNotify) {
+        const targetUserId = await resolveNotifyTarget(row.workflow.workspaceId, row.card.assigneeId);
+        if (targetUserId) {
+          await createNotification({
+            workspaceId: row.workflow.workspaceId,
+            userId: targetUserId,
+            cardId: row.card.id,
+            type: 'customer_replied',
+            title: 'Pelanggan membalas WhatsApp',
+            body: `${row.customerName} membalas${input.message ? `: "${input.message.slice(0, 80)}"` : '.'}`
+          });
+        }
       }
     }
   }
