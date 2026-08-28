@@ -27,7 +27,8 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'wa_failed',
   'customer_replied',
   'card_overdue',
-  'handover'
+  'handover',
+  'workflow_action'
 ]);
 export const cardSourceEnum = pgEnum('card_source', ['manual', 'csv', 'mcp', 'estafet']);
 export const subscriptionStatusEnum = pgEnum('subscription_status', [
@@ -44,6 +45,7 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
+  phone: text('phone'),
   avatarUrl: text('avatar_url'),
   activeWorkspaceId: uuid('active_workspace_id'),
   platformAdmin: boolean('platform_admin').notNull().default(false),

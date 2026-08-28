@@ -120,6 +120,20 @@
       "when": 1788400000000,
       "tag": "0016_mcp_api_key_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787929319950,
+      "tag": "0017_sweet_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787932465168,
+      "tag": "0018_strange_yellowjacket",
+      "breakpoints": true
     }
   ]
 }
