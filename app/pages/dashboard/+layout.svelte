@@ -25,9 +25,9 @@
     DashboardSquare02Icon,
     CreditCardIcon,
     GiftIcon,
-    Plug02Icon
+    Plug02Icon,
+    Menu01Icon
   } from '@hugeicons/core-free-icons';
-
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
   const tr = (key: string, values?: Record<string, string | number>) =>
@@ -45,7 +45,21 @@
   let workspaces = $state<
     Array<{ id: string; name: string; slug: string; role: 'owner' | 'member'; joinedAt: string }>
   >([]);
+  let sidebarCollapsed = $state(false);
+  let mobileNavOpen = $state(false);
 
+  $effect(() => {
+    if (typeof localStorage !== 'undefined') {
+      sidebarCollapsed = localStorage.getItem('flowboard-sidebar-collapsed') === 'true';
+    }
+  });
+
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('flowboard-sidebar-collapsed', String(sidebarCollapsed));
+    }
+  }
   $effect(() => {
     if (!data.user) {
       workspaces = [];
@@ -317,16 +331,35 @@
     items={sidebarItems}
     settingsItems={sidebarSettingsItems}
     userName={data.user?.name ?? 'User'}
+    userEmail={data.user?.email}
+    userRole={data.user?.platformAdmin ? 'Platform Admin' : (data.workspace?.role === 'owner' ? 'Owner' : 'Member')}
     userSrc={data.user?.avatarUrl ?? undefined}
+    workspaceName={data.workspace?.name ?? 'Flowboard'}
+    workspaceRole={data.workspace?.role ? (data.workspace.role === 'owner' ? 'Owner' : 'Member') : undefined}
+    workspaces={workspaces}
+    currentWorkspaceId={data.workspace?.id}
+    onSwitchWorkspace={switchWorkspace}
+    collapsed={sidebarCollapsed}
+    onToggleCollapse={toggleSidebar}
+    bind:mobileOpen={mobileNavOpen}
+    isPlatformAdmin={Boolean(data.user?.platformAdmin)}
+    adminMode={adminMode}
+    onToggleAdminMode={toggleAdminMode}
+    onLogout={logout}
     labels={{
       ariaLabel: tr('nav.dashboard'),
       subtitle: adminMode ? tr('admin.shell') : tr('shell.productSubtitle'),
       settings: tr('nav.settingsGroup'),
-      admin: tr('nav.admin')
+      admin: tr('nav.admin'),
+      adminMode: tr('nav.adminMode'),
+      exitAdmin: tr('nav.exitAdmin'),
+      signOut: tr('shell.signOut'),
+      search: tr('shell.search'),
+      noResults: tr('common.noResults')
     }}
   />
 
-  <div class="flex min-w-0 flex-1 flex-col md:pl-[76px]">
+  <div class="flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
     <Topbar
       title={data.workspace?.name ?? 'Flowboard'}
       showSearch={false}
@@ -334,27 +367,39 @@
       themeLabels={themeLabels}
     >
       {#snippet heading()}
-        {#if canSwitchWorkspace}
-          <DropdownMenu items={workspaceMenuItems} align="start" label={tr('shell.chooseWorkspace')}>
-            {#snippet trigger({ open, toggle })}
-              <button
-                type="button"
-                onclick={toggle}
-                class="flex max-w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-                aria-expanded={open}
-                aria-label={tr('shell.switchWorkspace')}
-                disabled={switchingWorkspace}
-              >
-                <span class="ds-section-title truncate text-ink">
-                  {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'Flowboard')}
-                </span>
-                <HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8} class="shrink-0 text-mute" />
-              </button>
-            {/snippet}
-          </DropdownMenu>
-        {:else}
-          <h2 class="ds-section-title text-ink">{data.workspace?.name ?? 'Flowboard'}</h2>
-        {/if}
+        <div class="flex items-center gap-2">
+          <!-- Mobile Menu Button -->
+          <button
+            type="button"
+            onclick={() => (mobileNavOpen = true)}
+            class="flex size-9 items-center justify-center rounded-lg text-mute transition-colors hover:bg-canvas-sunken hover:text-ink md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+            aria-label="Open menu"
+          >
+            <HugeiconsIcon icon={Menu01Icon} size={20} strokeWidth={2} />
+          </button>
+
+          {#if canSwitchWorkspace}
+            <DropdownMenu items={workspaceMenuItems} align="start" label={tr('shell.chooseWorkspace')}>
+              {#snippet trigger({ open, toggle })}
+                <button
+                  type="button"
+                  onclick={toggle}
+                  class="flex max-w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                  aria-expanded={open}
+                  aria-label={tr('shell.switchWorkspace')}
+                  disabled={switchingWorkspace}
+                >
+                  <span class="ds-section-title truncate text-ink">
+                    {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'Flowboard')}
+                  </span>
+                  <HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8} class="shrink-0 text-mute" />
+                </button>
+              {/snippet}
+            </DropdownMenu>
+          {:else}
+            <h2 class="ds-section-title text-ink">{data.workspace?.name ?? 'Flowboard'}</h2>
+          {/if}
+        </div>
       {/snippet}
       {#snippet actions()}
         {#if data.user?.platformAdmin}

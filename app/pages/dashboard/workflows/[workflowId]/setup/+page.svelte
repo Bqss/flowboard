@@ -34,6 +34,8 @@
     Edit02Icon,
     Settings01Icon,
     KanbanIcon,
+    DashboardSquare02Icon,
+    Layers01Icon,
     ArrowUp01Icon,
     ArrowDown01Icon,
     Clock01Icon,
@@ -45,7 +47,6 @@
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import type { LayoutData } from '../../../$types';
-
   let { data }: { data: LayoutData } = $props();
 
   const tr = (key: string, values?: Record<string, string | number>) =>
@@ -638,93 +639,62 @@
 </script>
 
 <svelte:head>
-  <title>{tr('setup.title')} {workflow?.name ?? tr('common.workflow')} — Flowboard</title>
+  <title>{workflow?.name ?? tr('board.title')} — Flowboard</title>
 </svelte:head>
 
-<div data-theme="app" class="space-y-6 pb-12">
+<div class="space-y-6 pb-12">
   <!-- Top Navigation & Header -->
-  <header class="space-y-4">
+  <header class="space-y-3">
     <Breadcrumb
       items={[
         { label: tr('common.workflows'), href: '/dashboard/workflows' },
-        { label: workflow?.name ?? tr('common.workflow'), href: `/dashboard/workflows/${workflowId}` },
-        { label: tr('setup.breadcrumb') }
+        { label: workflow?.name ?? tr('board.title') }
       ]}
       showHomeIcon
     />
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="space-y-1">
-        <h1 class="ds-page-title text-ink font-extrabold tracking-tight">
-          {workflow?.name ?? tr('setup.workflowFallback')}
+        <h1 class="ds-page-title text-ink tracking-tight">
+          {workflow?.name ?? tr('board.title')}
         </h1>
-        <p class="ds-caption text-mute max-w-2xl text-sm">
-          {tr('setup.description')}
+        <p class="ds-caption text-mute">
+          {tr('board.description')}{#if workflow?.ownerName} · {tr('common.pic')}: <span class="font-medium text-ink-soft">{workflow.ownerName}</span>{/if}
         </p>
-
-        {#if assignedMembers.length > 0}
-          <div class="flex flex-wrap items-center gap-2 pt-1">
-            <span class="text-xs font-semibold text-mute">{tr('setup.autoAssignee', { count: assignedMembers.length })}:</span>
-            <div class="flex flex-wrap items-center gap-1.5">
-              {#each assignedMembers as member (member.id)}
-                {@const isPrimary = defaultAssigneeId === member.id}
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-card border border-hairline/80 px-2.5 py-0.5 text-xs font-medium text-ink shadow-xs">
-                  <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={16} />
-                  <span>{member.name}</span>
-                  {#if isPrimary && assignedMembers.length > 1}
-                    <span class="rounded bg-primary/10 px-1 text-[9px] font-bold text-primary">
-                      {tr('setup.primary')}
-                    </span>
-                  {/if}
-                </span>
-              {/each}
-              {#if assignedMembers.length > 1}
-                <Badge tone="queued" variant="soft" class="text-[10px] font-semibold py-0.5">
-                  {tr('setup.roundRobin')}
-                </Badge>
-              {/if}
-            </div>
-          </div>
-        {/if}
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center gap-2.5">
-        <Button
-          variant="secondary"
-          size="md"
-          href={`/dashboard/workflows/${workflowId}`}
-        >
-          <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
-          <span>{tr('setup.viewBoard')}</span>
-        </Button>
-
+      <div class="flex flex-wrap items-center gap-2.5">
         {#if canManage}
-          <Button
-            variant="primary"
-            size="md"
-            loading={savingSetupChanges}
-            disabled={!hasUnsavedSetupChanges || savingSetupChanges}
-            onclick={() => saveSetupChanges()}
-          >
-            <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
-            <span>{tr('setup.saveChanges')}</span>
-          </Button>
+          {#if hasUnsavedSetupChanges}
+            <Button
+              variant="primary"
+              size="sm"
+              loading={savingSetupChanges}
+              onclick={() => saveSetupChanges()}
+              class="shadow-xs"
+            >
+              <HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={1.8} />
+              <span>{tr('setup.saveChanges')}</span>
+            </Button>
+          {/if}
+
           <Button
             variant="secondary"
-            size="md"
+            size="sm"
             onclick={() => (settingsOpen = true)}
           >
-            <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
-            <span>{tr('common.settings')}</span>
+            <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
+            <span>{tr('setup.workflowSettings')}</span>
           </Button>
 
           <Button
             variant="primary"
-            size="md"
+            size="sm"
             onclick={() => (createStageOpen = true)}
+            class="shadow-xs"
           >
-            <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
+            <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
             <span>{tr('setup.addStage')}</span>
           </Button>
         {/if}
@@ -741,6 +711,46 @@
       </div>
     {/if}
   </header>
+
+  <!-- PRIMARY 4-TAB BAR -->
+  <div class="flex items-center justify-between border-b border-hairline">
+    <div class="flex items-center gap-1 -mb-px overflow-x-auto">
+      <!-- Tab 1: Statistik -->
+      <a
+        href="/dashboard/workflows/{workflowId}"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+      >
+        <HugeiconsIcon icon={DashboardSquare02Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.stats')}</span>
+      </a>
+
+      <!-- Tab 2: Kanban Board -->
+      <a
+        href="/dashboard/workflows/{workflowId}?tab=kanban"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+      >
+        <HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.kanban')}</span>
+      </a>
+
+      <!-- Tab 3: Table List -->
+      <a
+        href="/dashboard/workflows/{workflowId}?tab=table"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+      >
+        <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.table')}</span>
+      </a>
+
+      <!-- Tab 4: Setup Stages (Active) -->
+      <div
+        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-primary text-primary transition-all cursor-default whitespace-nowrap"
+      >
+        <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.setupStages')}</span>
+      </div>
+    </div>
+  </div>
 
   {#if loadingData}
     <!-- Skeleton Loading Screen (matching 320px lanes) -->

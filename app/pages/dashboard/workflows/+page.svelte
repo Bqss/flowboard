@@ -3,11 +3,31 @@
   import { api, ApiError, type ApiWorkflow, type ApiWorkflowDraft, type ApiWorkspaceMember } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Badge, Button, Input, Skeleton } from '$lib/components/atoms/index.js';
-  import { FormField, EmptyStateBlock, Breadcrumb, MultiSelectCombobox, toast, type MultiSelectOption } from '$lib/components/molecules/index.js';
+  import { Avatar, Badge, Button, Input, Skeleton, Tooltip } from '$lib/components/atoms/index.js';
+  import {
+    FormField,
+    EmptyStateBlock,
+    Breadcrumb,
+    MultiSelectCombobox,
+    toast,
+    type MultiSelectOption
+  } from '$lib/components/molecules/index.js';
   import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
-  import { Add01Icon, KanbanIcon, AiMagicIcon, Edit02Icon, Delete02Icon, Copy01Icon } from '@hugeicons/core-free-icons';
+  import {
+    Add01Icon,
+    KanbanIcon,
+    AiMagicIcon,
+    Edit02Icon,
+    Delete02Icon,
+    Copy01Icon,
+    Settings01Icon,
+    ArrowRight01Icon,
+    UserGroupIcon,
+    Search01Icon,
+    Cancel01Icon,
+    WorkflowSquare01Icon
+  } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../$types';
 
   let { data }: { data: LayoutData } = $props();
@@ -78,6 +98,7 @@
   let loadingData = $state(true);
   let workflows = $state<ApiWorkflow[]>([]);
   let members = $state<ApiWorkspaceMember[]>([]);
+  let workflowSearch = $state('');
 
   let editingWorkflow = $state<ApiWorkflow | null>(null);
   let editWorkflowOpen = $state(false);
@@ -97,6 +118,21 @@
       avatarUrl: member.avatarUrl ?? undefined,
       role: member.role === 'owner' ? tr('common.owner') : tr('common.member')
     }))
+  );
+
+  const filteredWorkflows = $derived(
+    workflowSearch.trim()
+      ? workflows.filter((wf) => {
+          const query = workflowSearch.trim().toLowerCase();
+          const nameMatch = wf.name.toLowerCase().includes(query);
+          const ownerMatch = (wf.ownerName ?? '').toLowerCase().includes(query);
+          const assigneeMatch = (wf.defaultAssigneeIds ?? []).some((id) => {
+            const m = members.find((mem) => mem.id === id);
+            return m && m.name.toLowerCase().includes(query);
+          });
+          return nameMatch || ownerMatch || assigneeMatch;
+        })
+      : workflows
   );
 
   const canManageWorkflow = (workflow: ApiWorkflow) =>
@@ -249,11 +285,14 @@
       deletingWorkflow = false;
     }
   }
+
 </script>
 
 <svelte:head><title>{tr('common.workflows')} — Flowboard</title></svelte:head>
 
-<div class="space-y-8">
+
+<div class="space-y-6">
+  <!-- PAGE HEADER -->
   <header class="space-y-3">
     <Breadcrumb
       items={[
@@ -262,28 +301,68 @@
       ]}
       showHomeIcon
     />
-    <div class="flex flex-wrap items-start justify-between gap-4 pt-1">
+    <div class="flex flex-wrap items-center justify-between gap-4 pt-1">
       <div>
         <h1 class="ds-page-title text-ink">{tr('common.workflows')}</h1>
         <p class="ds-caption mt-1 text-mute">{tr('workflows.description')}</p>
       </div>
-      <Button variant="primary" onclick={openChooser}>
-        <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
+      <Button variant="primary" onclick={openChooser} class="shadow-xs">
+        <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={2} />
         <span>{tr('workflows.create')}</span>
       </Button>
     </div>
   </header>
 
+  <!-- TOOLBAR: SEARCH & COUNT -->
+  {#if !loadingData && workflows.length > 0}
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-hairline pb-4">
+      <div class="relative w-full max-w-sm">
+        <HugeiconsIcon
+          icon={Search01Icon}
+          size={15}
+          strokeWidth={1.8}
+          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+        />
+        <input
+          type="text"
+          bind:value={workflowSearch}
+          placeholder={tr('common.search') + '…'}
+          class="h-9 w-full rounded-xl border border-hairline bg-card pl-9 pr-8 text-xs text-ink placeholder:text-mute/70 shadow-xs transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+        />
+        {#if workflowSearch}
+          <button
+            type="button"
+            onclick={() => (workflowSearch = '')}
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 flex size-4 items-center justify-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink"
+            aria-label="Clear search"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={2} />
+          </button>
+        {/if}
+      </div>
+
+      <div class="text-xs text-mute font-medium">
+        <span>{filteredWorkflows.length} {filteredWorkflows.length === 1 ? 'workflow' : 'workflows'}</span>
+      </div>
+    </div>
+  {/if}
+
+  <!-- CONTENT GRID -->
   {#if loadingData}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {#each [1, 2, 3] as _i}
-        <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
-          <Skeleton shape="rect" class="h-1 w-7 rounded-full" />
-          <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
-          <Skeleton shape="rect" class="h-4 w-24 rounded-md" />
-          <div class="flex gap-2 pt-2">
-            <Skeleton shape="rect" class="h-8 flex-1 rounded-full" />
-            <Skeleton shape="rect" class="h-8 w-16 rounded-full" />
+        <div class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 space-y-5 shadow-card">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <Skeleton shape="rect" class="size-10 rounded-xl" />
+              <Skeleton shape="rect" class="size-6 rounded-lg" />
+            </div>
+            <Skeleton shape="rect" class="h-5 w-40 rounded-md" />
+            <Skeleton shape="rect" class="h-4 w-28 rounded-md" />
+          </div>
+          <div class="border-t border-hairline pt-3 flex justify-between items-center">
+            <Skeleton shape="rect" class="h-8 w-20 rounded-lg" />
+            <Skeleton shape="rect" class="h-8 w-28 rounded-lg" />
           </div>
         </div>
       {/each}
@@ -295,49 +374,142 @@
       actionLabel={tr('workflows.create')}
       onaction={openChooser}
     />
+  {:else if filteredWorkflows.length === 0}
+    <div class="rounded-2xl border border-hairline bg-card p-10 text-center space-y-3 shadow-card">
+      <HugeiconsIcon icon={Search01Icon} size={32} strokeWidth={1.5} class="mx-auto text-faint" />
+      <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
+      <p class="ds-caption text-mute">Tidak ada workflow yang cocok dengan kata kunci "{workflowSearch}".</p>
+      <Button variant="secondary" size="sm" onclick={() => (workflowSearch = '')}>
+        {tr('common.clearSearch')}
+      </Button>
+    </div>
   {:else}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {#each workflows as workflow (workflow.id)}
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {#each filteredWorkflows as workflow (workflow.id)}
         {@const assigned = (workflow.defaultAssigneeIds ?? [])
           .map((id) => members.find((m) => m.id === id))
           .filter((m): m is ApiWorkspaceMember => Boolean(m))}
-        <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
-          <div>
-            <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
-            <h2 class="ds-section-title text-ink">{workflow.name}</h2>
-            <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-mute">
-              <span>{tr('workflows.pic')}</span>
-              {#if assigned.length > 0}
-                <span class="font-medium text-ink truncate max-w-[180px]">
-                  {assigned.map(m => m.name).join(', ')}
-                </span>
-                {#if assigned.length > 1}
-                  <Badge tone="queued" variant="soft" class="text-[10px] py-0 px-1.5">
-                    {tr('workflows.picCount', { count: assigned.length })}
-                  </Badge>
+        {@const canManage = canManageWorkflow(workflow)}
+
+        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover">
+          <!-- TOP SECTION -->
+          <div class="space-y-3.5">
+            <div class="flex items-start justify-between gap-3">
+              <!-- ICON BADGE & TITLE -->
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                  <HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <a
+                    href="/dashboard/workflows/{workflow.id}"
+                    class="block truncate text-base font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
+                    title={workflow.name}
+                  >
+                    {workflow.name}
+                  </a>
+                  {#if workflow.createdAt}
+                    <span class="block text-[11px] text-faint">
+                      {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  {/if}
+                </div>
+              </div>
+
+              <!-- DIRECT MANAGEMENT ICON ACTIONS (EDIT & DELETE) -->
+              {#if canManage}
+                <div class="flex items-center gap-1 shrink-0">
+                  <Tooltip text={tr('common.edit')} side="top">
+                    <button
+                      type="button"
+                      onclick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openEditWorkflow(workflow);
+                      }}
+                      class="flex size-8 items-center justify-center rounded-lg text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                      aria-label={tr('common.edit')}
+                    >
+                      <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
+                    </button>
+                  </Tooltip>
+
+                  <Tooltip text={tr('common.delete')} side="top">
+                    <button
+                      type="button"
+                      onclick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openDeleteWorkflow(workflow);
+                      }}
+                      class="flex size-8 items-center justify-center rounded-lg text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                      aria-label={tr('common.delete')}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                    </button>
+                  </Tooltip>
+                </div>
+              {/if}
+            </div>
+
+            <!-- ASSIGNEES / PIC INFO -->
+            <div class="rounded-xl bg-canvas-sunken/60 p-2.5 flex items-center justify-between gap-2 border border-hairline/60">
+              <div class="flex items-center gap-2 min-w-0">
+                {#if assigned.length > 0}
+                  <div class="flex items-center -space-x-2 shrink-0">
+                    {#each assigned.slice(0, 3) as member (member.id)}
+                      <Tooltip text={member.name} side="top">
+                        <div class="ring-2 ring-card rounded-full overflow-hidden">
+                          <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={24} />
+                        </div>
+                      </Tooltip>
+                    {/each}
+                    {#if assigned.length > 3}
+                      <div class="flex size-6 items-center justify-center rounded-full bg-lane ring-2 ring-card text-[10px] font-bold text-ink">
+                        +{assigned.length - 3}
+                      </div>
+                    {/if}
+                  </div>
+                  <span class="truncate font-medium text-ink text-xs">
+                    {assigned.map(m => m.name).slice(0, 2).join(', ')}{assigned.length > 2 ? ` (+${assigned.length - 2})` : ''}
+                  </span>
+                {:else}
+                  <div class="flex items-center gap-1.5 text-mute text-xs">
+                    <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={1.8} class="text-faint" />
+                    <span>{workflow.ownerName ?? tr('common.unassigned')}</span>
+                  </div>
                 {/if}
-              {:else}
-                <span>{workflow.ownerName ?? '—'}</span>
+              </div>
+
+              {#if assigned.length > 0}
+                <Badge tone="queued" variant="soft" class="text-[10px] font-semibold py-0.5 px-2 shrink-0">
+                  {tr('workflows.picCount', { count: assigned.length })}
+                </Badge>
               {/if}
             </div>
           </div>
-          <div class="mt-5 flex flex-wrap items-center gap-2 pt-2">
-            {#if canManageWorkflow(workflow)}
-              <Button variant="secondary" size="sm" onclick={() => openEditWorkflow(workflow)}>
-                <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
-                <span>{tr('common.edit')}</span>
-              </Button>
-              <Button variant="destructive" size="sm" onclick={() => openDeleteWorkflow(workflow)}>
-                <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
-                <span>{tr('common.delete')}</span>
-              </Button>
-            {/if}
-            <Button href="/dashboard/workflows/{workflow.id}" variant="primary" size="sm">
-              <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
-              <span>{tr('workflows.openBoard')}</span>
+
+          <!-- FOOTER ACTIONS -->
+          <div class="mt-5 flex items-center justify-between border-t border-hairline pt-3.5">
+            <Button
+              href="/dashboard/workflows/{workflow.id}/setup"
+              variant="secondary"
+              size="sm"
+              class="gap-1.5 text-xs text-mute hover:text-ink"
+            >
+              <HugeiconsIcon icon={Settings01Icon} size={14} strokeWidth={1.8} />
+              <span>{tr('workflows.setup')}</span>
             </Button>
-            <Button href="/dashboard/workflows/{workflow.id}/setup" variant="secondary" size="sm">
-              {tr('workflows.setup')}
+
+            <Button
+              href="/dashboard/workflows/{workflow.id}"
+              variant="primary"
+              size="sm"
+              class="gap-1.5 shadow-xs"
+            >
+              <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} />
+              <span>{tr('workflows.openBoard')}</span>
+              <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2.2} class="transition-transform group-hover:translate-x-0.5" />
             </Button>
           </div>
         </article>
@@ -346,23 +518,28 @@
   {/if}
 </div>
 
+<!-- WORKFLOW CREATION MODALS -->
 <Dialog bind:open={chooseOpen} title={tr('workflows.chooseTitle')} description={tr('workflows.chooseDescription')}>
   <div class="grid gap-3 sm:grid-cols-3">
     <button
       type="button"
       onclick={startManual}
-      class="rounded-xl border border-hairline bg-card p-4 text-left shadow-card transition-all hover:border-primary-border hover:shadow-card-hover"
+      class="group rounded-xl border border-hairline bg-card p-4 text-left shadow-card transition-all hover:border-primary-border hover:shadow-card-hover"
     >
-      <HugeiconsIcon icon={Edit02Icon} size={22} strokeWidth={1.8} class="text-primary" />
+      <div class="flex size-9 items-center justify-center rounded-lg bg-primary-soft text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+        <HugeiconsIcon icon={Edit02Icon} size={20} strokeWidth={1.8} />
+      </div>
       <p class="mt-3 font-semibold text-ink">{tr('workflows.manual')}</p>
       <p class="ds-caption mt-1 text-mute">{tr('workflows.manualDescription')}</p>
     </button>
     <button
       type="button"
       onclick={startAi}
-      class="rounded-xl border border-primary/30 bg-primary-soft/30 p-4 text-left shadow-card transition-all hover:border-primary hover:shadow-card-hover"
+      class="group rounded-xl border border-primary/30 bg-primary-soft/30 p-4 text-left shadow-card transition-all hover:border-primary hover:shadow-card-hover"
     >
-      <HugeiconsIcon icon={AiMagicIcon} size={22} strokeWidth={1.8} class="text-primary" />
+      <div class="flex size-9 items-center justify-center rounded-lg bg-primary text-white shadow-xs">
+        <HugeiconsIcon icon={AiMagicIcon} size={20} strokeWidth={1.8} />
+      </div>
       <p class="mt-3 font-semibold text-ink">{tr('workflows.aiSetup')}</p>
       <p class="ds-caption mt-1 text-mute">{tr('workflows.aiDescription')}</p>
     </button>
@@ -370,9 +547,11 @@
       type="button"
       onclick={createExampleWorkflow}
       disabled={loading}
-      class="rounded-xl border border-status-done/30 bg-status-done-soft/30 p-4 text-left shadow-card transition-all hover:border-status-done hover:shadow-card-hover disabled:cursor-not-allowed disabled:opacity-50"
+      class="group rounded-xl border border-status-done/30 bg-status-done-soft/30 p-4 text-left shadow-card transition-all hover:border-status-done hover:shadow-card-hover disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <HugeiconsIcon icon={Copy01Icon} size={22} strokeWidth={1.8} class="text-status-done-ink" />
+      <div class="flex size-9 items-center justify-center rounded-lg bg-status-done-soft text-status-done-strong group-hover:bg-status-done group-hover:text-white transition-colors">
+        <HugeiconsIcon icon={Copy01Icon} size={20} strokeWidth={1.8} />
+      </div>
       <p class="mt-3 font-semibold text-ink">{tr('workflows.example')}</p>
       <p class="ds-caption mt-1 text-mute">{tr('workflows.exampleDescription')}</p>
     </button>

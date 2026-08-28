@@ -32,21 +32,21 @@
 	const tag = $derived(href ? 'a' : 'button');
 
 	const base =
-		'group relative inline-flex shrink-0 items-center transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]';
+		'group relative inline-flex shrink-0 items-center transition-all duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]';
 
 	const shape = $derived(
 		variant === 'rail'
 			? cn(
-					'size-10 justify-center rounded-full [&_svg]:size-5',
+					'size-10 justify-center rounded-xl [&_svg]:size-5',
 					active
-						? 'bg-primary-soft text-primary'
-						: 'text-faint hover:bg-lane hover:text-body'
+						? 'bg-primary-soft text-primary shadow-xs'
+						: 'text-mute hover:bg-lane/80 hover:text-ink'
 				)
 			: cn(
-					'ds-nav h-10 w-full gap-3 rounded-md px-3 [&_svg]:size-[18px]',
+					'h-9 w-full gap-3 rounded-lg px-2.5 text-[13.5px] font-medium leading-none [&_svg]:size-[18px]',
 					active
-						? 'bg-primary-soft font-semibold text-primary'
-						: 'text-mute hover:bg-primary-soft/60 hover:text-ink'
+						? 'bg-primary-soft text-primary font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r-full before:bg-primary'
+						: 'text-mute hover:bg-lane/80 hover:text-ink'
 				)
 	);
 </script>
@@ -74,10 +74,12 @@
 	{#if badge !== undefined && badge !== ''}
 		<span
 			class={cn(
-				'ds-caption grid place-items-center rounded-full bg-status-urgent px-1.5 text-white',
+				'ds-caption grid place-items-center rounded-full text-center font-bold tracking-tight',
 				variant === 'rail'
-					? 'absolute -top-0.5 -right-0.5 min-w-4 border-2 border-card leading-4'
-					: 'min-w-5 py-0.5'
+					? 'absolute -top-0.5 -right-0.5 min-w-4 border-2 border-card bg-status-urgent px-1 text-[10px] text-white leading-4'
+					: active
+						? 'ml-auto min-w-5 bg-primary/15 px-2 py-0.5 text-[11px] text-primary'
+						: 'ml-auto min-w-5 bg-lane px-2 py-0.5 text-[11px] text-mute'
 			)}
 		>
 			{badge}

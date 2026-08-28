@@ -285,7 +285,7 @@
 
   <ShowcaseSection id="chrome" title="App chrome" description="Sidebar, topbar, bottom tabs, command palette, notifications.">
     <div class="flex flex-col gap-6 lg:flex-row">
-      <SidebarRail items={navItems} userName="Admin" class="!relative !flex !h-80 !w-[76px] shrink-0 !z-0" />
+      <SidebarRail items={navItems} userName="Admin" workspaceName="Acme Corp" class="!relative !flex !h-[420px] shrink-0 !z-0 rounded-card overflow-hidden border border-hairline shadow-card" />
       <div class="min-w-0 flex-1 overflow-hidden rounded-card border border-hairline bg-canvas-sunken">
         <Topbar title="Executive Dashboard" subtitle="Signed in as Admin" eyebrow="Flowboard" searchPlaceholder="Search board…" />
         <div class="border-t border-hairline p-6">

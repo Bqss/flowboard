@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { cn } from '$lib/utils.js';
   import {
     api,
     ApiError,
@@ -38,6 +39,7 @@
     Upload04Icon,
     Settings01Icon,
     KanbanIcon,
+    DashboardSquare02Icon,
     CheckmarkCircle02Icon,
     CheckListIcon,
     ArrowRight01Icon,
@@ -51,7 +53,6 @@
   } from '@hugeicons/core-free-icons';
   import type { KanbanColumn } from '$lib/components/organisms/shared.js';
   import type { LayoutData } from '../../$types';
-
   let { data }: { data: LayoutData } = $props();
 
   const tr = (key: string, values?: Record<string, string | number>) =>
@@ -69,13 +70,22 @@
   // Workflow statistics
   let stats = $state<ApiWorkflowStats | null>(null);
   let statsLoading = $state(false);
+  // Primary 4 tabs: stats (default) | kanban | table (setup links to /setup)
+  let activeTab = $state<'stats' | 'kanban' | 'table'>('stats');
 
-  // View mode: kanban board vs table list
-  let viewMode = $state<'board' | 'table'>('board');
+  $effect(() => {
+    const urlTab = page.url.searchParams.get('tab');
+    if (urlTab === 'kanban') {
+      activeTab = 'kanban';
+    } else if (urlTab === 'table') {
+      activeTab = 'table';
+    } else if (urlTab === 'stats') {
+      activeTab = 'stats';
+    }
+  });
   let searchQuery = $state('');
   let selectedMemberFilter = $state<string>('all');
   let selectedTagFilter = $state<string>('all');
-
   // Sheet / Card detail state
   let selectedCardId = $state<string | null>(null);
   let isSheetOpen = $derived(selectedCardId !== null);
@@ -534,21 +544,12 @@
 
       <!-- Action Buttons Cluster -->
       <div class="flex flex-wrap items-center gap-2.5">
-        <Button
-          href="/dashboard/workflows/{workflowId}/setup"
-          variant="secondary"
-          size="sm"
-        >
-          <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
-          <span>{tr('board.setupStages')}</span>
-        </Button>
-
         <Button variant="secondary" size="sm" onclick={() => (importOpen = true)}>
           <HugeiconsIcon icon={Upload04Icon} size={16} strokeWidth={1.8} />
           <span>{tr('board.importCsv')}</span>
         </Button>
 
-        <Button variant="primary" size="sm" onclick={openCreateModal}>
+        <Button variant="primary" size="sm" onclick={openCreateModal} class="shadow-xs">
           <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
           <span>{tr('board.addCustomer')}</span>
         </Button>
@@ -556,366 +557,400 @@
     </div>
   </header>
 
-  {#if stats && !loadingData}
-    <section class="space-y-4">
-      <h2 class="ds-section-title text-ink">{tr('board.stats')}</h2>
-
-      <!-- Totals: 4 stat cards -->
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label={tr('board.statsActive')}
-          value={String(stats.totals.active)}
-          class="p-5 rounded-2xl"
-        >
-          {#snippet icon()}
-            <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
-          {/snippet}
-        </StatCard>
-        <StatCard
-          label={tr('board.statsWaiting')}
-          value={String(stats.totals.waiting)}
-          class="p-5 rounded-2xl"
-        >
-          {#snippet icon()}
-            <HugeiconsIcon icon={AlertCircleIcon} size={18} strokeWidth={1.8} />
-          {/snippet}
-        </StatCard>
-        <StatCard
-          label={tr('board.statsOverdue')}
-          value={String(stats.totals.overdue)}
-          class="p-5 rounded-2xl"
-        >
-          {#snippet icon()}
-            <HugeiconsIcon icon={ClockAlertIcon} size={18} strokeWidth={1.8} />
-          {/snippet}
-        </StatCard>
-        <StatCard
-          label={tr('board.statsDone')}
-          value={String(stats.totals.done)}
-          class="p-5 rounded-2xl"
-        >
-          {#snippet icon()}
-            <HugeiconsIcon icon={CheckmarkCircle02Icon} size={18} strokeWidth={1.8} />
-          {/snippet}
-        </StatCard>
-      </div>
-
-      <!-- Breakdown: by stage + by assignee -->
-      <div class="grid gap-4 lg:grid-cols-2">
-        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
-          <h3 class="ds-label text-ink">{tr('board.statsByStage')}</h3>
-          <div class="space-y-2">
-            {#each stats.byStage as stage (stage.stageId)}
-              <div class="flex items-center justify-between gap-3 text-sm">
-                <span class="min-w-0 truncate text-ink-soft">{stage.stageName}</span>
-                <div class="flex shrink-0 items-center gap-3">
-                  <span class="font-semibold text-ink">{stage.total}</span>
-                  {#if stage.overdue > 0}
-                    <Badge tone="urgent">{stage.overdue} {tr('board.statsOverdue')}</Badge>
-                  {/if}
-                </div>
-              </div>
-            {/each}
-          </div>
-        </div>
-
-        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
-          <div class="flex items-center gap-2">
-            <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} class="text-mute" />
-            <h3 class="ds-label text-ink">{tr('board.statsByAssignee')}</h3>
-          </div>
-          <div class="space-y-2">
-            {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
-              <div class="flex items-center justify-between gap-3 text-sm">
-                <span class="min-w-0 truncate text-ink-soft">
-                  {assignee.assigneeName ?? tr('board.statsUnassigned')}
-                </span>
-                <div class="flex shrink-0 items-center gap-2">
-                  <Badge tone="progress">{assignee.active} {tr('board.statsActive')}</Badge>
-                  {#if assignee.waiting > 0}
-                    <Badge tone="urgent">{assignee.waiting} {tr('board.statsWaiting')}</Badge>
-                  {/if}
-                  {#if assignee.overdue > 0}
-                    <Badge tone="urgent">{assignee.overdue} {tr('board.statsOverdue')}</Badge>
-                  {/if}
-                  {#if assignee.done > 0}
-                    <Badge tone="done">{assignee.done} {tr('board.statsDone')}</Badge>
-                  {/if}
-                </div>
-              </div>
-            {/each}
-          </div>
-        </div>
-      </div>
-
-      <!-- Activity over time -->
-      <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
-        <div class="flex items-center gap-2">
-          <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={1.8} class="text-mute" />
-          <h3 class="ds-label text-ink">{tr('board.statsByTime')}</h3>
-        </div>
-        <div class="grid gap-3 sm:grid-cols-3">
-          {#each stats.byTime as bucket (bucket.bucket)}
-            <div class="rounded-xl border border-hairline bg-lane/40 p-4 text-sm">
-              <p class="ds-caption text-mute">
-                {bucket.bucket === '7d' ? tr('board.statsLast7d') : bucket.bucket === '30d' ? tr('board.statsLast30d') : tr('board.statsLast90d')}
-              </p>
-              <div class="mt-2 flex items-center justify-between">
-                <div>
-                  <p class="ds-caption text-mute">{tr('board.statsCreated')}</p>
-                  <p class="ds-stat text-ink">{bucket.created}</p>
-                </div>
-                <div>
-                  <p class="ds-caption text-mute">{tr('board.statsCompleted')}</p>
-                  <p class="ds-stat text-ink">{bucket.completed}</p>
-                </div>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </div>
-    </section>
-  {/if}
-
-  <!-- Clean View Controls & Filter Toolbar -->
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-hairline pb-3">
-    <!-- View Switcher Tabs -->
-    <Tabs
-      variant="underline"
-      bind:value={viewMode}
-      items={[
-        {
-          value: 'board',
-          label: tr('board.kanban'),
-          icon: kanbanIconSnippet
-        },
-        {
-          value: 'table',
-          label: tr('board.table'),
-          icon: tableIconSnippet,
-          badge: totalCards > 0 ? String(totalCards) : undefined
-        }
-      ]}
-      class="border-b-0"
-    />
-
-    <!-- Search & Filters -->
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="w-full sm:w-60">
-        <SearchInput
-          bind:value={searchQuery}
-          placeholder={tr('board.search')}
-          size="sm"
-          submit={false}
-        />
-      </div>
-
-      <select
-        bind:value={selectedMemberFilter}
-        class="h-8.5 rounded-full border border-hairline bg-card px-3 text-xs font-medium text-ink shadow-control outline-none transition-colors hover:border-hairline-strong focus:border-primary focus:ring-2 focus:ring-primary/15"
-        aria-label={tr('board.filterAssignee')}
+  <!-- PRIMARY 4-TAB BAR -->
+  <div class="flex items-center justify-between border-b border-hairline">
+    <div class="flex items-center gap-1 -mb-px overflow-x-auto">
+      <!-- Tab 1: Statistik (Default) -->
+      <button
+        type="button"
+        onclick={() => {
+          activeTab = 'stats';
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('tab');
+            window.history.replaceState({}, '', url.toString());
+          }
+        }}
+        class={cn(
+          'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          activeTab === 'stats'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
+        )}
       >
-        <option value="all">{tr('board.allAssignees')}</option>
-        <option value="unassigned">{tr('board.unassigned')}</option>
-        {#each members as member (member.id)}
-          <option value={member.id}>{member.name}</option>
-        {/each}
-      </select>
+        <HugeiconsIcon icon={DashboardSquare02Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.stats')}</span>
+      </button>
 
-      {#if availableTags.length > 0}
-        <select
-          bind:value={selectedTagFilter}
-          class="h-8.5 rounded-full border border-hairline bg-card px-3 text-xs font-medium text-ink shadow-control outline-none transition-colors hover:border-hairline-strong focus:border-primary focus:ring-2 focus:ring-primary/15"
-          aria-label={tr('board.filterTag')}
-        >
-          <option value="all">{tr('board.allTags')}</option>
-          {#each availableTags as t (t)}
-            <option value={t}>{t}</option>
-          {/each}
-        </select>
-      {/if}
+      <!-- Tab 2: Kanban Board -->
+      <button
+        type="button"
+        onclick={() => {
+          activeTab = 'kanban';
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'kanban');
+            window.history.replaceState({}, '', url.toString());
+          }
+        }}
+        class={cn(
+          'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          activeTab === 'kanban'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
+        )}
+      >
+        <HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.kanban')}</span>
+        {#if totalCards > 0}
+          <span class={cn('rounded-full px-2 py-0.5 text-xs font-bold', activeTab === 'kanban' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
+            {totalCards}
+          </span>
+        {/if}
+      </button>
 
-      {#if isFilterActive}
-        <Button variant="ghost" size="sm" onclick={resetFilters} class="h-8.5 text-xs text-mute hover:text-ink">
-          {tr('board.resetFilter')}
-        </Button>
-      {/if}
+      <!-- Tab 3: Table List -->
+      <button
+        type="button"
+        onclick={() => {
+          activeTab = 'table';
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'table');
+            window.history.replaceState({}, '', url.toString());
+          }
+        }}
+        class={cn(
+          'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          activeTab === 'table'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
+        )}
+      >
+        <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.table')}</span>
+        {#if totalCards > 0}
+          <span class={cn('rounded-full px-2 py-0.5 text-xs font-bold', activeTab === 'table' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
+            {totalCards}
+          </span>
+        {/if}
+      </button>
+
+      <!-- Tab 4: Setup Stages -->
+      <a
+        href="/dashboard/workflows/{workflowId}/setup"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+      >
+        <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.setupStages')}</span>
+      </a>
     </div>
   </div>
 
-  <!-- Filter Active Summary notice -->
-  {#if isFilterActive}
-    <div class="flex items-center justify-between px-1 text-xs text-mute">
-      <span>
-        {tr('board.showing', { shown: totalFilteredCount, total: totalCards })}
-      </span>
-      <button
-        type="button"
-        onclick={resetFilters}
-        class="font-semibold text-primary hover:underline"
-      >
-        {tr('board.clearFilter')}
-      </button>
-    </div>
-  {/if}
+  <!-- TAB CONTENT -->
+  {#if activeTab === 'stats'}
+    {#if stats && !loadingData}
+      <section class="space-y-6 pt-2">
+        <h2 class="ds-section-title text-ink">{tr('board.stats')}</h2>
 
-  <!-- Main View Area: Board vs Table -->
-  {#if loadingData}
-    <div class="flex gap-4 overflow-x-auto pb-4">
-      {#each [1, 2, 3] as _i}
-        <div class="flex w-lane shrink-0 flex-col rounded-lane bg-lane p-4 space-y-3">
-          <div class="flex items-center justify-between">
-            <Skeleton shape="rect" class="h-6 w-28 rounded-md" />
-            <Skeleton shape="rect" class="h-6 w-12 rounded-full" />
-          </div>
-          <Skeleton shape="rect" class="h-11 w-full rounded-full bg-card" />
-          <Skeleton shape="rect" class="h-28 w-full rounded-xl bg-card shadow-card" />
-          <Skeleton shape="rect" class="h-28 w-full rounded-xl bg-card shadow-card" />
+        <!-- Totals: 4 stat cards -->
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label={tr('board.statsActive')}
+            value={String(stats.totals.active)}
+            class="p-5 rounded-2xl"
+          >
+            {#snippet icon()}
+              <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
+            {/snippet}
+          </StatCard>
+          <StatCard
+            label={tr('board.statsWaiting')}
+            value={String(stats.totals.waiting)}
+            class="p-5 rounded-2xl"
+          >
+            {#snippet icon()}
+              <HugeiconsIcon icon={AlertCircleIcon} size={18} strokeWidth={1.8} />
+            {/snippet}
+          </StatCard>
+          <StatCard
+            label={tr('board.statsOverdue')}
+            value={String(stats.totals.overdue)}
+            class="p-5 rounded-2xl"
+          >
+            {#snippet icon()}
+              <HugeiconsIcon icon={ClockAlertIcon} size={18} strokeWidth={1.8} />
+            {/snippet}
+          </StatCard>
+          <StatCard
+            label={tr('board.statsDone')}
+            value={String(stats.totals.done)}
+            class="p-5 rounded-2xl"
+          >
+            {#snippet icon()}
+              <HugeiconsIcon icon={CheckmarkCircle02Icon} size={18} strokeWidth={1.8} />
+            {/snippet}
+          </StatCard>
         </div>
-      {/each}
-    </div>
-  {:else if board.length === 0}
-    <EmptyStateBlock
-      title={tr('board.noStages')}
-      description={tr('board.noStagesDescription')}
-      actionLabel={tr('board.setupStageChecklist')}
-      onaction={() => (window.location.href = `/dashboard/workflows/${workflowId}/setup`)}
-    />
-  {:else if viewMode === 'board'}
-    <!-- Kanban Board View -->
-    {#if isFilterActive && totalFilteredCount === 0}
-      <div class="rounded-2xl border border-hairline bg-card p-12 text-center shadow-card">
-        <EmptyStateBlock
-          title={tr('board.noMatchingCustomers')}
-          description={tr('board.noMatchingDescription')}
-          actionLabel={tr('board.resetAllFilters')}
-          onaction={resetFilters}
-          class="!border-0 !shadow-none"
-        />
-      </div>
+
+        <!-- Breakdown: by stage + by assignee -->
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
+            <h3 class="ds-label text-ink font-semibold">{tr('board.statsByStage')}</h3>
+            <div class="space-y-2">
+              {#each stats.byStage as stage (stage.stageId)}
+                <div class="flex items-center justify-between gap-3 text-sm">
+                  <span class="min-w-0 truncate text-ink-soft">{stage.stageName}</span>
+                  <div class="flex shrink-0 items-center gap-3">
+                    <span class="font-semibold text-ink">{stage.total}</span>
+                    {#if stage.overdue > 0}
+                      <Badge tone="urgent">{stage.overdue} {tr('board.statsOverdue')}</Badge>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
+            <div class="flex items-center gap-2">
+              <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} class="text-mute" />
+              <h3 class="ds-label text-ink font-semibold">{tr('board.statsByAssignee')}</h3>
+            </div>
+            <div class="space-y-2">
+              {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
+                <div class="flex items-center justify-between gap-3 text-sm">
+                  <span class="min-w-0 truncate text-ink-soft">
+                    {assignee.assigneeName ?? tr('board.statsUnassigned')}
+                  </span>
+                  <div class="flex shrink-0 items-center gap-2">
+                    <Badge tone="progress">{assignee.active} {tr('board.statsActive')}</Badge>
+                    {#if assignee.waiting > 0}
+                      <Badge tone="urgent">{assignee.waiting} {tr('board.statsWaiting')}</Badge>
+                    {/if}
+                    {#if assignee.overdue > 0}
+                      <Badge tone="urgent">{assignee.overdue} {tr('board.statsOverdue')}</Badge>
+                    {/if}
+                    {#if assignee.done > 0}
+                      <Badge tone="done">{assignee.done} {tr('board.statsDone')}</Badge>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity over time -->
+        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
+          <div class="flex items-center gap-2">
+            <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={1.8} class="text-mute" />
+            <h3 class="ds-label text-ink font-semibold">{tr('board.statsByTime')}</h3>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            {#each stats.byTime as bucket (bucket.bucket)}
+              <div class="rounded-xl border border-hairline bg-lane/40 p-4 text-sm">
+                <p class="ds-caption text-mute">
+                  {bucket.bucket === '7d' ? tr('board.statsLast7d') : bucket.bucket === '30d' ? tr('board.statsLast30d') : tr('board.statsLast90d')}
+                </p>
+                <div class="mt-2 flex items-center justify-between">
+                  <div>
+                    <p class="ds-caption text-mute">{tr('board.statsCreated')}</p>
+                    <p class="ds-stat text-ink">{bucket.created}</p>
+                  </div>
+                  <div>
+                    <p class="ds-caption text-mute">{tr('board.statsCompleted')}</p>
+                    <p class="ds-stat text-ink">{bucket.completed}</p>
+                  </div>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </section>
     {:else}
-      <div class="w-full">
-        <KanbanBoard
-          columns={filteredColumns}
-          addLabel={tr('board.addCustomer')}
-          emptyTitle={tr('board.noMatchingCustomers')}
-          emptyDropHint={tr('board.dropCard')}
-          columnLabel={tr('board.column')}
-          waErrorLabel={tr('home.waError')}
-          dragEnabled={!boardMoveLoading}
-          oncardclick={openCard}
-          oncardmove={handleCardMove}
-          onadd={() => openCreateModal()}
-        />
+      <div class="flex h-64 items-center justify-center rounded-2xl border border-hairline bg-card p-8">
+        <Skeleton shape="rect" class="h-10 w-48 rounded-xl" />
       </div>
     {/if}
   {:else}
-    <!-- Data Table View -->
-    <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
-      {#if tableRows.length === 0}
-        <div class="p-8">
-          <EmptyStateBlock
-            title={tr('board.noData')}
-            description={tr('board.noDataDescription')}
-            actionLabel={tr('board.resetFilter')}
-            onaction={resetFilters}
-            class="!border-0 !shadow-none"
+    <!-- TAB 2 (KANBAN) OR TAB 3 (TABLE): FILTER BAR -->
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-hairline pb-3">
+      <!-- Search & Filters -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="w-full sm:w-60">
+          <SearchInput
+            bind:value={searchQuery}
+            placeholder={tr('board.searchPlaceholder')}
+            size="sm"
           />
         </div>
+
+        <!-- Member Filter Pill -->
+        {#if members.length > 0}
+          <select
+            bind:value={selectedMemberFilter}
+            class="h-8 rounded-lg border border-hairline bg-card px-2.5 text-xs text-ink shadow-control transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+            aria-label={tr('board.filterMember')}
+          >
+            <option value="all">{tr('board.allMembers')}</option>
+            <option value="unassigned">{tr('common.unassigned')}</option>
+            {#each members as member (member.id)}
+              <option value={member.id}>{member.name}</option>
+            {/each}
+          </select>
+        {/if}
+
+        <!-- Tag / WhatsApp Error Status Filter Pill -->
+        <select
+          bind:value={selectedTagFilter}
+          class="h-8 rounded-lg border border-hairline bg-card px-2.5 text-xs text-ink shadow-control transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+          aria-label={tr('board.filterStatus')}
+        >
+          <option value="all">{tr('board.allStatus')}</option>
+          <option value="needs_attention">{tr('home.needsAction')}</option>
+          <option value="wa_error">{tr('board.waError')}</option>
+          <option value="followup_stopped">{tr('board.followupStopped')}</option>
+          <option value="healthy">{tr('board.healthy')}</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Filter Active Summary notice -->
+    {#if isFilterActive}
+      <div class="flex items-center justify-between px-1 text-xs text-mute">
+        <span>
+          {tr('board.showingFiltered', { filtered: totalFilteredCount, total: totalCards })}
+        </span>
+        <button
+          type="button"
+          onclick={resetFilters}
+          class="text-primary hover:underline font-medium"
+        >
+          {tr('board.resetFilter')}
+        </button>
+      </div>
+    {/if}
+
+    <!-- Main View Area: Board vs Table -->
+    {#if loadingData}
+      <div class="flex gap-4 overflow-x-auto pb-4">
+        {#each [1, 2, 3] as _i}
+          <div class="w-80 shrink-0 rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-3">
+            <Skeleton shape="rect" class="h-5 w-24 rounded-md" />
+            <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
+            <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
+          </div>
+        {/each}
+      </div>
+    {:else if board.length === 0}
+      <EmptyStateBlock
+        title={tr('board.empty')}
+        description={tr('board.emptyDescription')}
+        actionLabel={tr('board.setupStages')}
+        onaction={() => (window.location.href = `/dashboard/workflows/${workflowId}/setup`)}
+      />
+    {:else if activeTab === 'kanban'}
+      <!-- Kanban Board View -->
+      {#if isFilterActive && totalFilteredCount === 0}
+        <div class="rounded-2xl border border-hairline bg-card p-12 text-center shadow-card">
+          <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
+          <p class="ds-caption mt-1 text-mute">{tr('board.noFilterResults')}</p>
+          <Button variant="secondary" size="sm" class="mt-4" onclick={resetFilters}>
+            {tr('board.resetFilter')}
+          </Button>
+        </div>
       {:else}
-        <div class="overflow-x-auto">
-          <table class="w-full border-collapse text-left text-sm">
-            <thead>
-              <tr class="border-b border-hairline bg-canvas-sunken text-xs font-semibold uppercase tracking-wider text-mute">
-                <th class="px-5 py-3.5">{tr('board.customers')}</th>
-                <th class="px-5 py-3.5">{tr('common.whatsapp')}</th>
-                <th class="px-5 py-3.5">{tr('board.productSource')}</th>
-                <th class="px-5 py-3.5">{tr('board.tagLabel')}</th>
-                <th class="px-5 py-3.5">{tr('board.currentStage')}</th>
-                <th class="px-5 py-3.5">{tr('common.pic')}</th>
-                <th class="px-5 py-3.5">{tr('common.checklist')}</th>
-                <th class="px-5 py-3.5 text-right">{tr('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-hairline">
-              {#each tableRows as row (row.id)}
-                {@const isDone = row.checklistTotal > 0 && row.checklistDone === row.checklistTotal}
-                <tr class="transition-colors hover:bg-canvas-sunken/60">
-                  <td class="px-5 py-3.5 font-bold text-ink">
-                    <button
-                      type="button"
-                      onclick={() => openCard(row.stageId, row.id)}
-                      class="flex items-center gap-2.5 text-left font-bold text-ink hover:text-primary hover:underline"
-                    >
-                      <Avatar name={row.customerName} size={24} />
-                      <span>{row.customerName}</span>
-                    </button>
-                  </td>
-                  <td class="px-5 py-3.5 font-mono text-xs font-semibold text-ink-soft">
-                    <div class="flex items-center gap-1.5">
-                      <span>{row.customerWa}</span>
-                      <a
-                        href="https://wa.me/{cleanPhone(row.customerWa)}"
-                        target="_blank"
-                        rel="noreferrer"
-                        class="rounded p-1 text-mute hover:bg-status-done-soft hover:text-status-done-ink"
-                        title={tr('board.openWhatsApp')}
-                        aria-label={tr('board.openWhatsApp')}
-                      >
-                        <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={1.8} />
-                      </a>
-                    </div>
-                  </td>
-                  <td class="px-5 py-3.5 text-ink-soft">
-                    {row.product ?? '—'}
-                  </td>
-                  <td class="px-5 py-3.5">
-                    {#if row.tag}
-                      <Badge tone={resolveTone(row.tag)} variant="soft">{row.tag}</Badge>
-                    {:else}
-                      <span class="text-mute">—</span>
-                    {/if}
-                  </td>
-                  <td class="px-5 py-3.5">
-                    <Badge tone={row.stageColor === 'emerald' ? 'done' : row.stageColor === 'amber' ? 'progress' : row.stageColor === 'rose' ? 'urgent' : 'queued'}>
-                      {row.stageName}
-                    </Badge>
-                  </td>
-                  <td class="px-5 py-3.5 text-ink-soft">
-                    {#if row.assigneeName}
-                      <div class="flex items-center gap-1.5">
-                        <Avatar name={row.assigneeName} size={18} />
-                        <span class="text-xs font-medium">{row.assigneeName}</span>
-                      </div>
-                    {:else}
-                      <span class="text-xs text-mute">{tr('board.unassigned')}</span>
-                    {/if}
-                  </td>
-                  <td class="px-5 py-3.5">
-                    {#if row.checklistTotal > 0}
-                      <span class="ds-caption font-semibold {isDone ? 'text-status-done-ink' : 'text-ink'}">
-                        {row.checklistDone} / {row.checklistTotal} {isDone ? '✓' : ''}
-                      </span>
-                    {:else}
-                      <span class="text-mute">—</span>
-                    {/if}
-                  </td>
-                  <td class="px-5 py-3.5 text-right">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onclick={() => openCard(row.stageId, row.id)}
-                    >
-                      {tr('board.detail')}
-                    </Button>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+        <div class="w-full">
+          <KanbanBoard
+            columns={filteredColumns}
+            oncardmove={handleCardMove}
+            oncardclick={openCard}
+            class="min-h-[500px]"
+          />
         </div>
       {/if}
-    </div>
+    {:else if activeTab === 'table'}
+      <!-- Data Table View -->
+      <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
+        {#if tableRows.length === 0}
+          <div class="p-12 text-center">
+            <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
+            <p class="ds-caption mt-1 text-mute">{tr('board.noFilterResults')}</p>
+          </div>
+        {:else}
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left text-sm">
+              <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+                <tr>
+                  <th class="px-5 py-3">{tr('common.customer')}</th>
+                  <th class="px-5 py-3">{tr('common.whatsapp')}</th>
+                  <th class="px-5 py-3">{tr('common.stage')}</th>
+                  <th class="px-5 py-3">{tr('common.pic')}</th>
+                  <th class="px-5 py-3">{tr('common.checklist')}</th>
+                  <th class="px-5 py-3">{tr('common.status')}</th>
+                  <th class="px-5 py-3 text-right">{tr('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-hairline">
+                {#each tableRows as row (row.id)}
+                  {@const isDone = row.checklistTotal > 0 && row.checklistDone === row.checklistTotal}
+                  <tr class="transition-colors hover:bg-canvas-sunken/60">
+                    <td class="px-5 py-3.5 font-medium text-ink">
+                      {row.customerName}
+                      {#if row.product}
+                        <span class="block text-xs text-mute font-normal">{row.product}</span>
+                      {/if}
+                    </td>
+                    <td class="px-5 py-3.5 text-mute">{row.customerWa}</td>
+                    <td class="px-5 py-3.5">
+                      <Badge tone={row.stageColor === 'emerald' ? 'done' : row.stageColor === 'amber' ? 'progress' : row.stageColor === 'rose' ? 'urgent' : 'queued'}>
+                        {row.stageName}
+                      </Badge>
+                    </td>
+                    <td class="px-5 py-3.5 text-mute">
+                      {#if row.assigneeName}
+                        <div class="flex items-center gap-1.5">
+                          <Avatar name={row.assigneeName} size={18} />
+                          <span class="text-xs font-medium">{row.assigneeName}</span>
+                        </div>
+                      {:else}
+                        <span class="text-xs text-mute">{tr('board.unassigned')}</span>
+                      {/if}
+                    </td>
+                    <td class="px-5 py-3.5 text-mute">
+                      {#if row.checklistTotal > 0}
+                        <span class="ds-caption font-semibold {isDone ? 'text-status-done-ink' : 'text-ink'}">
+                          {row.checklistDone} / {row.checklistTotal} {isDone ? '✓' : ''}
+                        </span>
+                      {:else}
+                        <span class="text-mute">—</span>
+                      {/if}
+                    </td>
+                    <td class="px-5 py-3.5">
+                      {#if row.waErrorFlag}
+                        <Badge tone="urgent">{tr('board.waError')}</Badge>
+                      {:else}
+                        <Badge tone="done">{tr('board.healthy')}</Badge>
+                      {/if}
+                    </td>
+                    <td class="px-5 py-3.5 text-right">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onclick={() => openCard(row.stageId, row.id)}
+                      >
+                        {tr('board.detail')}
+                      </Button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -939,7 +974,7 @@
             {#if cardDetail.waErrorFlag}
               {tr('board.whatsappFailed')}
             {:else}
-              {tr('board.followupStopped')}
+              {tr('board.followupStoppedMsg')}
             {/if}
           </p>
           <p class="mt-1 text-status-urgent-ink/80">
