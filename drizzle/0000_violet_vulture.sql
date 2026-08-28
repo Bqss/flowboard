@@ -1,10 +1,29 @@
 CREATE TYPE "public"."card_source" AS ENUM('manual', 'csv', 'mcp', 'estafet');--> statement-breakpoint
 CREATE TYPE "public"."checklist_action_kind" AS ENUM('none', 'send', 'followup');--> statement-breakpoint
-CREATE TYPE "public"."notification_type" AS ENUM('wa_failed', 'customer_replied', 'card_overdue', 'handover');--> statement-breakpoint
+CREATE TYPE "public"."notification_type" AS ENUM('wa_failed', 'customer_replied', 'card_overdue', 'handover', 'workflow_action');--> statement-breakpoint
 CREATE TYPE "public"."plan_interval" AS ENUM('monthly', 'yearly');--> statement-breakpoint
 CREATE TYPE "public"."subscription_status" AS ENUM('trial', 'active', 'past_due', 'canceled');--> statement-breakpoint
 CREATE TYPE "public"."voucher_type" AS ENUM('percent', 'fixed', 'trial_days');--> statement-breakpoint
 CREATE TYPE "public"."whatsapp_job_status" AS ENUM('pending', 'queued', 'sent', 'delivered', 'read', 'failed', 'cancelled');--> statement-breakpoint
+CREATE TYPE "public"."workspace_role" AS ENUM('owner', 'member');--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "cards" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workflow_id" uuid NOT NULL,
+	"stage_id" uuid NOT NULL,
+	"customer_id" uuid NOT NULL,
+	"product" text,
+	"tag" text,
+	"assignee_id" uuid,
+	"stage_entered_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"wa_followups_stopped" boolean DEFAULT false NOT NULL,
+	"handover_reason" text,
+	"handed_over_at" timestamp with time zone,
+	"wa_error_flag" boolean DEFAULT false NOT NULL,
+	"source" "card_source" DEFAULT 'manual' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "checklist_actions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"template_id" uuid NOT NULL,
@@ -14,6 +33,29 @@ CREATE TABLE IF NOT EXISTS "checklist_actions" (
 	"followup_if_no_reply" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "checklist_items" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"card_id" uuid NOT NULL,
+	"stage_id" uuid NOT NULL,
+	"template_id" uuid,
+	"label" text NOT NULL,
+	"required" boolean DEFAULT true NOT NULL,
+	"done" boolean DEFAULT false NOT NULL,
+	"position" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "checklist_templates" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"stage_id" uuid NOT NULL,
+	"label" text NOT NULL,
+	"required" boolean DEFAULT true NOT NULL,
+	"deadline_hours" integer,
+	"position" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "customers" (
@@ -151,6 +193,27 @@ CREATE TABLE IF NOT EXISTS "plans" (
 	CONSTRAINT "plans_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "sessions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "stages" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workflow_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"color" text DEFAULT 'indigo' NOT NULL,
+	"position" integer DEFAULT 0 NOT NULL,
+	"on_reply_notify" boolean DEFAULT false NOT NULL,
+	"overdue_reminder_hours" integer,
+	"auto_move_on_complete" boolean DEFAULT false NOT NULL,
+	"next_workflow_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "subscriptions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"workspace_id" uuid NOT NULL,
@@ -167,6 +230,22 @@ CREATE TABLE IF NOT EXISTS "subscriptions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "subscriptions_workspace_id_unique" UNIQUE("workspace_id")
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "users" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"email" text NOT NULL,
+	"name" text NOT NULL,
+	"password_hash" text,
+	"provider" text,
+	"provider_id" text,
+	"phone" text,
+	"avatar_url" text,
+	"active_workspace_id" uuid,
+	"platform_admin" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "voucher_redemptions" (
@@ -258,25 +337,98 @@ CREATE TABLE IF NOT EXISTS "workflow_inbound_endpoints" (
 	CONSTRAINT "workflow_inbound_endpoints_api_key_hash_unique" UNIQUE("api_key_hash")
 );
 --> statement-breakpoint
-ALTER TABLE "cards" ADD COLUMN "customer_id" uuid NOT NULL;--> statement-breakpoint
-ALTER TABLE "cards" ADD COLUMN "stage_entered_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
-ALTER TABLE "cards" ADD COLUMN "wa_followups_stopped" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "cards" ADD COLUMN "handover_reason" text;--> statement-breakpoint
-ALTER TABLE "cards" ADD COLUMN "handed_over_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "cards" ADD COLUMN "wa_error_flag" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "cards" ADD COLUMN "source" "card_source" DEFAULT 'manual' NOT NULL;--> statement-breakpoint
-ALTER TABLE "checklist_templates" ADD COLUMN "deadline_hours" integer;--> statement-breakpoint
-ALTER TABLE "stages" ADD COLUMN "color" text DEFAULT 'indigo' NOT NULL;--> statement-breakpoint
-ALTER TABLE "stages" ADD COLUMN "on_reply_notify" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "stages" ADD COLUMN "overdue_reminder_hours" integer;--> statement-breakpoint
-ALTER TABLE "stages" ADD COLUMN "auto_move_on_complete" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "stages" ADD COLUMN "next_workflow_id" uuid;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "phone" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "platform_admin" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "workflows" ADD COLUMN "description" text;--> statement-breakpoint
-ALTER TABLE "workflows" ADD COLUMN "default_assignee_ids" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "workflows" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"description" text,
+	"owner_id" uuid NOT NULL,
+	"default_assignee_id" uuid,
+	"default_assignee_ids" text[] DEFAULT '{}'::text[] NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "workspace_invites" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"email" text NOT NULL,
+	"role" "workspace_role" DEFAULT 'member' NOT NULL,
+	"token" text NOT NULL,
+	"invited_by_id" uuid NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"accepted_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "workspace_invites_token_unique" UNIQUE("token")
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "workspace_members" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"role" "workspace_role" DEFAULT 'member' NOT NULL,
+	"joined_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "workspaces" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"slug" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "workspaces_slug_unique" UNIQUE("slug")
+);
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "cards" ADD CONSTRAINT "cards_workflow_id_workflows_id_fk" FOREIGN KEY ("workflow_id") REFERENCES "public"."workflows"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "cards" ADD CONSTRAINT "cards_stage_id_stages_id_fk" FOREIGN KEY ("stage_id") REFERENCES "public"."stages"("id") ON DELETE restrict ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "cards" ADD CONSTRAINT "cards_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE restrict ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "cards" ADD CONSTRAINT "cards_assignee_id_users_id_fk" FOREIGN KEY ("assignee_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "checklist_actions" ADD CONSTRAINT "checklist_actions_template_id_checklist_templates_id_fk" FOREIGN KEY ("template_id") REFERENCES "public"."checklist_templates"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "checklist_items" ADD CONSTRAINT "checklist_items_card_id_cards_id_fk" FOREIGN KEY ("card_id") REFERENCES "public"."cards"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "checklist_items" ADD CONSTRAINT "checklist_items_stage_id_stages_id_fk" FOREIGN KEY ("stage_id") REFERENCES "public"."stages"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "checklist_items" ADD CONSTRAINT "checklist_items_template_id_checklist_templates_id_fk" FOREIGN KEY ("template_id") REFERENCES "public"."checklist_templates"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "checklist_templates" ADD CONSTRAINT "checklist_templates_stage_id_stages_id_fk" FOREIGN KEY ("stage_id") REFERENCES "public"."stages"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
@@ -384,6 +536,24 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
+ ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "stages" ADD CONSTRAINT "stages_workflow_id_workflows_id_fk" FOREIGN KEY ("workflow_id") REFERENCES "public"."workflows"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "stages" ADD CONSTRAINT "stages_next_workflow_id_workflows_id_fk" FOREIGN KEY ("next_workflow_id") REFERENCES "public"."workflows"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -479,6 +649,48 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "workflows" ADD CONSTRAINT "workflows_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "workflows" ADD CONSTRAINT "workflows_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "workflows" ADD CONSTRAINT "workflows_default_assignee_id_users_id_fk" FOREIGN KEY ("default_assignee_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "workspace_invites" ADD CONSTRAINT "workspace_invites_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "workspace_invites" ADD CONSTRAINT "workspace_invites_invited_by_id_users_id_fk" FOREIGN KEY ("invited_by_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "workspace_members" ADD CONSTRAINT "workspace_members_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "workspace_members" ADD CONSTRAINT "workspace_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "checklist_actions_template_idx" ON "checklist_actions" USING btree ("template_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "customers_workspace_wa_idx" ON "customers" USING btree ("workspace_id","wa");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "inbound_idempotency_endpoint_key_idx" ON "inbound_idempotency_keys" USING btree ("endpoint_id","key");--> statement-breakpoint
@@ -492,7 +704,9 @@ CREATE INDEX IF NOT EXISTS "mcp_api_key_workflows_workflow_idx" ON "mcp_api_key_
 CREATE INDEX IF NOT EXISTS "mcp_api_keys_workspace_idx" ON "mcp_api_keys" USING btree ("workspace_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "notification_settings_workspace_user_idx" ON "notification_settings" USING btree ("workspace_id","user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "plans_active_sort_idx" ON "plans" USING btree ("active","sort_order");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "stages_workflow_position_idx" ON "stages" USING btree ("workflow_id","position");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "subscriptions_status_idx" ON "subscriptions" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "users_provider_provider_id_idx" ON "users" USING btree ("provider","provider_id") WHERE provider IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "voucher_redemptions_voucher_workspace_idx" ON "voucher_redemptions" USING btree ("voucher_id","workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "voucher_redemptions_workspace_idx" ON "voucher_redemptions" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "vouchers_active_idx" ON "vouchers" USING btree ("active");--> statement-breakpoint
@@ -502,18 +716,4 @@ CREATE INDEX IF NOT EXISTS "whatsapp_jobs_connection_idx" ON "whatsapp_jobs" USI
 CREATE INDEX IF NOT EXISTS "whatsapp_jobs_provider_message_idx" ON "whatsapp_jobs" USING btree ("provider_message_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "workflow_inbound_endpoints_workflow_idx" ON "workflow_inbound_endpoints" USING btree ("workflow_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "workflow_inbound_endpoints_workspace_idx" ON "workflow_inbound_endpoints" USING btree ("workspace_id");--> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "cards" ADD CONSTRAINT "cards_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE restrict ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "stages" ADD CONSTRAINT "stages_next_workflow_id_workflows_id_fk" FOREIGN KEY ("next_workflow_id") REFERENCES "public"."workflows"("id") ON DELETE set null ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
---> statement-breakpoint
-ALTER TABLE "cards" DROP COLUMN IF EXISTS "customer_name";--> statement-breakpoint
-ALTER TABLE "stages" DROP COLUMN IF EXISTS "kind";--> statement-breakpoint
-DROP TYPE "public"."stage_kind";
+CREATE UNIQUE INDEX IF NOT EXISTS "workspace_members_workspace_user_idx" ON "workspace_members" USING btree ("workspace_id","user_id");
