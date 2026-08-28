@@ -163,6 +163,3 @@ export const createWorkflowsRoutes = () => {
         })
     );
 };
-
-/** @deprecated Prefer `createWorkflowsRoutes()` when composing the API in dev. */
-export const workflowsRoutes = createWorkflowsRoutes();

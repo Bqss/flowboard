@@ -36,8 +36,3 @@ export const createRequireAuth = () =>
       }
     });
 
-/** @deprecated Prefer `createWithUser()` when building route tables in dev. */
-export const withUser = createWithUser();
-
-/** @deprecated Prefer `createRequireAuth()` when building route tables in dev. */
-export const requireAuth = createRequireAuth();

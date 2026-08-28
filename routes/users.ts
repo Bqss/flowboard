@@ -14,6 +14,3 @@ export const createUsersRoutes = () =>
     .get('/:id', users.show, { params: UserIdParam })
     .patch('/:id', users.update, { params: UserIdParam, body: UpdateUserSchema })
     .delete('/:id', users.remove, { params: UserIdParam });
-
-/** @deprecated Prefer `createUsersRoutes()` when composing the API in dev. */
-export const usersRoutes = createUsersRoutes();

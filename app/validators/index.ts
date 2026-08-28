@@ -177,9 +177,8 @@ export const GenerateWorkflowDraftSchema = t.Object({
 });
 
 export const McpCallSchema = t.Object({
-  // workspaceId is required for legacy global-key mode (x-workspace-id header).
-  // For DB-managed per-workspace keys, the workspace is resolved from the key
-  // and this field is ignored.
+  // workspaceId is resolved from the DB-managed API key; this field is
+  // only used to address a specific workflow/card within that workspace.
   workspaceId: t.Optional(t.String({ format: 'uuid' })),
   tool: t.Union([
     t.Literal('create_card'),
@@ -237,7 +236,13 @@ export const UpdateCardAssigneeSchema = t.Object({
 
 export const ImportCardsSchema = t.Object({
   csv: t.String({ minLength: 1 }),
-  mode: t.Optional(t.Union([t.Literal('skip'), t.Literal('update')]))
+  mode: t.Optional(t.Union([t.Literal('skip'), t.Literal('update')])),
+  columnMapping: t.Optional(t.Object({
+    name: t.Number(),
+    wa: t.Number(),
+    product: t.Optional(t.Number()),
+    tag: t.Optional(t.Number())
+  }))
 });
 
 export const MoveCardSchema = t.Object({

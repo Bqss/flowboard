@@ -1,12 +1,9 @@
-export { withUser, requireAuth, createWithUser, createRequireAuth } from './auth';
-export { withClientIp, createWithClientIp } from './clientIp';
+export { createWithUser, createRequireAuth } from './auth';
+export { createWithClientIp } from './clientIp';
 export {
-  withWorkspaceMember,
-  requireWorkspaceMember,
-  requireWorkspaceOwner,
   createWithWorkspaceMember,
   createRequireWorkspaceMember,
   createRequireWorkspaceOwner
 } from './workspace';
-export { withWorkflow, requireWorkflow, createWithWorkflow, createRequireWorkflow } from './workflow';
-export { requirePlatformAdmin, createRequirePlatformAdmin } from './platform-admin';
+export { createWithWorkflow, createRequireWorkflow } from './workflow';
+export { createRequirePlatformAdmin } from './platform-admin';

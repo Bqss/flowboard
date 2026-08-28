@@ -18,9 +18,6 @@ export const env = {
   sessionTtlDays: Number(process.env.SESSION_TTL_DAYS ?? 7),
   loginMaxAttempts: Number(process.env.LOGIN_MAX_ATTEMPTS ?? 5),
   loginLockoutMs: Number(process.env.LOGIN_LOCKOUT_MS ?? 15 * 60 * 1000),
-  flowboardApiKey: isProduction && !isMcpService
-    ? required('FLOWBOARD_API_KEY')
-    : (process.env.FLOWBOARD_API_KEY ?? 'dev-flowboard-key'),
   integrationTokenPepper: isProduction
     ? required('INTEGRATION_TOKEN_PEPPER')
     : (process.env.INTEGRATION_TOKEN_PEPPER ?? 'dev-integration-token-pepper'),
@@ -49,6 +46,12 @@ export const env = {
   emailResendApiKey: process.env.RESEND_API_KEY ?? '',
   // Days of read-only grace after a subscription becomes past_due / canceled before hard block.
   billingGraceDays: Number(process.env.BILLING_GRACE_DAYS ?? 7)
+  ,
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+  googleRedirectUri:
+    process.env.GOOGLE_REDIRECT_URI ??
+    `http://localhost:${process.env.PORT ?? 3000}/api/auth/google/callback`
 } as const;
 
 export const isProd = isProduction;

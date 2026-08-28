@@ -1,10 +1,9 @@
 /**
  * MCP tool dispatcher.
  *
- * Tools are workspace-scoped: the workspace is resolved from the API key
- * (DB-managed per-workspace key) or from the x-workspace-id header (legacy
- * global FLOWBOARD_API_KEY mode). The caller never trusts a workspaceId in
- * the request body for authentication — it is only used to address a specific
+ * Tools are workspace-scoped: the workspace is resolved from the DB-managed
+ * per-workspace API key. The caller never trusts a workspaceId in the request
+ * body for authentication — it is only used to address a specific
  * workflow/card within the already-authenticated workspace.
  *
  * Workflow scope (all | selected) and enabled tools are enforced via
@@ -32,14 +31,6 @@ import type { ResolvedApiKey } from './api-keys';
 
 export type { McpToolName } from './integration-tools';
 
-/* ----------------------------------------------------- legacy global key auth */
-
-/**
- * Legacy: validate the global FLOWBOARD_API_KEY env var.
- * Kept for backward compatibility — DB-managed keys are preferred.
- */
-export const isValidIntegrationKey = (provided: string | null | undefined) =>
-  Boolean(provided && env.flowboardApiKey && provided === env.flowboardApiKey);
 
 /* ----------------------------------------------------------- scope guard */
 

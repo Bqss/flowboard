@@ -49,8 +49,3 @@ export const createRequireWorkflow = () =>
     }
   });
 
-/** @deprecated Prefer `createWithWorkflow()` when building route tables in dev. */
-export const withWorkflow = createWithWorkflow();
-
-/** @deprecated Prefer `createRequireWorkflow()` when building route tables in dev. */
-export const requireWorkflow = createRequireWorkflow();

@@ -1,9 +1,6 @@
 import { Elysia } from 'elysia';
 import * as integrations from '@handlers/integrations';
-import { isValidIntegrationKey } from '@services/integration';
 import { resolveApiKey, type ResolvedApiKey } from '@services/api-keys';
-import { env } from '@config/env';
-import { MCP_TOOL_NAMES } from '@services/integration-tools';
 import { IntegrationCreateCardSchema } from '@validators';
 
 /**
@@ -17,42 +14,17 @@ const readApiKey = (request: Request) => {
 
 /**
  * Resolve the workspace + plaintext API key from the request.
- *
- * 1. DB-managed per-workspace key → workspace resolved from key hash lookup.
- * 2. Legacy global FLOWBOARD_API_KEY → workspace from x-workspace-id header.
- *
- * Returns the plaintext key (for scope resolution in handlers) + workspaceId,
- * or null if auth fails.
+ * DB-managed per-workspace key → workspace resolved from key hash lookup.
+ * Returns the plaintext key + workspaceId, or null if auth fails.
  */
 export const resolveIntegrationAuth = async (
   request: Request
-): Promise<{ apiKey: string; workspaceId: string; mode: 'db' | 'legacy'; resolved: ResolvedApiKey } | null> => {
+): Promise<{ apiKey: string; workspaceId: string; resolved: ResolvedApiKey } | null> => {
   const apiKey = readApiKey(request);
   if (!apiKey) return null;
 
-  // 1. DB-managed per-workspace key.
   const resolved = await resolveApiKey(apiKey);
-  if (resolved) return { apiKey, workspaceId: resolved.workspaceId, mode: 'db', resolved };
-
-  // 2. Legacy global key + x-workspace-id header.
-  if (env.flowboardApiKey && isValidIntegrationKey(apiKey)) {
-    const headerWorkspaceId = request.headers.get('x-workspace-id');
-    if (headerWorkspaceId) {
-      return {
-        apiKey,
-        workspaceId: headerWorkspaceId,
-        mode: 'legacy',
-        resolved: {
-          workspaceId: headerWorkspaceId,
-          keyId: 'legacy-flowboard-key',
-          label: 'Legacy Flowboard key',
-          scopeMode: 'all',
-          enabledTools: [...MCP_TOOL_NAMES],
-          allowedWorkflowIds: []
-        }
-      };
-    }
-  }
+  if (resolved) return { apiKey, workspaceId: resolved.workspaceId, resolved };
 
   return null;
 };

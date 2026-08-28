@@ -20,5 +20,3 @@ export const createWithClientIp = () =>
     return { clientIp };
   });
 
-/** @deprecated Prefer `createWithClientIp()` when building route tables in dev. */
-export const withClientIp = createWithClientIp();

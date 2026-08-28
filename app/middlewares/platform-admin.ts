@@ -40,5 +40,3 @@ export const createRequirePlatformAdmin = () =>
       }
     });
 
-/** @deprecated Prefer `createRequirePlatformAdmin()` when composing routes in dev. */
-export const requirePlatformAdmin = createRequirePlatformAdmin();

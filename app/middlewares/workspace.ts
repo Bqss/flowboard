@@ -82,11 +82,3 @@ export const createRequireWorkspaceOwner = () =>
       }
     });
 
-/** @deprecated Prefer `createWithWorkspaceMember()` when building route tables in dev. */
-export const withWorkspaceMember = createWithWorkspaceMember();
-
-/** @deprecated Prefer `createRequireWorkspaceMember()` when building route tables in dev. */
-export const requireWorkspaceMember = createRequireWorkspaceMember();
-
-/** @deprecated Prefer `createRequireWorkspaceOwner()` when building route tables in dev. */
-export const requireWorkspaceOwner = createRequireWorkspaceOwner();

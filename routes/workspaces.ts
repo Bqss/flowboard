@@ -79,6 +79,3 @@ export const createWorkspacesRoutes = () => {
         })
     );
 };
-
-/** @deprecated Prefer `createWorkspacesRoutes()` when composing the API in dev. */
-export const workspacesRoutes = createWorkspacesRoutes();

@@ -53,6 +53,3 @@ export const createAdminRoutes = () =>
           body: AdminSetStatusSchema
         })
     );
-
-/** @deprecated Prefer `createAdminRoutes()` when composing the API in dev. */
-export const adminRoutes = createAdminRoutes();
