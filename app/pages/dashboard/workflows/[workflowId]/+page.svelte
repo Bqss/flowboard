@@ -50,6 +50,11 @@
     ClockAlertIcon,
     UserGroupIcon,
     Calendar03Icon,
+    Tick02Icon,
+    Alert02Icon,
+    Clock01Icon,
+    BarChartIcon,
+    SparklesIcon
   } from '@hugeicons/core-free-icons';
   import type { KanbanColumn } from '$lib/components/organisms/shared.js';
   import type { LayoutData } from '../../$types';
@@ -478,8 +483,10 @@
       tag = '';
       createAssigneeId = '';
       await refreshBoard();
+      toast.success(tr('board.customerAdded'));
     } catch (err) {
       createError = err instanceof ApiError ? err.message : tr('board.createError');
+      toast.error(err instanceof ApiError ? err.message : tr('board.createError'));
     } finally {
       createLoading = false;
     }
@@ -650,117 +657,226 @@
   <!-- TAB CONTENT -->
   {#if activeTab === 'stats'}
     {#if stats && !loadingData}
+      {@const totalActive = stats.totals.active ?? 0}
+      {@const totalDone = stats.totals.done ?? 0}
+      {@const totalAll = totalActive + totalDone}
+      {@const maxStageCount = Math.max(...(stats.byStage.map((s) => s.total) ?? [1]), 1)}
+
       <section class="space-y-6 pt-2">
-        <h2 class="ds-section-title text-ink">{tr('board.stats')}</h2>
-
-        <!-- Totals: 4 stat cards -->
+        <!-- Hero KPI 4-Cards Grid (Flowboard Light Aesthetic) -->
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label={tr('board.statsActive')}
-            value={String(stats.totals.active)}
-            class="p-5 rounded-2xl"
-          >
-            {#snippet icon()}
-              <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
-            {/snippet}
-          </StatCard>
-          <StatCard
-            label={tr('board.statsWaiting')}
-            value={String(stats.totals.waiting)}
-            class="p-5 rounded-2xl"
-          >
-            {#snippet icon()}
-              <HugeiconsIcon icon={AlertCircleIcon} size={18} strokeWidth={1.8} />
-            {/snippet}
-          </StatCard>
-          <StatCard
-            label={tr('board.statsOverdue')}
-            value={String(stats.totals.overdue)}
-            class="p-5 rounded-2xl"
-          >
-            {#snippet icon()}
-              <HugeiconsIcon icon={ClockAlertIcon} size={18} strokeWidth={1.8} />
-            {/snippet}
-          </StatCard>
-          <StatCard
-            label={tr('board.statsDone')}
-            value={String(stats.totals.done)}
-            class="p-5 rounded-2xl"
-          >
-            {#snippet icon()}
-              <HugeiconsIcon icon={CheckmarkCircle02Icon} size={18} strokeWidth={1.8} />
-            {/snippet}
-          </StatCard>
-        </div>
-
-        <!-- Breakdown: by stage + by assignee -->
-        <div class="grid gap-4 lg:grid-cols-2">
-          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
-            <h3 class="ds-label text-ink font-semibold">{tr('board.statsByStage')}</h3>
-            <div class="space-y-2">
-              {#each stats.byStage as stage (stage.stageId)}
-                <div class="flex items-center justify-between gap-3 text-sm">
-                  <span class="min-w-0 truncate text-ink-soft">{stage.stageName}</span>
-                  <div class="flex shrink-0 items-center gap-3">
-                    <span class="font-semibold text-ink">{stage.total}</span>
-                    {#if stage.overdue > 0}
-                      <Badge tone="urgent">{stage.overdue} {tr('board.statsOverdue')}</Badge>
-                    {/if}
-                  </div>
-                </div>
-              {/each}
+          <!-- Card 1: Pelanggan Aktif -->
+          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
+            <div class="absolute top-0 left-0 right-0 h-[3px] bg-primary"></div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsActive')}</span>
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft text-primary border border-primary-border/60 shadow-xs">
+                <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
+              </div>
+            </div>
+            <div>
+              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.active}</p>
+              <p class="text-[11px] text-mute mt-1">{tr('board.activeInPipeline') || 'Pelanggan aktif dalam alur kerja'}</p>
             </div>
           </div>
 
-          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
+          <!-- Card 2: Menunggu Tindakan -->
+          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
+            <div class="absolute top-0 left-0 right-0 h-[3px] bg-status-progress"></div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsWaiting')}</span>
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-status-progress-soft text-status-progress-ink border border-status-progress/40 shadow-xs">
+                <HugeiconsIcon icon={Clock01Icon} size={18} strokeWidth={1.8} />
+              </div>
+            </div>
+            <div>
+              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.waiting}</p>
+              <p class="text-[11px] text-mute mt-1">{tr('board.waitingActionDesc') || 'Menunggu maklum balas / semakan'}</p>
+            </div>
+          </div>
+
+          <!-- Card 3: Tertunggak -->
+          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
+            <div class="absolute top-0 left-0 right-0 h-[3px] bg-status-urgent"></div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsOverdue')}</span>
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-status-urgent-soft text-status-urgent-ink border border-status-urgent/40 shadow-xs">
+                <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
+              </div>
+            </div>
+            <div>
+              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.overdue}</p>
+              <p class="text-[11px] text-mute mt-1">{tr('board.overdueDesc') || 'Melebihi had masa tindak balas'}</p>
+            </div>
+          </div>
+
+          <!-- Card 4: Selesai -->
+          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
+            <div class="absolute top-0 left-0 right-0 h-[3px] bg-status-done"></div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsDone')}</span>
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-status-done-soft text-status-done-ink border border-status-done/40 shadow-xs">
+                <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
+              </div>
+            </div>
+            <div>
+              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.done}</p>
+              <p class="text-[11px] text-mute mt-1">
+                {#if totalAll > 0}
+                  {Math.round((totalDone / totalAll) * 100)}% {tr('board.completionRate') || 'kadar selesai'}
+                {:else}
+                  {tr('board.completedDesc') || 'Berjaya diselesaikan'}
+                {/if}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle Grid: Distribution by Stage & Team Workload -->
+        <div class="grid gap-5 lg:grid-cols-2">
+          <!-- Card 1: Taburan Mengikut Peringkat -->
+          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
+            <div class="flex items-center justify-between border-b border-hairline/60 pb-3">
+              <div class="flex items-center gap-2">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary border border-primary-border/60">
+                  <HugeiconsIcon icon={BarChartIcon} size={15} strokeWidth={2} />
+                </div>
+                <h3 class="text-sm font-bold text-ink">{tr('board.statsByStage')}</h3>
+              </div>
+              <span class="rounded-full bg-lane border border-hairline px-2.5 py-0.5 text-xs font-semibold text-mute">
+                {stats.byStage.length} {stats.byStage.length === 1 ? 'peringkat' : 'peringkat'}
+              </span>
+            </div>
+
+            <div class="space-y-3.5 pt-1">
+              {#if stats.byStage.length === 0}
+                <p class="text-xs text-mute py-4 text-center">{tr('board.noStages')}</p>
+              {:else}
+                {#each stats.byStage as stage (stage.stageId)}
+                  {@const pct = totalActive > 0 ? Math.round((stage.total / totalActive) * 100) : 0}
+                  {@const barPct = Math.round((stage.total / maxStageCount) * 100)}
+                  <div class="space-y-1.5">
+                    <div class="flex items-center justify-between text-xs">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="font-bold text-ink truncate">{stage.stageName}</span>
+                        {#if stage.overdue > 0}
+                          <span class="inline-flex items-center rounded-full bg-status-urgent-soft text-status-urgent-ink border border-status-urgent/30 px-1.5 py-0.2 text-[10px] font-semibold">
+                            {stage.overdue} {tr('board.statsOverdue').toLowerCase()}
+                          </span>
+                        {/if}
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0 font-medium">
+                        <span class="text-ink font-bold">{stage.total}</span>
+                        <span class="text-mute text-[11px]">({pct}%)</span>
+                      </div>
+                    </div>
+
+                    <!-- Progress Bar Track -->
+                    <div class="h-2 w-full rounded-full bg-lane overflow-hidden border border-hairline/50">
+                      <div
+                        class="h-full rounded-full bg-primary transition-all duration-300"
+                        style="width: {barPct}%;"
+                      ></div>
+                    </div>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          </div>
+
+          <!-- Card 2: Beban Kerja PIC Pasukan -->
+          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
+            <div class="flex items-center justify-between border-b border-hairline/60 pb-3">
+              <div class="flex items-center gap-2">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary border border-primary-border/60">
+                  <HugeiconsIcon icon={UserGroupIcon} size={15} strokeWidth={2} />
+                </div>
+                <h3 class="text-sm font-bold text-ink">{tr('board.statsByAssignee')}</h3>
+              </div>
+              <span class="rounded-full bg-lane border border-hairline px-2.5 py-0.5 text-xs font-semibold text-mute">
+                {stats.byAssignee.length} PIC
+              </span>
+            </div>
+
+            <div class="space-y-3 pt-1">
+              {#if stats.byAssignee.length === 0}
+                <p class="text-xs text-mute py-4 text-center">{tr('board.unassigned')}</p>
+              {:else}
+                {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
+                  <div class="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-canvas-sunken/60 p-3 text-xs transition-colors hover:bg-card">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <Avatar name={assignee.assigneeName ?? tr('board.statsUnassigned')} size={28} />
+                      <div class="min-w-0">
+                        <p class="font-bold text-ink truncate text-xs">
+                          {assignee.assigneeName ?? tr('board.statsUnassigned')}
+                        </p>
+                        <p class="text-[10px] text-mute truncate">{assignee.active} {tr('board.statsActive').toLowerCase()}</p>
+                      </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                      <Badge tone="queued" variant="soft" class="text-[10px] font-semibold">
+                        {assignee.active} {tr('board.statsActive').toLowerCase()}
+                      </Badge>
+                      {#if assignee.waiting > 0}
+                        <Badge tone="progress" variant="soft" class="text-[10px] font-semibold">
+                          {assignee.waiting} {tr('board.statsWaiting').toLowerCase()}
+                        </Badge>
+                      {/if}
+                      {#if assignee.overdue > 0}
+                        <Badge tone="urgent" variant="soft" class="text-[10px] font-semibold">
+                          {assignee.overdue} {tr('board.statsOverdue').toLowerCase()}
+                        </Badge>
+                      {/if}
+                      {#if assignee.done > 0}
+                        <Badge tone="done" variant="soft" class="text-[10px] font-semibold">
+                          {assignee.done} {tr('board.statsDone').toLowerCase()}
+                        </Badge>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Card: Aktiviti Mengikut Garis Masa -->
+        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
+          <div class="flex items-center justify-between border-b border-hairline/60 pb-3">
             <div class="flex items-center gap-2">
-              <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} class="text-mute" />
-              <h3 class="ds-label text-ink font-semibold">{tr('board.statsByAssignee')}</h3>
-            </div>
-            <div class="space-y-2">
-              {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
-                <div class="flex items-center justify-between gap-3 text-sm">
-                  <span class="min-w-0 truncate text-ink-soft">
-                    {assignee.assigneeName ?? tr('board.statsUnassigned')}
-                  </span>
-                  <div class="flex shrink-0 items-center gap-2">
-                    <Badge tone="progress">{assignee.active} {tr('board.statsActive')}</Badge>
-                    {#if assignee.waiting > 0}
-                      <Badge tone="urgent">{assignee.waiting} {tr('board.statsWaiting')}</Badge>
-                    {/if}
-                    {#if assignee.overdue > 0}
-                      <Badge tone="urgent">{assignee.overdue} {tr('board.statsOverdue')}</Badge>
-                    {/if}
-                    {#if assignee.done > 0}
-                      <Badge tone="done">{assignee.done} {tr('board.statsDone')}</Badge>
-                    {/if}
-                  </div>
-                </div>
-              {/each}
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary border border-primary-border/60">
+                <HugeiconsIcon icon={Calendar03Icon} size={15} strokeWidth={2} />
+              </div>
+              <h3 class="text-sm font-bold text-ink">{tr('board.statsByTime')}</h3>
             </div>
           </div>
-        </div>
 
-        <!-- Activity over time -->
-        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-3">
-          <div class="flex items-center gap-2">
-            <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={1.8} class="text-mute" />
-            <h3 class="ds-label text-ink font-semibold">{tr('board.statsByTime')}</h3>
-          </div>
           <div class="grid gap-3 sm:grid-cols-3">
             {#each stats.byTime as bucket (bucket.bucket)}
-              <div class="rounded-xl border border-hairline bg-lane/40 p-4 text-sm">
-                <p class="ds-caption text-mute">
-                  {bucket.bucket === '7d' ? tr('board.statsLast7d') : bucket.bucket === '30d' ? tr('board.statsLast30d') : tr('board.statsLast90d')}
-                </p>
-                <div class="mt-2 flex items-center justify-between">
-                  <div>
-                    <p class="ds-caption text-mute">{tr('board.statsCreated')}</p>
-                    <p class="ds-stat text-ink">{bucket.created}</p>
+              {@const periodLabel = bucket.bucket === '7d' ? tr('board.statsLast7d') : bucket.bucket === '30d' ? tr('board.statsLast30d') : tr('board.statsLast90d')}
+              <div class="rounded-xl border border-hairline bg-canvas-sunken/60 hover:bg-card p-4 text-xs space-y-3 transition-all duration-150 shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-ink bg-card border border-hairline px-2.5 py-0.5 rounded-lg text-[11px] shadow-xs">
+                    {periodLabel}
+                  </span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                  <div class="rounded-lg bg-card border border-hairline p-2.5 space-y-0.5">
+                    <div class="flex items-center gap-1 text-mute text-[10px]">
+                      <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={2} class="text-primary" />
+                      <span>{tr('board.statsCreated')}</span>
+                    </div>
+                    <p class="text-xl font-extrabold text-ink tracking-tight">{bucket.created}</p>
                   </div>
-                  <div>
-                    <p class="ds-caption text-mute">{tr('board.statsCompleted')}</p>
-                    <p class="ds-stat text-ink">{bucket.completed}</p>
+
+                  <div class="rounded-lg bg-card border border-hairline p-2.5 space-y-0.5">
+                    <div class="flex items-center gap-1 text-mute text-[10px]">
+                      <HugeiconsIcon icon={Tick02Icon} size={12} strokeWidth={2} class="text-status-done-ink" />
+                      <span>{tr('board.statsCompleted')}</span>
+                    </div>
+                    <p class="text-xl font-extrabold text-status-done-ink tracking-tight">{bucket.completed}</p>
                   </div>
                 </div>
               </div>
@@ -769,8 +885,32 @@
         </div>
       </section>
     {:else}
-      <div class="flex h-64 items-center justify-center rounded-2xl border border-hairline bg-card p-8">
-        <Skeleton shape="rect" class="h-10 w-48 rounded-xl" />
+      <!-- Full Skeleton Loading Layout -->
+      <div class="space-y-6 pt-2">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {#each [1, 2, 3, 4] as _i}
+            <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
+              <div class="flex justify-between items-center">
+                <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
+                <Skeleton shape="rect" class="h-9 w-9 rounded-xl" />
+              </div>
+              <Skeleton shape="rect" class="h-8 w-16 rounded-md" />
+              <Skeleton shape="rect" class="h-3 w-32 rounded-md" />
+            </div>
+          {/each}
+        </div>
+        <div class="grid gap-5 lg:grid-cols-2">
+          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
+            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
+            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
+            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
+          </div>
+          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
+            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
+            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
+            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
+          </div>
+        </div>
       </div>
     {/if}
   {:else}
@@ -866,6 +1006,12 @@
             columns={filteredColumns}
             oncardmove={handleCardMove}
             oncardclick={openCard}
+            onadd={() => openCreateModal()}
+            onaddcard={() => openCreateModal()}
+            addLabel={tr('board.addCard')}
+            emptyTitle={tr('board.noCustomersInStage')}
+            emptyDropHint={tr('board.dropCardHere')}
+            waErrorLabel={tr('board.waError')}
             class="min-h-[500px]"
           />
         </div>
@@ -967,17 +1113,21 @@
       <Skeleton shape="rect" class="h-24 w-full rounded-2xl" />
     </div>
   {:else if cardDetail}
-    <div class="space-y-6 pb-6">
+    <div class="space-y-5 pb-6">
+      <!-- WhatsApp Alert Banner -->
       {#if cardDetail.waErrorFlag || cardDetail.waFollowupsStopped}
-        <div class="rounded-xl border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-xs">
-          <p class="font-bold text-status-urgent-ink">
-            {#if cardDetail.waErrorFlag}
-              {tr('board.whatsappFailed')}
-            {:else}
-              {tr('board.followupStoppedMsg')}
-            {/if}
-          </p>
-          <p class="mt-1 text-status-urgent-ink/80">
+        <div class="rounded-xl border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-xs space-y-1 shadow-xs">
+          <div class="flex items-center gap-1.5 font-bold text-status-urgent-ink">
+            <HugeiconsIcon icon={Alert02Icon} size={15} strokeWidth={2} />
+            <span>
+              {#if cardDetail.waErrorFlag}
+                {tr('board.whatsappFailed')}
+              {:else}
+                {tr('board.followupStoppedMsg')}
+              {/if}
+            </span>
+          </div>
+          <p class="text-status-urgent-ink/80 text-[11px] leading-relaxed pl-5">
             {tr('board.manualHint')}
           </p>
         </div>
@@ -989,130 +1139,138 @@
         </div>
       {/if}
 
-      <!-- Customer Header & Quick Contact -->
-      <section class="flex items-center justify-between gap-3 rounded-2xl border border-hairline bg-card p-4 shadow-card">
-        <div class="flex items-center gap-3">
-          <Avatar name={cardDetail.customer?.name} size={42} />
-          <div>
-            <h2 class="text-lg font-bold text-ink">{cardDetail.customer?.name}</h2>
+      <!-- Customer Hero Profile Card -->
+      <section class="rounded-2xl border border-hairline bg-card p-4 shadow-card space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <Avatar name={cardDetail.customer?.name} size={46} class="shrink-0 ring-2 ring-hairline shadow-xs" />
+            <div class="min-w-0">
+              <h2 class="text-base font-bold text-ink truncate leading-tight">
+                {cardDetail.customer?.name ?? tr('board.cardDetail')}
+              </h2>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {#if cardDetail.stage}
+                  <Badge
+                    tone={cardDetail.stage.color === 'emerald' ? 'done' : cardDetail.stage.color === 'amber' ? 'progress' : cardDetail.stage.color === 'rose' ? 'urgent' : 'queued'}
+                    variant="soft"
+                    class="text-[10px] font-semibold px-2 py-0.2"
+                  >
+                    {cardDetail.stage.name}
+                  </Badge>
+                {/if}
+                {#if cardDetail.card.tag}
+                  <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft" class="text-[10px] font-semibold px-2 py-0.2">
+                    {cardDetail.card.tag}
+                  </Badge>
+                {/if}
+              </div>
+            </div>
           </div>
-        </div>
 
-        {#if cardDetail.customer?.wa}
-          <a
-            href="https://wa.me/{cleanPhone(cardDetail.customer.wa)}"
-            target="_blank"
-            rel="noreferrer"
-            class="flex items-center gap-1.5 rounded-full bg-status-done px-4 py-2 text-xs font-bold text-ink shadow-control transition hover:brightness-95 active:scale-95"
-          >
-            <HugeiconsIcon icon={WhatsappIcon} size={16} strokeWidth={1.8} />
-            <span>{tr('board.chatWhatsApp')}</span>
-          </a>
-        {/if}
+          {#if cardDetail.customer?.wa}
+            <a
+              href="https://wa.me/{cleanPhone(cardDetail.customer.wa)}"
+              target="_blank"
+              rel="noreferrer"
+              class="flex items-center gap-1.5 rounded-full bg-[#25D366] hover:bg-[#20bd5a] text-white px-3.5 py-1.5 text-xs font-bold shadow-xs transition-all active:scale-95 shrink-0"
+            >
+              <HugeiconsIcon icon={WhatsappIcon} size={15} strokeWidth={2} />
+              <span>{tr('board.chatWhatsApp')}</span>
+            </a>
+          {/if}
+        </div>
       </section>
 
-      <!-- Customer Information Card -->
-      <section class="space-y-3 rounded-2xl border border-hairline bg-canvas-sunken p-4 text-sm">
+      <!-- Customer Details Grid Card -->
+      <section class="rounded-2xl border border-hairline bg-canvas-sunken/70 p-3.5 space-y-2.5 text-xs shadow-xs">
         <div class="flex items-center justify-between gap-2">
-          <span class="shrink-0 text-mute">{tr('board.customerNumber')}</span>
+          <span class="text-mute font-medium">{tr('board.customerNumber')}</span>
           {#if cardDetail.customer?.wa}
-            <CopyToClipboard value={cardDetail.customer.wa} />
+            <div class="flex items-center gap-1 font-mono font-semibold text-ink">
+              <span>{cardDetail.customer.wa}</span>
+              <CopyToClipboard value={cardDetail.customer.wa} />
+            </div>
           {:else}
             <span class="text-mute">—</span>
           {/if}
         </div>
 
         {#if cardDetail.card.product}
-          <div class="flex items-center justify-between">
-            <span class="text-mute">{tr('board.productService')}</span>
-            <span class="font-medium text-ink">{cardDetail.card.product}</span>
+          <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
+            <span class="text-mute font-medium">{tr('board.productService')}</span>
+            <span class="font-semibold text-ink">{cardDetail.card.product}</span>
           </div>
         {/if}
 
-        {#if cardDetail.card.tag}
-          <div class="flex items-center justify-between">
-            <span class="text-mute">{tr('board.tagLabel')}</span>
-            <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft">
-              {cardDetail.card.tag}
-            </Badge>
+        <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
+          <span class="text-mute font-medium">{tr('board.assigneeCustomer')}</span>
+          <div class="flex items-center gap-2">
+            <select
+              id="assignee-select"
+              disabled={assigneeLoading}
+              value={cardDetail.card.assigneeId ?? ''}
+              onchange={(e) => {
+                const val = (e.target as HTMLSelectElement).value;
+                updateAssignee(val || null);
+              }}
+              class="h-8 rounded-lg border border-hairline bg-card px-2 text-xs font-semibold text-ink shadow-xs outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15 cursor-pointer"
+            >
+              <option value="">{tr('board.unassigned')}</option>
+              {#each members as member (member.id)}
+                <option value={member.id}>{member.name}</option>
+              {/each}
+            </select>
           </div>
-        {/if}
-
-        <div class="flex items-center justify-between">
-          <span class="text-mute">{tr('board.currentStage')}</span>
-          <Badge tone={cardDetail.stage?.color === 'emerald' ? 'done' : cardDetail.stage?.color === 'amber' ? 'progress' : cardDetail.stage?.color === 'rose' ? 'urgent' : 'queued'}>
-            {cardDetail.stage?.name ?? tr('common.stage')}
-          </Badge>
         </div>
       </section>
 
-      <!-- Assignee PIC Selection -->
-      <section class="space-y-2">
-        <label for="assignee-select" class="ds-label text-ink">
-          {tr('board.assigneeCustomer')}
-        </label>
-        <select
-          id="assignee-select"
-          disabled={assigneeLoading}
-          value={cardDetail.card.assigneeId ?? ''}
-          onchange={(e) => {
-            const val = (e.target as HTMLSelectElement).value;
-            updateAssignee(val || null);
-          }}
-          class="h-10 w-full rounded-xl border border-hairline bg-card px-3.5 text-sm font-medium text-ink shadow-control outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
-        >
-          <option value="">{tr('board.unassigned')}</option>
-          {#each members as member (member.id)}
-            <option value={member.id}>{member.name} ({member.email})</option>
-          {/each}
-        </select>
-      </section>
-
       <!-- Interactive Stage Checklist Section -->
-      <section class="space-y-3">
-        <div class="flex items-center justify-between">
-          <div>
-            <h3 class="ds-section-title text-ink">
-              {tr('board.checklistStage', { stage: cardDetail.stage?.name ?? '' })}
-            </h3>
-            <p class="ds-caption mt-0.5 text-mute">
+      <section class="space-y-3 rounded-2xl border border-hairline bg-card p-4 shadow-card">
+        <div class="flex items-center justify-between gap-2">
+          <div class="space-y-0.5">
+            <div class="flex items-center gap-1.5">
+              <HugeiconsIcon icon={CheckListIcon} size={16} strokeWidth={2} class="text-primary" />
+              <h3 class="text-xs font-bold text-ink uppercase tracking-wider">
+                {tr('board.checklistStage', { stage: cardDetail.stage?.name ?? '' })}
+              </h3>
+            </div>
+            <p class="text-[11px] text-mute">
               {tr('board.checklistHint')}
             </p>
           </div>
-          <span class="ds-caption rounded-full border border-hairline bg-card px-2.5 py-0.5 font-bold text-ink shadow-control">
-            {sheetChecklistDone} / {sheetChecklistTotal} {tr('board.completed')}
+          <span class="rounded-full border border-hairline bg-lane px-2.5 py-0.5 text-xs font-bold text-ink-soft shrink-0">
+            {sheetChecklistDone}/{sheetChecklistTotal}
           </span>
         </div>
 
         {#if sheetChecklistTotal > 0}
-          <div class="py-1">
-            <ProgressBar
-              value={sheetChecklistDone}
-              max={sheetChecklistTotal}
-              tone={sheetChecklistPct === 100 ? 'positive' : 'warning'}
-            />
+          <div class="h-2 w-full rounded-full bg-lane overflow-hidden border border-hairline/50">
+            <div
+              class="h-full rounded-full transition-all duration-300 {sheetChecklistPct === 100 ? 'bg-status-done' : 'bg-primary'}"
+              style="width: {sheetChecklistPct}%;"
+            ></div>
           </div>
         {/if}
 
         {#if cardDetail.checklist.length === 0}
-          <div class="rounded-xl border border-dashed border-hairline bg-card/60 p-4 text-center">
-            <p class="ds-caption text-mute">{tr('board.noChecklist')}</p>
+          <div class="rounded-xl border border-dashed border-hairline bg-canvas-sunken/50 p-4 text-center">
+            <p class="text-xs text-mute font-medium">{tr('board.noChecklist')}</p>
           </div>
         {:else}
-          <ul class="space-y-2">
+          <ul class="space-y-2 pt-1">
             {#each cardDetail.checklist as item (item.id)}
-              <li class="flex items-start gap-3 rounded-xl border border-hairline bg-card p-3.5 shadow-card transition-all hover:border-hairline-strong">
+              <li class="flex items-start gap-3 rounded-xl border border-hairline bg-canvas-sunken/40 hover:bg-card p-3 shadow-xs transition-all">
                 <Checkbox
                   checked={item.done}
                   onchange={(e) => toggleItem(item.id, e.currentTarget.checked)}
                   class="mt-0.5"
                 />
                 <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-ink transition-colors {item.done ? 'line-through text-mute' : ''}">
+                  <p class="text-xs font-semibold text-ink transition-colors {item.done ? 'line-through text-mute' : ''}">
                     {item.label}
                   </p>
                   {#if item.required}
-                    <span class="ds-caption font-semibold text-status-urgent-ink">
+                    <span class="inline-block mt-0.5 text-[10px] font-semibold text-primary-ink bg-primary-soft border border-primary-border/40 px-1.5 py-0.2 rounded-md">
                       {tr('board.requiredItem')}
                     </span>
                   {/if}
@@ -1124,30 +1282,35 @@
       </section>
 
       <!-- Stage Progression / Movement Section -->
-      <section class="space-y-3 border-t border-hairline pt-5">
-        <span class="ds-label text-ink">{tr('board.moveToStage')}</span>
-        <div class="flex flex-wrap gap-2 pt-1">
+      <section class="space-y-3 rounded-2xl border border-hairline bg-card p-4 shadow-card">
+        <span class="text-xs font-bold text-ink uppercase tracking-wider block">{tr('board.moveToStage')}</span>
+        <div class="flex flex-wrap gap-2 pt-0.5">
           {#each board as col (col.id)}
-            {#if col.id !== cardDetail.stage?.id}
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={moveLoading}
-                onclick={() => moveStage(col.id)}
-                class="rounded-full shadow-control"
-              >
-                <span>{tr('board.continueTo', { name: col.name })}</span>
-                <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
-              </Button>
-            {/if}
+            {@const isCurrent = col.id === cardDetail.stage?.id}
+            <Button
+              variant={isCurrent ? 'primary' : 'secondary'}
+              size="sm"
+              disabled={isCurrent || moveLoading}
+              onclick={() => moveStage(col.id)}
+              class="rounded-xl text-xs font-semibold shadow-xs {isCurrent ? 'opacity-90 cursor-default' : ''}"
+            >
+              <span>{col.name}</span>
+              {#if !isCurrent}
+                <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2} />
+              {/if}
+            </Button>
           {/each}
         </div>
       </section>
 
+      <!-- Next Workflow Handoff Section -->
       {#if cardDetail.nextWorkflow}
-        <section class="space-y-3 border-t border-hairline pt-5">
-          <span class="ds-label text-ink">{tr('board.handoffNext')}</span>
-          <p class="ds-caption text-mute">
+        <section class="rounded-2xl border border-primary-border/70 bg-primary-soft/40 p-4 shadow-card space-y-2.5">
+          <div class="flex items-center gap-1.5 text-primary-ink font-bold text-xs">
+            <HugeiconsIcon icon={Layers01Icon} size={15} strokeWidth={2} />
+            <span>{tr('board.handoffNext')}</span>
+          </div>
+          <p class="text-xs text-mute">
             {tr('board.handoffDescription')}
           </p>
           <Button
@@ -1155,24 +1318,25 @@
             size="sm"
             loading={relayLoading}
             onclick={relayToNextWorkflow}
-            class="rounded-full"
+            class="w-full justify-center shadow-xs"
           >
-            <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
+            <HugeiconsIcon icon={Layers01Icon} size={15} strokeWidth={1.8} />
             <span>{tr('board.continueTo', { name: cardDetail.nextWorkflow.name })}</span>
           </Button>
         </section>
       {/if}
 
+      <!-- Danger Action Section -->
       {#if canManage}
-        <section class="border-t border-hairline pt-5">
+        <section class="pt-2">
           <Button
             variant="destructive"
             size="sm"
             loading={deleteLoading}
             onclick={requestDeleteCard}
-            class="w-full justify-center"
+            class="w-full justify-center shadow-xs"
           >
-            <HugeiconsIcon icon={Delete02Icon} size={16} strokeWidth={1.8} />
+            <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
             <span>{tr('board.deleteCard')}</span>
           </Button>
         </section>
@@ -1198,17 +1362,35 @@
   bind:open={createOpen}
   title={tr('board.addCustomerTitle')}
   description={tr('board.addCustomerDescription')}
+  size="md"
 >
-  <div class="space-y-4">
+  <form
+    onsubmit={(e) => {
+      e.preventDefault();
+      createCard();
+    }}
+    class="space-y-4 py-2"
+  >
     <FormField label={tr('board.customerName')} required>
       {#snippet control(args)}
-        <Input {...args} bind:value={customerName} placeholder={tr('board.customerNamePlaceholder')} />
+        <Input
+          {...args}
+          bind:value={customerName}
+          placeholder={tr('board.customerNamePlaceholder')}
+          autofocus
+          required
+        />
       {/snippet}
     </FormField>
 
     <FormField label={tr('board.phone')} required helper={tr('board.phoneHelper')}>
       {#snippet control(args)}
-        <Input {...args} bind:value={customerWa} placeholder="60123456789" />
+        <Input
+          {...args}
+          bind:value={customerWa}
+          placeholder="60123456789"
+          required
+        />
       {/snippet}
     </FormField>
 
@@ -1244,18 +1426,22 @@
         {createError}
       </div>
     {/if}
-  </div>
 
-  {#snippet footer()}
-    <div class="flex justify-end gap-2.5">
+    <div class="flex justify-end gap-2.5 pt-2">
       <Button variant="secondary" onclick={() => (createOpen = false)}>
         {tr('common.cancel')}
       </Button>
-      <Button variant="primary" loading={createLoading} onclick={createCard}>
-        {tr('board.saveCustomer')}
+      <Button
+        variant="primary"
+        type="submit"
+        loading={createLoading}
+        disabled={!customerName.trim() || !customerWa.trim() || createLoading}
+      >
+        <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('board.saveCustomer')}</span>
       </Button>
     </div>
-  {/snippet}
+  </form>
 </Dialog>
 
 <!-- Modal: Import CSV -->

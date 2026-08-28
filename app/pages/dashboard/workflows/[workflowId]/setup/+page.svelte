@@ -38,11 +38,16 @@
     Layers01Icon,
     ArrowUp01Icon,
     ArrowDown01Icon,
+    ArrowRight01Icon,
+    ArrowLeft01Icon,
     Clock01Icon,
     Alert02Icon,
     Tick02Icon,
     PlayIcon,
     WhatsappIcon,
+    BubbleChatNotificationIcon,
+    FlowConnectionIcon,
+    CheckmarkBadge01Icon
   } from '@hugeicons/core-free-icons';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
@@ -122,26 +127,18 @@
   } | null>(null);
   let deletingChecklist = $state(false);
 
-  // Checklist Inputs per Stage (keyed by stageId)
-  let checklistInputs = $state<Record<string, { label: string; required: boolean }>>({});
-  let addingChecklistStageId = $state<string | null>(null);
-
-  // Inline Checklist Editing
-  let editingChecklistId = $state<string | null>(null);
-  let editChecklistLabel = $state('');
-  let editChecklistRequired = $state(true);
-  let updatingChecklist = $state(false);
-
-  // Checklist action editor
-  let actionDialogOpen = $state(false);
-  let actionStageId = $state('');
-  let actionTemplateId = $state('');
-  let actionKind = $state<'none' | 'send' | 'followup'>('none');
-  let actionMessage = $state('');
-  let actionDelayMinutes = $state('0');
-  let actionFollowupIfNoReply = $state(true);
-  let savingAction = $state(false);
-
+  // Unified Checklist Modal State (Add & Edit with WhatsApp automation)
+  let checklistModalOpen = $state(false);
+  let checklistModalMode = $state<'create' | 'edit'>('create');
+  let checklistModalStageId = $state('');
+  let checklistModalTemplateId = $state<string | null>(null);
+  let checklistModalLabel = $state('');
+  let checklistModalRequired = $state(true);
+  let checklistModalActionKind = $state<'none' | 'send' | 'followup'>('none');
+  let checklistModalMessage = $state('');
+  let checklistModalDelay = $state('0');
+  let checklistModalFollowupIfNoReply = $state(true);
+  let savingChecklistModal = $state(false);
   // Stage Reordering
   let reordering = $state(false);
 
@@ -199,33 +196,59 @@
     return Number.isInteger(parsed) && parsed >= 1 && parsed <= 720 ? parsed : undefined;
   };
 
-  const stageColorMeta = $derived<Record<string, { name: string; description: string; color: string; bgSoft: string; icon: any }>>({
+  const stageColorMeta = $derived<
+    Record<
+      string,
+      {
+        name: string;
+        description: string;
+        color: string;
+        bgBadge: string;
+        textBadge: string;
+        borderBadge: string;
+        topBorder: string;
+        icon: any;
+      }
+    >
+  >({
     indigo: {
       name: 'Indigo',
       description: tr('setup.colorIndigo'),
       color: '#4f46e5',
-      bgSoft: '#eef2ff',
+      bgBadge: 'bg-primary-soft',
+      textBadge: 'text-primary-ink',
+      borderBadge: 'border-primary-border/70',
+      topBorder: '#4f46e5',
       icon: Clock01Icon
     },
     amber: {
       name: 'Amber',
       description: tr('setup.colorAmber'),
       color: '#f59e0b',
-      bgSoft: '#fffbeb',
+      bgBadge: 'bg-status-progress-soft',
+      textBadge: 'text-status-progress-ink',
+      borderBadge: 'border-amber-200',
+      topBorder: '#f59e0b',
       icon: PlayIcon
     },
     rose: {
       name: 'Rose',
       description: tr('setup.colorRose'),
       color: '#f43f5e',
-      bgSoft: '#fff1f2',
+      bgBadge: 'bg-status-urgent-soft',
+      textBadge: 'text-status-urgent-ink',
+      borderBadge: 'border-rose-200',
+      topBorder: '#f43f5e',
       icon: Alert02Icon
     },
     emerald: {
       name: tr('setup.colorEmerald'),
       description: tr('setup.colorEmeraldDescription'),
       color: '#22c55e',
-      bgSoft: '#f0fdf4',
+      bgBadge: 'bg-status-done-soft',
+      textBadge: 'text-status-done-ink',
+      borderBadge: 'border-emerald-200',
+      topBorder: '#22c55e',
       icon: Tick02Icon
     }
   });
@@ -258,13 +281,6 @@
       checklistRequiredDraft = nextChecklistRequiredDraft;
       stages = nextStages;
       allWorkflows = workflowsRes.workflows ?? [];
-      const updatedInputs: Record<string, { label: string; required: boolean }> = { ...checklistInputs };
-      for (const s of nextStages) {
-        if (!updatedInputs[s.id]) {
-          updatedInputs[s.id] = { label: '', required: true };
-        }
-      }
-      checklistInputs = updatedInputs;
 
       workflow = workflowsRes.workflows?.find((w) => w.id === workflowId) ?? null;
       members = membersRes.members ?? [];
@@ -513,60 +529,111 @@
     }
   }
 
-  // --- Checklist Management ---
-  async function addChecklist(stageId: string) {
-    if (!canManage || !data.workspace?.id || !workflowId) return;
-    if (!(await ensureSetupChangesSaved())) return;
-    const current = checklistInputs[stageId] ?? { label: '', required: true };
-    const label = current.label.trim();
-    const required = current.required;
+  // --- Checklist Management via Modal ---
+  function openCreateChecklistModal(stageId: string) {
+    checklistModalStageId = stageId;
+    checklistModalTemplateId = null;
+    checklistModalMode = 'create';
+    checklistModalLabel = '';
+    checklistModalRequired = true;
+    checklistModalActionKind = 'none';
+    checklistModalMessage = '';
+    checklistModalDelay = '0';
+    checklistModalFollowupIfNoReply = true;
+    checklistModalOpen = true;
+  }
 
+  function openEditChecklistModal(
+    stageId: string,
+    template: ApiWorkflowSetupStage['templates'][number]
+  ) {
+    checklistModalStageId = stageId;
+    checklistModalTemplateId = template.id;
+    checklistModalMode = 'edit';
+    checklistModalLabel = template.label;
+    checklistModalRequired = checklistIsRequired(template);
+    checklistModalActionKind = template.action?.kind ?? 'none';
+    checklistModalMessage = template.action?.messageTemplate ?? '';
+    checklistModalDelay = String(template.action?.delayMinutes ?? 0);
+    checklistModalFollowupIfNoReply = template.action?.followupIfNoReply ?? true;
+    checklistModalOpen = true;
+  }
+
+  function insertVariable(variable: string) {
+    checklistModalMessage = checklistModalMessage ? `${checklistModalMessage} ${variable}` : variable;
+  }
+
+  async function saveChecklistModal() {
+    if (!canManage || !data.workspace?.id || !workflowId || !checklistModalStageId) return;
+    if (!(await ensureSetupChangesSaved())) return;
+    const label = checklistModalLabel.trim();
     if (!label) return;
 
-    addingChecklistStageId = stageId;
+    savingChecklistModal = true;
     try {
-      await api.createChecklistTemplate(data.workspace.id, workflowId, stageId, {
-        label,
-        required
-      });
-      checklistInputs[stageId] = { label: '', required: true };
+      if (checklistModalMode === 'create') {
+        const res = await api.createChecklistTemplate(
+          data.workspace.id,
+          workflowId,
+          checklistModalStageId,
+          {
+            label,
+            required: checklistModalRequired
+          }
+        );
+        const templateId = res.template?.id;
+        if (templateId && checklistModalActionKind !== 'none') {
+          await api.updateChecklistAction(
+            data.workspace.id,
+            workflowId,
+            checklistModalStageId,
+            templateId,
+            {
+              kind: checklistModalActionKind,
+              messageTemplate: checklistModalMessage.trim(),
+              delayMinutes: Number(checklistModalDelay) || 0,
+              followupIfNoReply: checklistModalFollowupIfNoReply
+            }
+          );
+        }
+        toast.success(tr('setup.checklistAdded'));
+      } else if (checklistModalTemplateId) {
+        await api.updateChecklistTemplate(
+          data.workspace.id,
+          workflowId,
+          checklistModalStageId,
+          checklistModalTemplateId,
+          {
+            label,
+            required: checklistModalRequired
+          }
+        );
+        await api.updateChecklistAction(
+          data.workspace.id,
+          workflowId,
+          checklistModalStageId,
+          checklistModalTemplateId,
+          {
+            kind: checklistModalActionKind,
+            messageTemplate: checklistModalActionKind === 'none' ? null : checklistModalMessage.trim(),
+            delayMinutes: Number(checklistModalDelay) || 0,
+            followupIfNoReply: checklistModalFollowupIfNoReply
+          }
+        );
+        toast.success(tr('setup.checklistUpdated'));
+      }
+      checklistModalOpen = false;
       await loadSetupData();
-      toast.success(tr('setup.checklistAdded'));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : tr('setup.checklistAddError'));
     } finally {
-      addingChecklistStageId = null;
+      savingChecklistModal = false;
     }
   }
 
   function toggleChecklistRequired(template: ApiWorkflowSetupStage['templates'][number]) {
     if (!canManage) return;
     checklistRequiredDraft[template.id] = !checklistIsRequired(template);
-  }
-
-  function startEditChecklist(template: ApiWorkflowSetupStage['templates'][number]) {
-    editingChecklistId = template.id;
-    editChecklistLabel = template.label;
-    editChecklistRequired = checklistIsRequired(template);
-  }
-
-  async function saveEditChecklist(stageId: string, templateId: string) {
-    if (!editChecklistLabel.trim() || !canManage || !data.workspace?.id || !workflowId) return;
-    if (!(await ensureSetupChangesSaved())) return;
-    updatingChecklist = true;
-    try {
-      await api.updateChecklistTemplate(data.workspace.id, workflowId, stageId, templateId, {
-        label: editChecklistLabel.trim(),
-        required: editChecklistRequired
-      });
-      editingChecklistId = null;
-      await loadSetupData();
-      toast.success(tr('setup.checklistUpdated'));
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : tr('setup.checklistUpdateError'));
-    } finally {
-      updatingChecklist = false;
-    }
   }
 
   function promptDeleteChecklist(
@@ -578,46 +645,6 @@
       templateId: template.id,
       label: template.label
     };
-  }
-
-  function openActionEditor(
-    stageId: string,
-    template: ApiWorkflowSetupStage['templates'][number]
-  ) {
-    actionStageId = stageId;
-    actionTemplateId = template.id;
-    actionKind = template.action?.kind ?? 'none';
-    actionMessage = template.action?.messageTemplate ?? '';
-    actionDelayMinutes = String(template.action?.delayMinutes ?? 0);
-    actionFollowupIfNoReply = template.action?.followupIfNoReply ?? true;
-    actionDialogOpen = true;
-  }
-
-  async function saveChecklistAction() {
-    if (!canManage || !data.workspace?.id || !workflowId || !actionStageId || !actionTemplateId) return;
-    if (!(await ensureSetupChangesSaved())) return;
-    savingAction = true;
-    try {
-      await api.updateChecklistAction(
-        data.workspace.id,
-        workflowId,
-        actionStageId,
-        actionTemplateId,
-        {
-          kind: actionKind,
-          messageTemplate: actionKind === 'none' ? null : actionMessage.trim(),
-          delayMinutes: Number(actionDelayMinutes) || 0,
-          followupIfNoReply: actionFollowupIfNoReply
-        }
-      );
-      actionDialogOpen = false;
-      await loadSetupData();
-      toast.success(tr('setup.actionSaved'));
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : tr('setup.actionError'));
-    } finally {
-      savingAction = false;
-    }
   }
 
   async function deleteChecklistConfirmed() {
@@ -636,6 +663,7 @@
       deletingChecklist = false;
     }
   }
+
 </script>
 
 <svelte:head>
@@ -786,28 +814,33 @@
       {/if}
     </div>
   {:else}
-    <!-- Horizontal Kanban Lane Trays (Flowboard Canonical System) -->
-    <div class="flex gap-4 overflow-x-auto pb-6 pt-1 items-start">
+    <!-- Horizontal Kanban Lane Trays (Modernized 2026 Light Design) -->
+    <div class="flex gap-4 overflow-x-auto pb-8 pt-1 items-start">
       {#each stages as stage, index (stage.id)}
         {@const meta = stageColorMeta[stage.color] || stageColorMeta.indigo}
         {@const stageDraft = stageAutomationDraft[stage.id]}
+        {@const targetWf = allWorkflows.find((w) => w.id === stage.nextWorkflowId)}
+        {@const requiredCount = (stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0)}
+        {@const totalItems = stage.templates?.length ?? 0}
 
-        <!-- 320px Lane Tray -->
+        <!-- 330px Lane Tray -->
         <section
           id={`stage-lane-${stage.id}`}
-          class="w-80 shrink-0 rounded-2xl bg-lane p-3.5 flex flex-col space-y-3"
+          class="w-[330px] shrink-0 rounded-2xl bg-lane/90 p-3 flex flex-col space-y-3 border border-hairline/80 shadow-xs"
         >
           <!-- Lane Header Card -->
-          <div class="rounded-xl bg-card p-3 shadow-card space-y-2 border border-hairline/60">
-            <!-- Top meta row: Step Number, Status Category Badge, and Action Buttons -->
-            <div class="flex items-center justify-between gap-2">
+          <div class="relative rounded-xl bg-card p-3.5 shadow-card space-y-2.5 border border-hairline overflow-hidden">
+            <!-- Top 3px Colored Border Strip -->
+            <div class="absolute top-0 left-0 right-0 h-[3px]" style="background-color: {meta.topBorder};"></div>
+
+            <!-- Top Row: Stage Step, Color Badge & Controls -->
+            <div class="flex items-center justify-between gap-2 pt-0.5">
               <div class="flex items-center gap-1.5 min-w-0">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-lane text-[11px] font-bold text-ink-soft shrink-0">
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-lane text-[11px] font-bold text-ink-soft shrink-0 border border-hairline">
                   {index + 1}
                 </span>
                 <span
-                  class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold shrink-0"
-                  style="background-color: {meta.bgSoft}; color: {meta.color};"
+                  class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border {meta.bgBadge} {meta.textBadge} {meta.borderBadge} shrink-0"
                 >
                   <HugeiconsIcon icon={meta.icon} size={12} strokeWidth={2} />
                   <span>{meta.name}</span>
@@ -822,9 +855,9 @@
                     size="sm"
                     disabled={index === 0 || reordering}
                     onclick={() => moveStage(index, 'up')}
-                    class="h-7 w-7 text-mute hover:text-ink hover:bg-lane disabled:opacity-25"
+                    class="h-6 w-6 rounded-lg text-mute hover:text-ink hover:bg-lane disabled:opacity-20"
                   >
-                    <HugeiconsIcon icon={ArrowUp01Icon} size={14} strokeWidth={1.8} class="-rotate-90" />
+                    <HugeiconsIcon icon={ArrowLeft01Icon} size={13} strokeWidth={1.8} />
                   </IconButton>
 
                   <IconButton
@@ -833,9 +866,9 @@
                     size="sm"
                     disabled={index === stages.length - 1 || reordering}
                     onclick={() => moveStage(index, 'down')}
-                    class="h-7 w-7 text-mute hover:text-ink hover:bg-lane disabled:opacity-25"
+                    class="h-6 w-6 rounded-lg text-mute hover:text-ink hover:bg-lane disabled:opacity-20"
                   >
-                    <HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={1.8} class="-rotate-90" />
+                    <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={1.8} />
                   </IconButton>
 
                   <IconButton
@@ -843,9 +876,9 @@
                     variant="ghost"
                     size="sm"
                     onclick={() => startEditStage(stage)}
-                    class="h-7 w-7 text-mute hover:text-primary hover:bg-primary-soft"
+                    class="h-6 w-6 rounded-lg text-mute hover:text-primary hover:bg-primary-soft"
                   >
-                    <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} />
+                    <HugeiconsIcon icon={Edit02Icon} size={13} strokeWidth={1.8} />
                   </IconButton>
 
                   <IconButton
@@ -853,241 +886,217 @@
                     variant="ghost"
                     size="sm"
                     onclick={() => (stageToDelete = stage)}
-                    class="h-7 w-7 text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
+                    class="h-6 w-6 rounded-lg text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
                   >
-                    <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
+                    <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
                   </IconButton>
                 </div>
               {/if}
             </div>
 
-            <!-- Stage Title & Subtitle -->
-            <div class="pt-0.5">
-              <h2 class="text-ink font-bold text-[15px] leading-snug break-words">
+            <!-- Stage Title & Counters -->
+            <div>
+              <h3 class="text-sm font-bold text-ink leading-snug break-words tracking-tight">
                 {stage.name}
-              </h2>
-              <div class="flex items-center gap-1.5 mt-1 text-[11px] text-mute font-medium">
-                <span>{tr('setup.checklistCount', { count: stage.templates?.length ?? 0 })}</span>
-                {#if stageDraft?.onReplyNotify}
-                  <span class="text-faint">•</span>
-                  <span class="text-primary font-semibold">{tr('setup.replyNotify')}</span>
-                {/if}
-                {#if stageDraft?.overdueReminderHours}
-                  <span class="text-faint">•</span>
-                  <span>{tr('setup.reminder', { hours: stageDraft.overdueReminderHours })}</span>
-                {/if}
-                {#if (stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0) > 0}
-                  <span class="text-faint">•</span>
-                  <span class="text-status-urgent-ink font-semibold">
-                    {tr('setup.requiredCount', { count: stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0 })}
+              </h3>
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap text-xs">
+                <span class="inline-flex items-center rounded-md bg-lane border border-hairline px-2 py-0.5 text-[11px] font-medium text-mute">
+                  {totalItems} {totalItems === 1 ? 'item' : 'items'}
+                </span>
+                {#if requiredCount > 0}
+                  <span class="inline-flex items-center rounded-md bg-primary-soft border border-primary-border/40 px-2 py-0.5 text-[10px] font-semibold text-primary-ink">
+                    {requiredCount} {tr('setup.required').toLowerCase()}
                   </span>
                 {/if}
               </div>
             </div>
-            {#if canManage && stageDraft}
-              <div class="mt-2 space-y-2 rounded-lg border border-hairline/70 bg-lane/50 px-2.5 py-2">
-                <div class="flex items-start justify-between gap-2">
-                  <label class="flex min-w-0 items-start gap-2 text-[11px] font-semibold leading-tight text-ink">
-                    <Checkbox bind:checked={stageDraft.onReplyNotify} />
-                    <span>{tr('setup.replyNotifyAssignee')}</span>
-                  </label>
-                  {#if hasUnsavedSetupChanges}
-                    <span class="shrink-0 text-[10px] font-semibold text-primary">
-                      {tr('setup.unsavedChanges')}
-                    </span>
-                  {/if}
-                </div>
-                <div class="flex items-center justify-between gap-2">
-                  <div class="min-w-0">
-                    <label for={`reminder-${stage.id}`} class="text-[11px] font-semibold text-ink">
-                      {tr('setup.overdueReminder')}
-                    </label>
-                    <p class="text-[10px] leading-tight text-mute">{tr('setup.overdueHelper')}</p>
-                  </div>
-                  <Input
-                    id={`reminder-${stage.id}`}
-                    type="number"
-                    min="1"
-                    max="720"
-                    step="1"
-                    bind:value={stageDraft.overdueReminderHours}
-                    placeholder="—"
-                    class="h-8 w-20 shrink-0 bg-card text-xs"
-                  />
-                </div>
+
+            <!-- Stage Automation Status Pills -->
+            {#if stageDraft?.onReplyNotify || stageDraft?.overdueReminderHours || targetWf}
+              <div class="flex flex-wrap items-center gap-1 pt-1.5 border-t border-hairline/60 text-[10px]">
+                {#if stageDraft?.onReplyNotify}
+                  <span
+                    class="inline-flex items-center gap-1 rounded-md bg-primary-soft border border-primary-border/50 px-1.5 py-0.5 font-medium text-primary-ink"
+                    title={tr('setup.replyNotifyAssignee')}
+                  >
+                    <HugeiconsIcon icon={BubbleChatNotificationIcon} size={11} strokeWidth={2} />
+                    <span>{tr('setup.replyNotify')}</span>
+                  </span>
+                {/if}
+                {#if stageDraft?.overdueReminderHours}
+                  <span
+                    class="inline-flex items-center gap-1 rounded-md bg-lane px-1.5 py-0.5 font-medium text-body border border-hairline"
+                    title={tr('setup.overdueReminder')}
+                  >
+                    <HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={2} />
+                    <span>{stageDraft.overdueReminderHours}h</span>
+                  </span>
+                {/if}
+                {#if targetWf}
+                  <span
+                    class="inline-flex items-center gap-1 rounded-md bg-lane px-1.5 py-0.5 font-medium text-body border border-hairline max-w-[130px] truncate"
+                    title={`${tr('setup.nextWorkflow')}: ${targetWf.name}`}
+                  >
+                    <HugeiconsIcon icon={FlowConnectionIcon} size={11} strokeWidth={2} />
+                    <span class="truncate">→ {targetWf.name}</span>
+                  </span>
+                {/if}
               </div>
             {/if}
           </div>
 
-          <!-- Quick Add Checklist Input inside Lane -->
-          {#if canManage && checklistInputs[stage.id]}
-            <div class="space-y-2 pt-0.5">
-              <div class="relative">
-                <Input
-                  bind:value={checklistInputs[stage.id].label}
-                  placeholder={tr('setup.addChecklistPlaceholder')}
-                  class="h-9 text-xs pr-16 bg-card"
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addChecklist(stage.id);
-                    }
-                  }}
-                />
-                <div class="absolute right-1.5 top-1/2 -translate-y-1/2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    loading={addingChecklistStageId === stage.id}
-                    disabled={!checklistInputs[stage.id].label.trim()}
-                    onclick={() => addChecklist(stage.id)}
-                    class="h-7 px-2 text-xs font-semibold text-primary hover:bg-primary-soft"
-                  >
-                    {tr('setup.add')}
-                  </Button>
-                </div>
-              </div>
-
-              <div class="flex items-center justify-between px-1">
-                <label class="flex items-center gap-1.5 text-xs text-mute cursor-pointer select-none">
-                  <Checkbox bind:checked={checklistInputs[stage.id].required} />
-                  <span>{tr('setup.requiredComplete')}</span>
-                </label>
-                <span class="text-[11px] text-faint">{tr('setup.stageRequirement')}</span>
-              </div>
-            </div>
-          {/if}
-
-          <!-- Floating White Cards List (NO BORDER - Pure Flowboard Elevation) -->
-          <div class="space-y-3 pt-1">
-            {#if (stage.templates?.length ?? 0) === 0}
-              <div class="rounded-xl border border-dashed border-hairline-strong bg-card/40 p-4 text-center">
-                <p class="text-xs text-mute font-medium">{tr('setup.noChecklist')}</p>
+          <!-- Checklist Items Stack -->
+          <div class="space-y-2 flex-1 min-h-[40px]">
+            {#if totalItems === 0}
+              <div class="rounded-xl border border-dashed border-hairline-strong/80 bg-card/40 p-4 text-center">
+                <p class="text-xs font-medium text-mute">{tr('setup.noChecklist')}</p>
                 <p class="text-[11px] text-faint mt-0.5">{tr('setup.typeToAdd')}</p>
               </div>
             {:else}
               {#each stage.templates as template (template.id)}
-                {@const isEditingThisChecklist = editingChecklistId === template.id}
+                {@const isRequired = checklistIsRequired(template)}
+                {@const hasAction = template.action?.kind && template.action.kind !== 'none'}
 
-                <div class="rounded-xl bg-card p-3 shadow-card space-y-2 relative transition-shadow hover:shadow-card-hover">
-                  <!-- 4px Label Bar at Top Edge (Signature Flowboard Detail) -->
+                <div
+                  class="group relative rounded-xl bg-card p-3 shadow-card border border-hairline hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 space-y-1.5"
+                >
+                  <!-- Subtle left-edge accent line -->
                   <div
-                    class="h-1 w-7 rounded-full"
-                    style="background-color: {checklistIsRequired(template) ? '#4f46e5' : '#94a3b8'};"
+                    class="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full transition-colors"
+                    style="background-color: {isRequired ? 'var(--color-primary, #4f46e5)' : 'var(--color-hairline-strong, #cbd5e1)'};"
                   ></div>
 
-                  {#if isEditingThisChecklist}
-                    <!-- Edit Checklist Form -->
-                    <div class="space-y-2 pt-1">
-                      <Input
-                        bind:value={editChecklistLabel}
-                        placeholder={tr('setup.checklistLabelPlaceholder')}
-                        class="h-8 text-xs"
-                      />
-                      <div class="flex items-center justify-between pt-1">
-                        <label class="flex items-center gap-1.5 text-xs text-ink cursor-pointer select-none">
-                          <Checkbox bind:checked={editChecklistRequired} />
-                          <span>{tr('setup.required')}</span>
-                        </label>
-                        <div class="flex items-center gap-1">
-                          <Button
+                  <!-- Checklist Card Content -->
+                  <div class="space-y-1.5 pl-1.5">
+                    <!-- Top Row: Badges & Action Controls -->
+                    <div class="flex items-center justify-between gap-1">
+                      <div class="flex flex-wrap items-center gap-1 min-w-0">
+                        {#if canManage}
+                          <button
+                            type="button"
+                            title={tr('setup.toggleRule')}
+                            onclick={() => toggleChecklistRequired(template)}
+                            class="cursor-pointer transition-transform active:scale-95 focus:outline-none"
+                          >
+                            <Badge
+                              tone={isRequired ? 'queued' : 'idle'}
+                              variant="soft"
+                              class="text-[10px] font-semibold px-2 py-0.2"
+                            >
+                              {isRequired ? tr('setup.required') : tr('common.optional')}
+                            </Badge>
+                          </button>
+                        {:else}
+                          <Badge
+                            tone={isRequired ? 'queued' : 'idle'}
+                            variant="soft"
+                            class="text-[10px] font-semibold px-2 py-0.2"
+                          >
+                            {isRequired ? tr('setup.required') : tr('common.optional')}
+                          </Badge>
+                        {/if}
+
+                        {#if hasAction}
+                          <button
+                            type="button"
+                            onclick={() => openEditChecklistModal(stage.id, template)}
+                            class="inline-flex items-center gap-1 rounded-full bg-status-done-soft text-status-done-ink border border-status-done/30 px-2 py-0.2 text-[10px] font-semibold hover:opacity-80 transition-opacity cursor-pointer"
+                            title={tr('setup.actionWa')}
+                          >
+                            <HugeiconsIcon icon={WhatsappIcon} size={11} strokeWidth={2} />
+                            <span>{template.action?.kind === 'send' ? tr('setup.sendOnce') : tr('setup.followup')}</span>
+                          </button>
+                        {/if}
+                      </div>
+
+                      <!-- Hover Actions Cluster -->
+                      {#if canManage}
+                        <div class="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity ml-auto shrink-0">
+                          <IconButton
+                            label={tr('setup.actionWa')}
                             variant="ghost"
                             size="sm"
-                            onclick={() => (editingChecklistId = null)}
-                            class="h-7 px-2 text-xs"
+                            onclick={() => openEditChecklistModal(stage.id, template)}
+                            class="h-6 w-6 rounded-md text-mute hover:text-status-done-ink hover:bg-status-done-soft"
                           >
-                            {tr('setup.cancel')}
-                          </Button>
-                          <Button
-                            variant="primary"
+                            <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={1.8} />
+                          </IconButton>
+
+                          <IconButton
+                            label={tr('setup.editItem')}
+                            variant="ghost"
                             size="sm"
-                            loading={updatingChecklist}
-                            onclick={() => saveEditChecklist(stage.id, template.id)}
-                            class="h-7 px-2 text-xs"
+                            onclick={() => openEditChecklistModal(stage.id, template)}
+                            class="h-6 w-6 rounded-md text-mute hover:text-ink hover:bg-lane"
                           >
-                            {tr('common.save')}
-                          </Button>
+                            <HugeiconsIcon icon={Edit02Icon} size={13} strokeWidth={1.8} />
+                          </IconButton>
+
+                          <IconButton
+                            label={tr('setup.deleteItem')}
+                            variant="ghost"
+                            size="sm"
+                            onclick={() => promptDeleteChecklist(stage.id, template)}
+                            class="h-6 w-6 rounded-md text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
+                          >
+                            <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
+                          </IconButton>
                         </div>
-                      </div>
+                      {/if}
                     </div>
-                  {:else}
-                    <!-- Checklist Card Content -->
-                    <p class="text-sm font-semibold text-ink leading-snug break-words">
+
+                    <!-- Checklist Item Label -->
+                    <p class="text-xs font-semibold text-ink leading-relaxed break-words pt-0.5">
                       {template.label}
                     </p>
 
-                    <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 pt-1 text-xs">
-                      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                      {#if canManage}
-                        <button
-                          type="button"
-                          title={tr('setup.toggleRule')}
-                          onclick={() => toggleChecklistRequired(template)}
-                          class="cursor-pointer focus:outline-none"
-                        >
-                          <Badge
-                            tone={checklistIsRequired(template) ? 'urgent' : 'idle'}
-                            variant="soft"
-                            class="text-[11px] hover:opacity-80 transition-opacity"
-                          >
-                            {checklistIsRequired(template) ? tr('setup.required') : tr('common.optional')}
-                          </Badge>
-                        </button>
-                        {#if template.action?.kind && template.action.kind !== 'none'}
-                          <Badge tone="progress" variant="soft" class="text-[10px]">
-                            {tr('setup.waAction', { kind: template.action.kind })}
-                          </Badge>
-                        {/if}
-                      {:else}
-                        <Badge
-                          tone={checklistIsRequired(template) ? 'urgent' : 'idle'}
-                          variant="soft"
-                          class="text-[11px]"
-                        >
-                          {checklistIsRequired(template) ? tr('setup.required') : tr('common.optional')}
-                        </Badge>
-                      {/if}
+                    <!-- Message Template Snippet Preview (if attached) -->
+                    {#if hasAction && template.action?.messageTemplate}
+                      <div class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-canvas-sunken border border-hairline p-2 text-[11px] text-body">
+                        <HugeiconsIcon icon={WhatsappIcon} size={12} strokeWidth={2} class="text-status-done-ink shrink-0 mt-0.5" />
+                        <p class="line-clamp-1 italic text-[10px] leading-tight text-mute">
+                          "{template.action.messageTemplate}"
+                        </p>
                       </div>
-
-                      {#if canManage}
-                        <div class="ml-auto flex shrink-0 items-center gap-1 text-faint">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onclick={() => openActionEditor(stage.id, template)}
-                            class="h-7 shrink-0 gap-1 whitespace-nowrap px-1.5 text-[10px] font-semibold text-faint hover:text-primary"
-                          >
-                            <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={1.8} />
-                            <span>{tr('setup.actionWaShort')}</span>
-                          </Button>
-                          <IconButton
-                            label={tr('setup.editItem')}
-                            variant="bare"
-                            size="sm"
-                            onclick={() => startEditChecklist(template)}
-                            class="hover:text-ink"
-                          >
-                            <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} />
-                          </IconButton>
-                          <IconButton
-                            label={tr('setup.deleteItem')}
-                            variant="bare"
-                            size="sm"
-                            onclick={() => promptDeleteChecklist(stage.id, template)}
-                            class="hover:text-status-urgent-ink"
-                          >
-                            <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
-                          </IconButton>
-                        </div>
-                      {/if}
-                    </div>
-                  {/if}
+                    {/if}
+                  </div>
                 </div>
               {/each}
             {/if}
           </div>
+
+          <!-- Add Checklist Item Action Button -->
+          {#if canManage}
+            <button
+              type="button"
+              onclick={() => openCreateChecklistModal(stage.id)}
+              class="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-hairline-strong/80 hover:border-primary hover:bg-primary-soft/40 py-2 px-3 text-xs font-semibold text-ink-soft hover:text-primary transition-all cursor-pointer group shadow-xs"
+            >
+              <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={2} class="text-mute group-hover:text-primary transition-colors" />
+              <span>{tr('setup.addChecklistItem')}</span>
+            </button>
+          {/if}
         </section>
       {/each}
+
+      <!-- Rightmost "Add Stage" Ghost Lane -->
+      {#if canManage}
+        <button
+          type="button"
+          onclick={() => (createStageOpen = true)}
+          class="w-[280px] shrink-0 min-h-[160px] rounded-2xl border-2 border-dashed border-hairline-strong/80 hover:border-primary hover:bg-primary-soft/30 bg-card/40 flex flex-col items-center justify-center p-6 text-center transition-all cursor-pointer group shadow-xs"
+        >
+          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-lane border border-hairline group-hover:bg-primary-soft group-hover:text-primary transition-colors text-mute mb-2">
+            <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2} />
+          </div>
+          <p class="text-xs font-bold text-ink group-hover:text-primary transition-colors">
+            {tr('setup.newStage')}
+          </p>
+          <p class="text-[11px] text-mute mt-0.5">
+            {tr('setup.newStageDescription')}
+          </p>
+        </button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -1377,61 +1386,134 @@
   oncancel={() => (checklistToDelete = null)}
 />
 
+<!-- Modal: Create / Edit Checklist Item with WhatsApp Automation -->
 <Dialog
-  bind:open={actionDialogOpen}
-  title={tr('setup.whatsappAction')}
-  description={tr('setup.whatsappActionDescription')}
+  bind:open={checklistModalOpen}
+  title={checklistModalMode === 'create' ? tr('setup.newChecklistTitle') : tr('setup.editChecklistTitle')}
+  description={checklistModalMode === 'create' ? tr('setup.newChecklistDescription') : tr('setup.editChecklistDescription')}
   size="md"
 >
   <form
     onsubmit={(e) => {
       e.preventDefault();
-      saveChecklistAction();
+      saveChecklistModal();
     }}
     class="space-y-4 py-2"
   >
-    <FormField label={tr('setup.actionType')}>
-      {#snippet control()}
-        <SelectMenu
-          options={actionKindOptions}
-          bind:value={actionKind}
+    <!-- Checklist Label Input -->
+    <FormField label={tr('setup.checklistLabel')} required helper={tr('setup.checklistLabelExample')}>
+      {#snippet control(args)}
+        <Input
+          {...args}
+          bind:value={checklistModalLabel}
+          placeholder={tr('setup.checklistLabelExample')}
+          class="h-10 text-sm"
+          autofocus
+          required
         />
       {/snippet}
     </FormField>
 
-    {#if actionKind !== 'none'}
-      <FormField
-        label={tr('setup.messageTemplate')}
-        helper={tr('setup.templateHelper')}
-        required
-      >
-        {#snippet control(args)}
-          <Textarea
-            {...args}
-            bind:value={actionMessage}
-            rows={4}
-            placeholder={tr('setup.templatePlaceholder')}
+    <!-- Requirement Switch Card -->
+    <div class="rounded-xl border border-hairline bg-canvas-sunken p-3 flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <span class="text-xs font-bold text-ink block">{tr('setup.requiredComplete')}</span>
+        <p class="text-[11px] text-mute">{tr('setup.stageRequirement')}</p>
+      </div>
+      <Checkbox bind:checked={checklistModalRequired} />
+    </div>
+
+    <!-- WhatsApp Automation Settings Box -->
+    <div class="space-y-3 rounded-xl border border-hairline bg-card p-3.5 shadow-xs">
+      <div class="flex items-center gap-2">
+        <div class="flex h-6 w-6 items-center justify-center rounded-full bg-status-done-soft text-status-done-ink border border-status-done/30 shrink-0">
+          <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={2} />
+        </div>
+        <div>
+          <span class="text-xs font-bold text-ink block">{tr('setup.whatsappAction')}</span>
+          <p class="text-[11px] text-mute">{tr('setup.whatsappActionDescription')}</p>
+        </div>
+      </div>
+
+      <FormField label={tr('setup.actionType')}>
+        {#snippet control()}
+          <SelectMenu
+            options={actionKindOptions}
+            bind:value={checklistModalActionKind}
           />
         {/snippet}
       </FormField>
 
-      <FormField label={tr('setup.delay')}>
-        {#snippet control(args)}
-          <Input {...args} type="number" min="0" bind:value={actionDelayMinutes} class="h-10 text-sm" />
-        {/snippet}
-      </FormField>
+      {#if checklistModalActionKind !== 'none'}
+        <FormField
+          label={tr('setup.messageTemplate')}
+          helper={tr('setup.templateHelper')}
+          required
+        >
+          {#snippet control(args)}
+            <div class="space-y-2">
+              <Textarea
+                {...args}
+                bind:value={checklistModalMessage}
+                rows={4}
+                placeholder={tr('setup.templatePlaceholder')}
+                required
+              />
+              <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span class="text-[11px] text-mute font-medium">{tr('setup.insertVariable')}</span>
+                {#each ['{{nama}}', '{{wa}}', '{{product}}', '{{tag}}', '{{link}}'] as v}
+                  <button
+                    type="button"
+                    onclick={() => insertVariable(v)}
+                    class="inline-flex items-center rounded-md bg-lane border border-hairline px-1.5 py-0.5 text-[10px] font-mono font-semibold text-primary hover:bg-primary-soft hover:border-primary-border/60 transition-colors cursor-pointer"
+                  >
+                    {v}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/snippet}
+        </FormField>
 
-      {#if actionKind === 'followup'}
-        <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-          <Checkbox bind:checked={actionFollowupIfNoReply} />
-          <span>{tr('setup.onlyIfNoReply')}</span>
-        </label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <FormField label={tr('setup.delay')}>
+            {#snippet control(args)}
+              <Input
+                {...args}
+                type="number"
+                min="0"
+                bind:value={checklistModalDelay}
+                class="h-9 text-xs"
+              />
+            {/snippet}
+          </FormField>
+
+          {#if checklistModalActionKind === 'followup'}
+            <div class="flex items-end pb-2">
+              <label class="flex items-center gap-2 text-xs text-ink cursor-pointer select-none">
+                <Checkbox bind:checked={checklistModalFollowupIfNoReply} />
+                <span>{tr('setup.onlyIfNoReply')}</span>
+              </label>
+            </div>
+          {/if}
+        </div>
       {/if}
-    {/if}
+    </div>
 
+    <!-- Dialog Footer Actions -->
     <div class="flex justify-end gap-2 pt-2">
-      <Button variant="secondary" onclick={() => (actionDialogOpen = false)}>{tr('setup.cancel')}</Button>
-      <Button variant="primary" type="submit" loading={savingAction}>{tr('setup.saveAction')}</Button>
+      <Button variant="secondary" onclick={() => (checklistModalOpen = false)}>
+        {tr('setup.cancel')}
+      </Button>
+      <Button
+        variant="primary"
+        type="submit"
+        loading={savingChecklistModal}
+        disabled={!checklistModalLabel.trim() || (checklistModalActionKind !== 'none' && !checklistModalMessage.trim())}
+      >
+        <HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={1.8} />
+        <span>{checklistModalMode === 'create' ? tr('setup.createChecklistItem') : tr('setup.saveChecklistItem')}</span>
+      </Button>
     </div>
   </form>
 </Dialog>

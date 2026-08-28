@@ -25,12 +25,12 @@
 					'rounded-full bg-status-queued text-on-primary hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-status-queued/25 focus-visible:ring-offset-2',
 				link: 'rounded-md text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
 				lane:
-					'rounded-full text-on-primary shadow-primary focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2'
+					'rounded-full border border-hairline/80 shadow-xs focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 transition-all font-semibold'
 			},
 			lane: {
-				queued: 'bg-status-queued hover:bg-primary-hover',
-				progress: 'bg-status-progress text-ink hover:brightness-95',
-				done: 'bg-status-done text-ink hover:brightness-95',
+				queued: 'bg-primary-soft text-primary-ink border-primary-border/60 hover:bg-primary-soft-hover',
+				progress: 'bg-status-progress-soft text-status-progress-ink border-status-progress/40 hover:brightness-95',
+				done: 'bg-status-done-soft text-status-done-ink border-status-done/40 hover:brightness-95',
 				none: ''
 			},
 			size: {

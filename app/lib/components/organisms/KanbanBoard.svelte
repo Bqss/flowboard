@@ -7,7 +7,9 @@
 		Add01Icon,
 		CheckmarkCircle02Icon,
 		CheckListIcon,
-		UserCircleIcon
+		UserCircleIcon,
+		WhatsappIcon,
+		Alert02Icon
 	} from '@hugeicons/core-free-icons';
 	import type { KanbanColumn, KanbanCard } from './shared.js';
 
@@ -23,21 +25,23 @@
 		oncardclick?: (columnId: string, cardId: string) => void;
 		oncardmove?: (cardId: string, fromColumnId: string, toColumnId: string) => void | Promise<void>;
 		onadd?: (columnId: string) => void;
+		onaddcard?: (columnId: string) => void;
 	};
 
 	let {
 		ref = $bindable(null),
 		columns,
 		class: className,
-		addLabel = 'Tambah card',
-		emptyTitle = 'Belum ada pelanggan',
-		emptyDropHint = 'Lepaskan card di sini',
+		addLabel = 'Add customer',
+		emptyTitle = 'No customers yet',
+		emptyDropHint = 'Drop card here',
 		columnLabel = 'Column',
 		waErrorLabel = 'WA Error',
 		dragEnabled = true,
 		oncardclick,
 		oncardmove,
 		onadd,
+		onaddcard,
 		...rest
 	}: Props = $props();
 
@@ -56,15 +60,13 @@
 		progress: 'bg-status-progress',
 		done: 'bg-status-done'
 	} as const;
-
-	const labelBarBg = {
-		queued: 'bg-status-queued',
-		progress: 'bg-status-progress',
-		done: 'bg-status-done',
-		urgent: 'bg-status-urgent',
-		idle: 'bg-status-idle'
+	const labelBarColor = {
+		queued: '#4f46e5',
+		progress: '#f59e0b',
+		done: '#22c55e',
+		urgent: '#f43f5e',
+		idle: '#94a3b8'
 	} as const;
-
 	function resolveTone(tag?: string): 'urgent' | 'progress' | 'done' | 'queued' | 'neutral' {
 		if (!tag) return 'neutral';
 		const lower = tag.toLowerCase();
@@ -139,7 +141,7 @@
 
 <div
 	bind:this={ref}
-	class={cn('flex gap-4 overflow-x-auto pb-4 pt-1', className)}
+	class={cn('flex gap-4 overflow-x-auto pb-6 pt-1 items-start', className)}
 	{...rest}
 >
 	{#each columns as column, i (column.id)}
@@ -148,42 +150,55 @@
 			role="group"
 			aria-label={`${columnLabel} ${column.title}`}
 			class={cn(
-				'flex w-lane shrink-0 flex-col rounded-lane bg-lane p-4 select-none transition-colors duration-150',
+				'flex w-lane shrink-0 flex-col rounded-2xl bg-lane/90 p-3.5 select-none border border-hairline/80 shadow-xs transition-all duration-150',
 				dropTargetColumnId === column.id &&
 					draggingCardId &&
 					dragSourceColumnId !== column.id &&
-					'bg-primary-soft/30 ring-2 ring-primary/30'
+					'bg-primary-soft/30 ring-2 ring-primary/30 border-primary-border/60'
 			)}
 			ondragover={(event) => onDragOver(event, column.id)}
 			ondragleave={(event) => onDragLeave(event, column.id)}
 			ondrop={(event) => onDrop(event, column.id)}
 		>
+			<!-- Column Header -->
 			<header class="mb-3 flex items-center justify-between gap-2">
-				<div class="flex min-w-0 items-center gap-2.5">
-					<span class={cn('size-2.5 shrink-0 rounded-full', laneDot[tone])} aria-hidden="true"></span>
-					<h3 class="ds-section-title truncate text-ink">{column.title}</h3>
+				<div class="flex min-w-0 items-center gap-2">
+					<span class={cn('size-2.5 shrink-0 rounded-full shadow-xs', laneDot[tone])} aria-hidden="true"></span>
+					<h3 class="text-sm font-bold text-ink truncate tracking-tight">{column.title}</h3>
 				</div>
-				<span class="ds-caption shrink-0 rounded-full border border-hairline bg-card px-2.5 py-0.5 font-semibold text-mute shadow-control">
-					{column.items.length} Total
+				<span class="rounded-full border border-hairline bg-card px-2.5 py-0.5 text-xs font-semibold text-mute shadow-xs">
+					{column.items.length} {column.items.length === 1 ? 'kad' : 'kad'}
 				</span>
 			</header>
 
-			<Button variant="lane" lane={tone} size="lane" class="mb-4 shadow-primary/10" onclick={() => onadd?.(column.id)}>
-				<HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
+			<!-- Add Customer Button -->
+			<button
+				type="button"
+				class="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-hairline-strong/80 hover:border-primary hover:bg-primary-soft/40 bg-card/60 py-2.5 px-3 text-xs font-semibold text-ink-soft hover:text-primary transition-all cursor-pointer group shadow-xs active:scale-[0.99]"
+				onclick={() => {
+					onadd?.(column.id);
+					onaddcard?.(column.id);
+				}}
+			>
+				<HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={2} class="text-mute group-hover:text-primary transition-colors" />
 				<span>{addLabel}</span>
-			</Button>
-			<div class="flex min-h-[140px] flex-1 flex-col gap-3">
+			</button>
+
+			<!-- Cards Stack -->
+			<div class="flex min-h-[140px] flex-1 flex-col gap-2.5">
 				{#if column.items.length === 0}
-					<div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-hairline-strong/60 bg-card/40 p-6 text-center">
-						<p class="ds-caption font-medium text-mute">{emptyTitle}</p>
+					<div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-hairline-strong/70 bg-card/40 p-6 text-center space-y-1">
+						<p class="text-xs font-medium text-mute">{emptyTitle}</p>
 						{#if dragEnabled && oncardmove}
-							<p class="ds-caption mt-1 text-faint">{emptyDropHint}</p>
+							<p class="text-[11px] text-faint">{emptyDropHint}</p>
 						{/if}
 					</div>
 				{:else}
 					{#each column.items as card (card.id)}
 						{@const badgeTone = card.badgeTone ?? resolveTone(card.badge)}
 						{@const barTone = card.labelBarTone ?? (badgeTone === 'neutral' ? tone : badgeTone)}
+						{@const accentHex = labelBarColor[barTone as keyof typeof labelBarColor] ?? '#4f46e5'}
+
 						<button
 							type="button"
 							draggable={dragEnabled && Boolean(oncardmove)}
@@ -191,76 +206,80 @@
 							ondragend={onDragEnd}
 							onclick={() => handleCardClick(column.id, card.id)}
 							class={cn(
-								'group relative cursor-grab rounded-card bg-card p-3.5 text-left shadow-card transition-all duration-150 ease-out hover:-translate-y-px hover:shadow-card-hover hover:ring-1 hover:ring-ring-hover focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus)] active:cursor-grabbing',
+								'group relative cursor-grab rounded-xl bg-card p-3.5 text-left shadow-card border border-hairline hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing space-y-2.5 overflow-hidden',
 								card.selected && 'ring-2 ring-primary border-transparent shadow-card-hover',
-								draggingCardId === card.id && 'opacity-45 ring-2 ring-primary/40'
+								draggingCardId === card.id && 'opacity-40 ring-2 ring-primary/40'
 							)}
 						>
-							<!-- Top signature label bar -->
-							<div class="mb-2.5 flex items-center gap-1.5">
-								<div class={cn('h-1 w-7 rounded-full', labelBarBg[barTone as keyof typeof labelBarBg] ?? 'bg-primary')}></div>
-							</div>
+							<!-- Top 2.5px Accent Line -->
+							<div
+								class="absolute top-0 left-0 right-0 h-[2.5px] rounded-t-xl"
+								style="background-color: {accentHex};"
+							></div>
 
-							<!-- Badges and Assignee Row -->
-							<div class="mb-2 flex items-center justify-between gap-2">
-								<div class="flex flex-wrap items-center gap-1.5">
+							<!-- Top Meta Row: Badges & Assignee Chip -->
+							<div class="flex items-center justify-between gap-2 pt-0.5">
+								<div class="flex flex-wrap items-center gap-1 min-w-0">
 									{#if card.waError}
-										<Badge tone="urgent" variant="soft">{waErrorLabel}</Badge>
+										<Badge tone="urgent" variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
+											{waErrorLabel}
+										</Badge>
 									{/if}
 									{#if card.badge}
-										<Badge tone={badgeTone} variant="soft">{card.badge}</Badge>
+										<Badge tone={badgeTone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
+											{card.badge}
+										</Badge>
 									{/if}
 								</div>
 
 								{#if card.assignee}
-									<div class="flex min-w-0 items-center gap-1 rounded-full border border-hairline bg-canvas-sunken px-2 py-0.5">
+									<div class="flex min-w-0 items-center gap-1.5 rounded-full border border-hairline bg-canvas-sunken px-2 py-0.5 shadow-xs shrink-0">
 										<Avatar name={card.assignee} src={card.assigneeAvatar} size={16} class="shrink-0" />
-										<span class="ds-caption truncate text-[11px] font-semibold text-ink-soft">
+										<span class="truncate text-[11px] font-semibold text-ink-soft max-w-[90px]">
 											{card.assignee}
 										</span>
 									</div>
 								{/if}
 							</div>
 
-							<!-- Title with task marker -->
-							<div class="flex items-start gap-1.5">
-								<HugeiconsIcon
-									icon={CheckmarkCircle02Icon}
-									size={16}
-									strokeWidth={1.8}
-									class="mt-0.5 shrink-0 text-faint group-hover:text-primary transition-colors"
-								/>
-								<p class="ds-body line-clamp-2 font-bold text-ink group-hover:text-primary-ink transition-colors">
+							<!-- Card Title (Customer Name) -->
+							<div>
+								<p class="text-sm font-bold text-ink leading-snug break-words group-hover:text-primary transition-colors">
 									{card.title}
 								</p>
+
+								<!-- Subtitle (Product / WhatsApp number) -->
+								{#if card.subtitle}
+									<p class="text-xs text-mute mt-1 truncate">
+										{card.subtitle}
+									</p>
+								{/if}
 							</div>
 
-							<!-- Subtitle (Product / WhatsApp) -->
-							{#if card.subtitle}
-								<p class="ds-caption mt-1.5 pl-[22px] text-mute line-clamp-1">
-									{card.subtitle}
-								</p>
-							{/if}
-
-							<!-- Footer Row: Checklist Progress & Metadata -->
+							<!-- Footer Row: Checklist Progress -->
 							{#if card.progress}
-								<div class="mt-3 flex items-center justify-between border-t border-hairline/60 pt-2 pl-[22px]">
+								<div class="mt-2.5 flex items-center justify-between border-t border-hairline/60 pt-2 text-xs">
 									<div class="flex items-center gap-1.5">
 										<HugeiconsIcon
 											icon={CheckListIcon}
-											size={14}
+											size={13}
 											strokeWidth={1.8}
-											class={card.progressDone ? 'text-status-done' : 'text-faint'}
+											class={card.progressDone ? 'text-status-done-ink' : 'text-mute'}
 										/>
 										<span
 											class={cn(
-												'ds-caption font-semibold',
-												card.progressDone ? 'text-status-done-ink' : 'text-ink-soft'
+												'text-[11px] font-semibold',
+												card.progressDone ? 'text-status-done-ink' : 'text-mute'
 											)}
 										>
 											{card.progress}
 										</span>
 									</div>
+									{#if card.progressDone}
+										<span class="inline-flex items-center gap-0.5 rounded-full bg-status-done-soft text-status-done-ink border border-status-done/30 px-1.5 py-0.2 text-[10px] font-semibold">
+											✓ Selesai
+										</span>
+									{/if}
 								</div>
 							{/if}
 						</button>
