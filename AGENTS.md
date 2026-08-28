@@ -161,8 +161,47 @@ Never mix landing dark tokens with app light tokens on the same screen.
 
 ## Database Schema
 
-Defined in `app/db/schema.ts` using Drizzle ORM.
-Run `bun run db:generate` and `bun run db:migrate` after changing schema.
+Defined in `app/db/schema.ts` using Drizzle ORM. Migrations live in `drizzle/`.
+
+### Adding a migration (normal workflow)
+
+```bash
+# 1. Edit app/db/schema.ts
+# 2. Generate migration from the diff
+bun run db:generate
+# 3. Apply to DB
+bun run db:migrate
+# 4. (optional) Re-seed
+bun run db:seed
+```
+
+### Full DB reset (when migrations are out of sync / fresh start)
+
+DB is empty — no data to lose. Wipe everything and start from one clean migration:
+
+```bash
+# 1. Drop all schemas in Postgres
+bun --bun -e '
+import postgres from "postgres";
+const sql = postgres(process.env.DATABASE_URL);
+await sql`DROP SCHEMA IF EXISTS public CASCADE`;
+await sql`DROP SCHEMA IF EXISTS drizzle CASCADE`;
+await sql`CREATE SCHEMA public`;
+await sql.end();
+'
+
+# 2. Delete old migration files + meta
+rm -rf drizzle/*.sql drizzle/meta
+
+# 3. Generate one fresh migration from current schema
+bun run db:generate
+
+# 4. Migrate + seed
+bun run db:migrate
+bun run db:seed
+```
+
+> **Never use `db:push`** — it's interactive and can truncate tables. Always use `db:generate` + `db:migrate`.
 
 ## Build/Test
 
