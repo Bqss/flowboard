@@ -614,7 +614,7 @@
   <title>{workflow?.name ?? tr('board.title')} — Flowboard</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-5 sm:space-y-6">
   <!-- Top Navigation & Header Bar -->
   <header class="space-y-3">
     <Breadcrumb
@@ -664,7 +664,7 @@
           }
         }}
         class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          'flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeTab === 'stats'
             ? 'border-primary text-primary'
             : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
@@ -686,7 +686,7 @@
           }
         }}
         class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          'flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeTab === 'kanban'
             ? 'border-primary text-primary'
             : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
@@ -713,7 +713,7 @@
           }
         }}
         class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          'flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeTab === 'table'
             ? 'border-primary text-primary'
             : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
@@ -731,7 +731,7 @@
       <!-- Tab 4: Setup Stages -->
       <a
         href="/dashboard/workflows/{workflowId}/setup"
-        class="flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
       >
         <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
         <span>{tr('board.setupStages')}</span>
@@ -740,7 +740,7 @@
       <!-- Tab 5: Workflow Settings -->
       <a
         href="/dashboard/workflows/{workflowId}/setup?tab=settings"
-        class="flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+        class="flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
       >
         <HugeiconsIcon icon={Settings02Icon} size={16} strokeWidth={1.8} />
         <span>{tr('setup.workflowSettings')}</span>
@@ -773,7 +773,7 @@
       {@const labelStep = Math.max(1, Math.ceil(dateLabels.length / 8))}
       {@const donutResult = buildDonutSegments(donutData, donutSize, donutStroke)}
       <section class="space-y-6 pt-2">
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
             <div class="flex items-center justify-between">
               <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsActive')}</span>
@@ -845,7 +845,7 @@
             {#if stats.byStage.length === 0 || donutResult.total === 0}
               <p class="ds-body text-mute py-8 text-center">{tr('board.noStages')}</p>
             {:else}
-              <div class="flex items-center gap-6 pt-2">
+              <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6 pt-2">
                 <!-- Donut SVG -->
                 <div class="relative shrink-0" style="width: {donutSize}px; height: {donutSize}px">
                   <svg width={donutSize} height={donutSize} viewBox="0 0 {donutSize} {donutSize}" style="transform: rotate(-90deg)">
@@ -855,7 +855,7 @@
                     {/each}
                   </svg>
                   <div class="absolute inset-0 flex flex-col items-center justify-center">
-                    <span class="ds-stat text-ink text-2xl">{donutResult.total}</span>
+                    <span class="ds-stat text-ink text-xl sm:text-2xl">{donutResult.total}</span>
                     <span class="ds-caption text-mute text-[11px]">total</span>
                   </div>
                 </div>
@@ -936,9 +936,9 @@
         <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-5">
           <div class="flex items-center justify-between flex-wrap gap-3">
             <h3 class="ds-section-title text-ink">{tr('board.statsByTime')}</h3>
-            <div class="flex items-center gap-4">
+            <div class="flex flex-wrap items-center gap-3 sm:gap-4">
               <!-- Date Range Picker -->
-              <div class="w-[200px]">
+              <div class="w-full sm:w-[200px]">
                 <DateRangePicker
                   bind:start={activityFromDate}
                   bind:end={activityToDate}
@@ -1025,7 +1025,7 @@
     {:else}
       <!-- Skeleton Loading -->
       <div class="space-y-6 pt-2">
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {#each [1, 2, 3, 4] as _i}
             <div class="rounded-2xl bg-card p-5 space-y-3 shadow-card">
               <div class="flex justify-between items-center">

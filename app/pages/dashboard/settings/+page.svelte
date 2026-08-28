@@ -165,7 +165,7 @@
   <title>{tr('settings.title')} — Flowboard</title>
 </svelte:head>
 
-<div class="space-y-8">
+<div class="space-y-6 sm:space-y-8">
   <header class="space-y-3">
     <Breadcrumb
       items={[
@@ -181,13 +181,13 @@
   </header>
 
   <div class="grid gap-6 lg:grid-cols-2">
-    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
+    <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={UserCircleIcon} size={20} strokeWidth={1.8} class="text-primary" />
         <h2 class="ds-section-title text-ink">{tr('settings.profile')}</h2>
       </div>
 
-      <div class="flex items-center gap-5">
+      <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-5">
         <Avatar name={data.user?.name} src={data.user?.avatarUrl ?? undefined} size={72} />
         <div>
           <input
@@ -255,7 +255,7 @@
       </form>
     </section>
 
-    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
+    <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={LockPasswordIcon} size={20} strokeWidth={1.8} class="text-primary" />
         <h2 class="ds-section-title text-ink">{tr('settings.security')}</h2>
@@ -321,7 +321,7 @@
     </section>
   </div>
 
-  <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-6">
+  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
     <div class="flex items-center gap-2">
       <HugeiconsIcon icon={BellRingIcon} size={20} strokeWidth={1.8} class="text-primary" />
       <div>

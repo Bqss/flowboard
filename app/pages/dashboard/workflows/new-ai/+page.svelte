@@ -104,8 +104,8 @@
 
 <svelte:head><title>{tr('ai.title')} — Flowboard</title></svelte:head>
 
-<div class="space-y-8">
-  <header class="space-y-6">
+<div class="space-y-6 sm:space-y-8">
+  <header class="space-y-4 sm:space-y-6">
     <Breadcrumb
       items={[
         { label: tr('common.workflows'), href: '/dashboard/workflows' },
@@ -125,7 +125,7 @@
     <div class="grid gap-6 lg:grid-cols-[1fr_20rem]">
       <!-- Prompt card -->
       <section class="rounded-card border border-hairline bg-card shadow-card">
-        <div class="space-y-6 p-8">
+        <div class="space-y-6 p-5 sm:p-8">
           <div class="flex items-center gap-3">
             <span class="grid size-10 place-items-center rounded-full bg-primary-soft text-primary">
               <HugeiconsIcon icon={AiMagicIcon} size={20} strokeWidth={1.8} />
@@ -188,7 +188,7 @@
 
       <!-- Tips sidebar -->
       <aside class="space-y-4">
-        <div class="rounded-card border border-hairline bg-card p-6 shadow-card space-y-3">
+        <div class="rounded-card border border-hairline bg-card p-5 sm:p-6 shadow-card space-y-3">
           <div class="flex items-center gap-2">
             <span class="grid size-8 place-items-center rounded-full bg-status-progress-soft text-status-progress-ink">
               <HugeiconsIcon icon={BulbIcon} size={16} strokeWidth={1.8} />
@@ -205,7 +205,7 @@
           </ul>
         </div>
 
-        <div class="rounded-card border border-hairline bg-card p-6 shadow-card space-y-3">
+        <div class="rounded-card border border-hairline bg-card p-5 sm:p-6 shadow-card space-y-3">
           <div class="flex items-center gap-2">
             <span class="grid size-8 place-items-center rounded-full bg-primary-soft text-primary">
               <HugeiconsIcon icon={ViewIcon} size={16} strokeWidth={1.8} />
@@ -224,7 +224,7 @@
           </ul>
         </div>
 
-        <div class="rounded-card border border-hairline bg-card p-6 shadow-card space-y-3">
+        <div class="rounded-card border border-hairline bg-card p-5 sm:p-6 shadow-card space-y-3">
           <div class="flex items-center gap-2">
             <span class="grid size-8 place-items-center rounded-full bg-primary-soft text-primary">
               <HugeiconsIcon icon={SmartPhone01Icon} size={16} strokeWidth={1.8} />
@@ -244,7 +244,7 @@
   {:else if step === 2 && draft}
     <section class="space-y-6">
       <!-- Summary bar -->
-      <div class="rounded-card border border-hairline bg-card p-6 shadow-card">
+      <div class="rounded-card border border-hairline bg-card p-5 sm:p-6 shadow-card">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="flex items-center gap-3">
             <span class="grid size-11 place-items-center rounded-full bg-primary-soft text-primary">
@@ -262,19 +262,19 @@
           </div>
 
           <!-- Stats -->
-          <div class="flex items-center gap-6">
+          <div class="flex items-center gap-4 sm:gap-6">
             <div class="text-center">
-              <p class="text-2xl font-extrabold tracking-tight text-ink">{draft.stages.length}</p>
+              <p class="text-xl sm:text-2xl font-extrabold tracking-tight text-ink">{draft.stages.length}</p>
               <p class="ds-caption text-mute">{tr('ai.summaryStages')}</p>
             </div>
             <span class="h-10 w-px bg-hairline"></span>
             <div class="text-center">
-              <p class="text-2xl font-extrabold tracking-tight text-ink">{totalChecklists}</p>
+              <p class="text-xl sm:text-2xl font-extrabold tracking-tight text-ink">{totalChecklists}</p>
               <p class="ds-caption text-mute">{tr('ai.summaryChecklists')}</p>
             </div>
             <span class="h-10 w-px bg-hairline"></span>
             <div class="text-center">
-              <p class="text-2xl font-extrabold tracking-tight text-ink">{totalActions}</p>
+              <p class="text-xl sm:text-2xl font-extrabold tracking-tight text-ink">{totalActions}</p>
               <p class="ds-caption text-mute">{tr('ai.summaryActions')}</p>
             </div>
           </div>

@@ -51,7 +51,7 @@
 
 <svelte:head><title>{tr('admin.workspaces.title')} — Flowboard</title></svelte:head>
 
-<div class="space-y-8">
+<div class="space-y-6 sm:space-y-8">
   <header class="space-y-3">
     <h1 class="ds-page-title text-ink">{tr('admin.workspaces.title')}</h1>
     <p class="ds-caption text-mute">{tr('admin.workspaces.description')}</p>

@@ -165,14 +165,14 @@
   <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
 {/snippet}
 
-<div class="space-y-8">
+<div class="space-y-6 sm:space-y-8">
   <header class="space-y-3">
     <h1 class="ds-page-title text-ink">{tr('admin.subs.title')}</h1>
     <p class="ds-caption text-mute">{tr('admin.subs.description')}</p>
   </header>
 
   {#if loading}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {#each [1, 2, 3, 4] as _i}
         <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
           <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
@@ -192,7 +192,7 @@
     </AlertBanner>
   {:else}
     <!-- Stat summary by status -->
-    <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <section class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       <StatCard
         label={statusLabel.active}
         value={String(counts.active)}
@@ -238,7 +238,7 @@
           <article
             class="rounded-2xl border border-hairline bg-card shadow-card transition-all duration-200 hover:border-hairline-strong hover:shadow-card-hover"
           >
-            <div class="p-5 space-y-4">
+            <div class="p-4 sm:p-5 space-y-4">
               <div class="flex flex-wrap items-start justify-between gap-4">
                 <div class="space-y-2">
                   <div class="flex items-center gap-3">
@@ -251,7 +251,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                  <div class="w-44">
+                  <div class="w-full sm:w-44">
                     <SelectMenu
                       options={planOptions}
                       value={sub.plan.id}

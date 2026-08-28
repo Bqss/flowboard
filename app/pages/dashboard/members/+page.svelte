@@ -194,7 +194,7 @@
   <HugeiconsIcon icon={MailSend01Icon} size={18} strokeWidth={1.8} />
 {/snippet}
 
-<div class="space-y-6">
+<div class="space-y-5 sm:space-y-6">
   <!-- Navigation & Header -->
   <header class="space-y-3">
     <Breadcrumb
@@ -231,7 +231,7 @@
   <!-- Metric Overview Cards -->
   <section>
     {#if loadingData}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {#each [1, 2, 3] as _i}
           <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
             <Skeleton shape="circle" class="size-9 rounded-lg" />
@@ -241,7 +241,7 @@
         {/each}
       </div>
     {:else}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <StatCard
           label={tr('members.total')}
           value={String(members.length)}
@@ -294,7 +294,7 @@
     {#if loadingData}
       <div class="divide-y divide-hairline">
         {#each [1, 2, 3] as _i}
-          <div class="flex items-center justify-between gap-3 px-6 py-4">
+          <div class="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
             <div class="flex items-center gap-3 min-w-0">
               <Skeleton shape="circle" class="size-10 rounded-full" />
               <div class="space-y-1.5 min-w-0">
@@ -316,11 +316,11 @@
         <table class="w-full text-left text-sm">
           <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
             <tr>
-              <th scope="col" class="px-6 py-3.5">{tr('members.nameProfile')}</th>
-              <th scope="col" class="px-6 py-3.5">{tr('members.email')}</th>
-              <th scope="col" class="px-6 py-3.5">{tr('members.role')}</th>
-              <th scope="col" class="px-6 py-3.5">{tr('members.joined')}</th>
-              <th scope="col" class="px-6 py-3.5 text-right">{tr('common.actions')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.nameProfile')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.email')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.role')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.joined')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5 text-right">{tr('common.actions')}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-hairline">
@@ -328,7 +328,7 @@
               {@const isMe = member.id === currentUserId}
               {@const isMemberOwner = member.role === 'owner'}
               <tr class="hover:bg-lane/40 transition-colors">
-                <td class="px-6 py-4">
+                <td class="px-4 py-3 sm:px-6 sm:py-4">
                   <div class="flex items-center gap-3">
                     <Avatar
                       name={member.name}
@@ -346,7 +346,7 @@
                     </div>
                   </div>
                 </td>
-                <td class="px-6 py-4 text-mute">
+                <td class="px-4 py-3 sm:px-6 sm:py-4 text-mute">
                   <div class="flex items-center gap-1.5">
                     <span>{member.email}</span>
                     <button
@@ -365,15 +365,15 @@
                     </button>
                   </div>
                 </td>
-                <td class="px-6 py-4">
+                <td class="px-4 py-3 sm:px-6 sm:py-4">
                   <Badge tone={isMemberOwner ? 'done' : 'idle'} variant="soft">
                     {isMemberOwner ? tr('common.owner') : tr('common.member')}
                   </Badge>
                 </td>
-                <td class="px-6 py-4 ds-caption text-mute">
+                <td class="px-4 py-3 sm:px-6 sm:py-4 ds-caption text-mute">
                   {formatDate(member.joinedAt)}
                 </td>
-                <td class="px-6 py-4 text-right">
+                <td class="px-4 py-3 sm:px-6 sm:py-4 text-right">
                   <div class="flex items-center justify-end gap-2">
                     {#if isOwner && !isMemberOwner && !isMe}
                       <Button
@@ -399,7 +399,7 @@
   <!-- Pending Invites Table -->
   {#if isOwner && invites.length > 0}
     <section class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
-      <div class="border-b border-hairline px-6 py-4">
+      <div class="border-b border-hairline px-4 py-3 sm:px-6 sm:py-4">
         <h2 class="ds-section-title text-ink">{tr('members.invitesTitle', { count: invites.length })}</h2>
       </div>
 
@@ -407,25 +407,25 @@
         <table class="w-full text-left text-sm">
           <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
             <tr>
-              <th class="px-6 py-3.5">{tr('members.email')}</th>
-              <th class="px-6 py-3.5">{tr('members.inviteStatus')}</th>
-              <th class="px-6 py-3.5">{tr('members.expires')}</th>
-              <th class="px-6 py-3.5 text-right">{tr('common.actions')}</th>
+              <th class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.email')}</th>
+              <th class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.inviteStatus')}</th>
+              <th class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.expires')}</th>
+              <th class="px-4 py-3 sm:px-6 sm:py-3.5 text-right">{tr('common.actions')}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-hairline">
             {#each invites as invite (invite.id)}
               <tr class="hover:bg-lane/40 transition-colors">
-                <td class="px-6 py-4 font-semibold text-ink">
+                <td class="px-4 py-3 sm:px-6 sm:py-4 font-semibold text-ink">
                   {invite.email}
                 </td>
-                <td class="px-6 py-4">
+                <td class="px-4 py-3 sm:px-6 sm:py-4">
                   <Badge tone="queued" variant="soft">{tr('members.inviteStatus')}</Badge>
                 </td>
-                <td class="px-6 py-4 ds-caption text-mute">
+                <td class="px-4 py-3 sm:px-6 sm:py-4 ds-caption text-mute">
                   {formatDate(invite.expiresAt)}
                 </td>
-                <td class="px-6 py-4 text-right">
+                <td class="px-4 py-3 sm:px-6 sm:py-4 text-right">
                   {#if invite.token}
                     <Button
                       variant="secondary"

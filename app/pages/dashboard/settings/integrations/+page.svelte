@@ -480,7 +480,7 @@
   <title>{tr('integrations.title')} — Flowboard</title>
 </svelte:head>
 
-<div class="space-y-8">
+<div class="space-y-6 sm:space-y-8">
   <header class="space-y-4">
     <Breadcrumb
       items={[
@@ -510,7 +510,7 @@
   {/if}
 
   {#if issuedToken}
-    <section class="rounded-2xl border border-primary/25 bg-primary-soft p-5 shadow-card">
+    <section class="rounded-2xl border border-primary/25 bg-primary-soft p-4 sm:p-5 shadow-card">
       <div class="flex items-start gap-3">
         <HugeiconsIcon icon={ShieldKeyIcon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
         <div class="min-w-0 flex-1 space-y-3">
@@ -530,8 +530,8 @@
     </section>
   {/if}
 
-  <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card">
-    <div class="mb-6 flex items-start gap-3">
+  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card">
+    <div class="mb-4 sm:mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Link01Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
         <h2 class="ds-section-title text-ink">{tr('integrations.registered')}</h2>
@@ -560,8 +560,8 @@
       <div class="space-y-3">
         {#each connections as connection (connection.id)}
           {@const recentJobs = jobs.filter((job) => job.connectionId === connection.id).slice(0, 3)}
-          <div class="rounded-xl border border-hairline bg-canvas px-5 py-4">
-            <div class="flex items-center justify-between gap-4">
+          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
                   <span class="ds-label truncate text-ink">{connection.name}</span>
@@ -577,7 +577,7 @@
                 </p>
               </div>
               {#if canManage}
-                <div class="flex shrink-0 items-center gap-1">
+                <div class="flex shrink-0 flex-wrap items-center gap-1">
                   <Button variant="ghost" size="sm" onclick={() => resetForm(connection)}>
                     {tr('common.edit')}
                   </Button>
@@ -599,7 +599,7 @@
             {/if}
 
             {#if recentJobs.length > 0}
-              <div class="mt-4 rounded-lg border border-hairline bg-lane/40 p-4">
+              <div class="mt-4 rounded-lg border border-hairline bg-lane/40 p-3 sm:p-4">
                 <div class="flex items-center justify-between gap-2">
                   <p class="ds-label text-ink">{tr('integrations.outboundLatest')}</p>
                   <span class="text-xs font-normal text-mute">{tr('integrations.latestCount', { count: recentJobs.length })}</span>
@@ -643,8 +643,8 @@
   </section>
 
   <!-- MCP API keys -->
-  <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card">
-    <div class="mb-6 flex items-start gap-3">
+  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card">
+    <div class="mb-4 sm:mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Key02Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
         <h2 class="ds-section-title text-ink">{tr('integrations.apiKeysTitle')}</h2>
@@ -671,8 +671,8 @@
     {:else}
       <div class="space-y-3">
         {#each apiKeys as key (key.id)}
-          <div class="rounded-xl border border-hairline bg-canvas px-5 py-4">
-            <div class="flex items-center justify-between gap-4">
+          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
                   <span class="ds-label truncate text-ink">{key.label}</span>

@@ -291,7 +291,7 @@
 <svelte:head><title>{tr('common.workflows')} — Flowboard</title></svelte:head>
 
 
-<div class="space-y-6">
+<div class="space-y-5 sm:space-y-6">
   <!-- PAGE HEADER -->
   <header class="space-y-3">
     <Breadcrumb

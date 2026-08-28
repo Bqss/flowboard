@@ -127,7 +127,7 @@
   <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
 {/snippet}
 
-<div class="space-y-8">
+<div class="space-y-6 sm:space-y-8">
   <header class="space-y-3">
     <h1 class="ds-page-title text-ink">{tr('admin.users.title')}</h1>
     <p class="ds-caption text-mute">{tr('admin.users.description')}</p>
@@ -136,7 +136,7 @@
   <!-- Stat summary -->
   <section>
     {#if loading}
-      <div class="grid gap-4 sm:grid-cols-3">
+      <div class="grid grid-cols-3 gap-3 sm:gap-4">
         {#each [1, 2, 3] as _i}
           <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
             <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
@@ -146,7 +146,7 @@
         {/each}
       </div>
     {:else}
-      <div class="grid gap-4 sm:grid-cols-3">
+      <div class="grid grid-cols-3 gap-3 sm:gap-4">
         <StatCard
           label={tr('admin.stats.total')}
           value={String(users.length)}

@@ -159,7 +159,7 @@
 {#snippet urgentIcon()}
   <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
 {/snippet}
-<div class="space-y-8">
+<div class="space-y-6 sm:space-y-8">
   <!-- Clean Header & Direct Actions -->
   <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div class="space-y-1">
@@ -167,7 +167,7 @@
       <p class="ds-caption text-mute">{tr('home.description')}</p>
     </div>
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2 sm:gap-3">
       <Button href="/dashboard/members" variant="secondary" size="sm">
         <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
         <span>{tr('home.teamButton')}</span>
@@ -182,7 +182,7 @@
   <!-- Workspace Stats Grid (Clean & Direct) -->
   <section>
     {#if loadingData}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {#each [1, 2, 3, 4] as _i}
           <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
             <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
@@ -192,7 +192,7 @@
         {/each}
       </div>
     {:else}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
           label={tr('home.totalCustomers')}
           value={String(stats.totalCustomers ?? totalCards)}
@@ -233,7 +233,7 @@
       </div>
 
       <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
-        <div class="flex flex-wrap items-center gap-3 border-b border-hairline bg-canvas-sunken px-4 py-3">
+        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 border-b border-hairline bg-canvas-sunken px-4 py-3">
           <label class="flex items-center gap-2 text-[13px] font-semibold text-ink cursor-pointer">
             <Checkbox
               checked={selectedWaitingIds.length === waitingCards.length && waitingCards.length > 0}
@@ -438,7 +438,7 @@
         </div>
         <p class="ds-caption text-mute">{tr('home.shortcutsDescription')}</p>
       </div>
-      <div class="grid gap-3 sm:grid-cols-3">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <a
           href="/dashboard/workflows"
           class="flex flex-col rounded-xl border border-hairline bg-lane p-4 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"

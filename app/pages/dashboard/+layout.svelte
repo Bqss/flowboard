@@ -372,7 +372,7 @@
           <button
             type="button"
             onclick={() => (mobileNavOpen = true)}
-            class="flex size-9 items-center justify-center rounded-lg text-mute transition-colors hover:bg-canvas-sunken hover:text-ink md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+            class="flex size-9 shrink-0 items-center justify-center rounded-lg text-mute transition-colors hover:bg-canvas-sunken hover:text-ink md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
             aria-label="Open menu"
           >
             <HugeiconsIcon icon={Menu01Icon} size={20} strokeWidth={2} />
@@ -389,7 +389,7 @@
                   aria-label={tr('shell.switchWorkspace')}
                   disabled={switchingWorkspace}
                 >
-                  <span class="ds-section-title truncate text-ink">
+                  <span class="truncate text-base font-semibold text-ink sm:text-xl sm:font-semibold sm:tracking-[-0.015em]">
                     {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'Flowboard')}
                   </span>
                   <HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8} class="shrink-0 text-mute" />
@@ -397,7 +397,7 @@
               {/snippet}
             </DropdownMenu>
           {:else}
-            <h2 class="ds-section-title text-ink">{data.workspace?.name ?? 'Flowboard'}</h2>
+            <h2 class="truncate text-base font-semibold text-ink sm:text-xl sm:font-semibold sm:tracking-[-0.015em]">{data.workspace?.name ?? 'Flowboard'}</h2>
           {/if}
         </div>
       {/snippet}
@@ -406,7 +406,7 @@
           <button
             type="button"
             onclick={toggleAdminMode}
-            class="group inline-flex items-center gap-2 rounded-full border border-hairline bg-card px-3 py-1.5 shadow-control transition-colors hover:border-hairline-strong"
+            class="group hidden items-center gap-2 rounded-full border border-hairline bg-card px-3 py-1.5 shadow-control transition-colors hover:border-hairline-strong sm:inline-flex"
             aria-pressed={adminMode}
             aria-label={adminMode ? tr('nav.exitAdmin') : tr('nav.adminMode')}
             title={adminMode ? tr('nav.exitAdmin') : tr('nav.adminMode')}
@@ -421,7 +421,7 @@
             </span>
           </button>
         {/if}
-        <div class="inline-flex items-center rounded-full border border-hairline bg-card p-0.5 shadow-control" aria-label={tr('language.label')}>
+        <div class="hidden items-center rounded-full border border-hairline bg-card p-0.5 shadow-control sm:inline-flex" aria-label={tr('language.label')}>
           {#each locales as language}
             <button
               type="button"
@@ -447,7 +447,7 @@
             <button
               type="button"
               onclick={toggle}
-              class="flex items-center gap-2.5 rounded-full border border-hairline bg-card py-1 pl-1.5 pr-3 shadow-control transition-all hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+              class="flex items-center gap-2 rounded-full border border-hairline bg-card py-1 pl-1.5 pr-2 shadow-control transition-all hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] sm:pr-3"
               aria-expanded={open}
               aria-label={tr('shell.userMenu')}
             >
@@ -456,14 +456,14 @@
                 <span class="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-card bg-presence-online"></span>
               </div>
               <span class="ds-label hidden max-w-[130px] truncate text-ink md:inline">{data.user?.name ?? 'User'}</span>
-              <HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={1.8} class="text-mute" />
+              <HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={1.8} class="hidden text-mute sm:block" />
             </button>
           {/snippet}
         </DropdownMenu>
       {/snippet}
     </Topbar>
 
-    <main class="flex-1 bg-canvas px-6 pt-12 pb-8 md:px-8 md:pt-16 md:pb-10">
+    <main class="flex-1 bg-canvas px-4 pt-6 pb-8 sm:px-6 md:px-8 md:pt-16 md:pb-10">
       <div class="mx-auto w-full max-w-[1280px]">
         {@render children()}
       </div>
