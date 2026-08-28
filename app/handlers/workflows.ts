@@ -209,13 +209,14 @@ export async function dashboardStats({
   return { stats };
 }
 
-export async function workflowStats({ workflow, membership, set }: Ctx<unknown, WorkflowParams>) {
+export async function workflowStats({ workflow, membership, set, query }: Ctx<unknown, WorkflowParams> & { query: { range?: string } }) {
   if (!workflow || !membership) {
     set.status = 404;
     return { error: 'Workflow not found' };
   }
 
-  const stats = await getWorkflowStats(workflow.id);
+  const rangeDays = parseInt(query.range ?? '30', 10);
+  const stats = await getWorkflowStats(workflow.id, isNaN(rangeDays) ? 30 : Math.min(Math.max(rangeDays, 1), 365));
   return { stats };
 }
 

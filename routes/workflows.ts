@@ -1,4 +1,4 @@
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 import { eq, and } from 'drizzle-orm';
 import { db, workflows } from '@db';
 import * as workflowHandlers from '@handlers/workflows';
@@ -107,7 +107,7 @@ export const createWorkflowsRoutes = () => {
         .delete('/', workflowHandlers.remove, { params: WorkflowIdParam })
         .get('/setup', workflowHandlers.setup, { params: WorkflowIdParam })
         .get('/board', workflowHandlers.board, { params: WorkflowIdParam })
-        .get('/stats', workflowHandlers.workflowStats, { params: WorkflowIdParam })
+        .get('/stats', workflowHandlers.workflowStats, { params: WorkflowIdParam, query: t.Object({ range: t.Optional(t.String()) }) })
         .post('/stages', workflowHandlers.createStageHandler, {
           params: WorkflowIdParam,
           body: CreateStageSchema

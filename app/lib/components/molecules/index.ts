@@ -3,6 +3,7 @@ import FormField, { type FormFieldControl } from './FormField.svelte';
 import SearchInput from './SearchInput.svelte';
 import PasswordInput from './PasswordInput.svelte';
 import DatePicker from './DatePicker.svelte';
+import DateRangePicker from './DateRangePicker.svelte';
 import TimePicker from './TimePicker.svelte';
 import QuantityStepper from './QuantityStepper.svelte';
 import CheckboxGroup from './CheckboxGroup.svelte';
@@ -58,6 +59,7 @@ export {
 	SearchInput,
 	PasswordInput,
 	DatePicker,
+	DateRangePicker,
 	TimePicker,
 	QuantityStepper,
 	CheckboxGroup,

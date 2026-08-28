@@ -149,7 +149,8 @@ export const createWorkflowFromDraft = async (
         color: stageDraft.color ?? 'indigo',
         position: index,
         onReplyNotify: stageDraft.onReplyNotify ?? false,
-        overdueReminderHours: stageDraft.overdueReminderHours ?? null
+        overdueReminderHours: stageDraft.overdueReminderHours ?? null,
+        autoMoveOnComplete: stageDraft.autoMoveOnComplete ?? false
       })
       .returning();
 
@@ -161,6 +162,7 @@ export const createWorkflowFromDraft = async (
           stageId: stage.id,
           label: checklist.label,
           required: checklist.required ?? true,
+          deadlineHours: checklist.deadlineHours ?? null,
           position: cIndex
         })
         .returning();
@@ -1009,7 +1011,7 @@ export type WorkflowAssigneeStat = {
 };
 
 export type WorkflowTimeBucket = {
-  bucket: string;
+  date: string; // ISO date string YYYY-MM-DD
   created: number;
   completed: number;
 };
@@ -1027,13 +1029,7 @@ export type WorkflowStats = {
   byTime: WorkflowTimeBucket[];
 };
 
-const TIME_BUCKETS = [
-  { key: '7d', days: 7 },
-  { key: '30d', days: 30 },
-  { key: '90d', days: 90 }
-] as const;
-
-export const getWorkflowStats = async (workflowId: string): Promise<WorkflowStats> => {
+export const getWorkflowStats = async (workflowId: string, rangeDays = 30): Promise<WorkflowStats> => {
   const workflowStages = await listStages(workflowId);
   if (workflowStages.length === 0) {
     return {
@@ -1137,22 +1133,33 @@ export const getWorkflowStats = async (workflowId: string): Promise<WorkflowStat
     }
   }
 
-  // Per-time-range breakdown
-  const byTime: WorkflowTimeBucket[] = TIME_BUCKETS.map(({ key, days }) => {
-    const since = new Date(now - days * 24 * 60 * 60 * 1000);
-    const created = allCards.filter((c) => c.createdAt >= since).length;
-    const completed = allCards.filter(
-      (c) => c.stageId === lastStageId && c.stageEnteredAt >= since
-    ).length;
-    return { bucket: key, created, completed };
-  });
 
+  // Per-day breakdown for the selected range
+  const days = Math.min(Math.max(rangeDays, 1), 365);
+  const startDate = new Date(now - (days - 1) * 24 * 60 * 60 * 1000);
+  startDate.setHours(0, 0, 0, 0);
+
+  const dayBuckets: WorkflowTimeBucket[] = [];
+  for (let d = 0; d < days; d++) {
+    const dayStart = new Date(startDate.getTime() + d * 24 * 60 * 60 * 1000);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const dateStr = dayStart.toISOString().slice(0, 10);
+
+    const created = allCards.filter(
+      (c) => c.createdAt >= dayStart && c.createdAt < dayEnd
+    ).length;
+    const completed = allCards.filter(
+      (c) => c.stageId === lastStageId && c.stageEnteredAt >= dayStart && c.stageEnteredAt < dayEnd
+    ).length;
+
+    dayBuckets.push({ date: dateStr, created, completed });
+  }
   return {
     workflowId,
     totals: { active, waiting, overdue, done },
     byStage: [...stageStatsMap.values()].sort((a, b) => a.position - b.position),
     byAssignee: [...assigneeMap.values()],
-    byTime
+    byTime: dayBuckets
   };
 };
 

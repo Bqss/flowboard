@@ -29,6 +29,7 @@
     SearchInput,
     Tabs,
     CopyToClipboard,
+    DateRangePicker,
     StatCard,
     toast
   } from '$lib/components/molecules/index.js';
@@ -38,6 +39,7 @@
     Add01Icon,
     Upload04Icon,
     Settings01Icon,
+    Settings02Icon,
     KanbanIcon,
     DashboardSquare02Icon,
     CheckmarkCircle02Icon,
@@ -74,9 +76,31 @@
 
   // Workflow statistics
   let stats = $state<ApiWorkflowStats | null>(null);
+  let activityFromDate = $state<string>('');
+  let activityToDate = $state<string>('');
   let statsLoading = $state(false);
-  // Primary 4 tabs: stats (default) | kanban | table (setup links to /setup)
   let activeTab = $state<'stats' | 'kanban' | 'table'>('stats');
+
+  function toISO(date: Date) {
+    const m = `${date.getMonth() + 1}`.padStart(2, '0');
+    const d = `${date.getDate()}`.padStart(2, '0');
+    return `${date.getFullYear()}-${m}-${d}`;
+  }
+
+  function daysBetween(from: string, to: string) {
+    const f = new Date(from);
+    const t = new Date(to);
+    return Math.max(1, Math.ceil((t.getTime() - f.getTime()) / 86400000));
+  }
+
+  // Initialize default range: last 30 days
+  const _today = new Date();
+  const _30ago = new Date();
+  _30ago.setDate(_30ago.getDate() - 29);
+  activityFromDate = toISO(_30ago);
+  activityToDate = toISO(_today);
+
+  function activityRangeDays() { return daysBetween(activityFromDate, activityToDate); }
 
   $effect(() => {
     const urlTab = page.url.searchParams.get('tab');
@@ -139,7 +163,7 @@
         api.getWorkflowBoard(data.workspace.id, workflowId),
         api.listWorkflows(data.workspace.id),
         api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
-        api.getWorkflowStats(data.workspace.id, workflowId).catch(() => ({ stats: null }))
+        api.getWorkflowStats(data.workspace.id, workflowId, activityRangeDays()).catch(() => ({ stats: null }))
       ]);
       board = boardRes.board?.columns ?? [];
       workflow = workflowsRes.workflows?.find((w) => w.id === workflowId) ?? null;
@@ -155,6 +179,34 @@
   $effect(() => {
     if (data.workspace?.id && workflowId) {
       loadWorkflowBoardData();
+    }
+  });
+
+  async function refetchStats() {
+    if (!data.workspace?.id || !workflowId) return;
+    statsLoading = true;
+    try {
+      const res = await api.getWorkflowStats(data.workspace.id, workflowId, activityRangeDays());
+      stats = res.stats ?? null;
+    } catch {
+      /* keep existing stats */
+    } finally {
+      statsLoading = false;
+    }
+  }
+
+  // Refetch stats when date range changes
+  let lastFromDate = $state('');
+  let lastToDate = $state('');
+  $effect(() => {
+    if (
+      data.workspace?.id &&
+      workflowId &&
+      (activityFromDate !== lastFromDate || activityToDate !== lastToDate)
+    ) {
+      lastFromDate = activityFromDate;
+      lastToDate = activityToDate;
+      refetchStats();
     }
   });
 
@@ -522,6 +574,40 @@
   const sheetChecklistPct = $derived(
     sheetChecklistTotal > 0 ? Math.round((sheetChecklistDone / sheetChecklistTotal) * 100) : 0
   );
+
+  // Line chart path builder for activity-over-time
+ const buildLinePath = (data: number[], w: number, h: number, pad = 8) => {
+   if (!data.length) return { line: '', area: '' };
+   const min = Math.min(...data, 0);
+   const max = Math.max(...data, 1);
+   const range = max - min || 1;
+   const pts = data.map((v, i) => {
+     const x = pad + (i / Math.max(data.length - 1, 1)) * (w - pad * 2);
+     const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+     return `${x},${y}`;
+   });
+   return {
+     line: `M ${pts.join(' L ')}`,
+     area: `M ${pts.join(' L ')} L ${w - pad},${h - pad} L ${pad},${h - pad} Z`
+   };
+ };
+
+ // Donut chart builder — returns SVG circle segments using stroke-dasharray
+ const buildDonutSegments = (items: Array<{ label: string; value: number; color: string }>, size: number, stroke: number) => {
+   const total = items.reduce((s, i) => s + i.value, 0);
+   if (total === 0) return { segments: [] as Array<{ label: string; value: number; color: string; dash: string; offset: number }>, total };
+   const radius = (size - stroke) / 2;
+   const circumference = 2 * Math.PI * radius;
+   let offset = 0;
+   const segments = items.map((item) => {
+     const fraction = item.value / total;
+     const dash = fraction * circumference;
+     const seg = { label: item.label, value: item.value, color: item.color, dash: `${dash} ${circumference - dash}`, offset: -offset };
+     offset += dash;
+     return seg;
+   });
+   return { segments, total, radius, circumference };
+ };
 </script>
 
 <svelte:head>
@@ -556,16 +642,15 @@
           <span>{tr('board.importCsv')}</span>
         </Button>
 
-        <Button variant="primary" size="sm" onclick={openCreateModal} class="shadow-xs">
-          <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
+        <Button variant="primary" size="md" onclick={openCreateModal} class="shadow-primary font-bold ring-2 ring-primary/20">
+          <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2.2} />
           <span>{tr('board.addCustomer')}</span>
         </Button>
       </div>
     </div>
   </header>
 
-  <!-- PRIMARY 4-TAB BAR -->
-  <div class="flex items-center justify-between border-b border-hairline">
+  <div class="flex items-center justify-between">
     <div class="flex items-center gap-1 -mb-px overflow-x-auto">
       <!-- Tab 1: Statistik (Default) -->
       <button
@@ -579,7 +664,7 @@
           }
         }}
         class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeTab === 'stats'
             ? 'border-primary text-primary'
             : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
@@ -601,7 +686,7 @@
           }
         }}
         class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeTab === 'kanban'
             ? 'border-primary text-primary'
             : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
@@ -610,7 +695,7 @@
         <HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} />
         <span>{tr('board.kanban')}</span>
         {#if totalCards > 0}
-          <span class={cn('rounded-full px-2 py-0.5 text-xs font-bold', activeTab === 'kanban' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
+          <span class={cn('rounded-full px-2 py-0.5 text-[13px] font-bold', activeTab === 'kanban' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
             {totalCards}
           </span>
         {/if}
@@ -628,7 +713,7 @@
           }
         }}
         class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeTab === 'table'
             ? 'border-primary text-primary'
             : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
@@ -637,7 +722,7 @@
         <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
         <span>{tr('board.table')}</span>
         {#if totalCards > 0}
-          <span class={cn('rounded-full px-2 py-0.5 text-xs font-bold', activeTab === 'table' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
+          <span class={cn('rounded-full px-2 py-0.5 text-[13px] font-bold', activeTab === 'table' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
             {totalCards}
           </span>
         {/if}
@@ -646,10 +731,19 @@
       <!-- Tab 4: Setup Stages -->
       <a
         href="/dashboard/workflows/{workflowId}/setup"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+        class="flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
       >
         <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
         <span>{tr('board.setupStages')}</span>
+      </a>
+
+      <!-- Tab 5: Workflow Settings -->
+      <a
+        href="/dashboard/workflows/{workflowId}/setup?tab=settings"
+        class="flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+      >
+        <HugeiconsIcon icon={Settings02Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('setup.workflowSettings')}</span>
       </a>
     </div>
   </div>
@@ -660,68 +754,75 @@
       {@const totalActive = stats.totals.active ?? 0}
       {@const totalDone = stats.totals.done ?? 0}
       {@const totalAll = totalActive + totalDone}
-      {@const maxStageCount = Math.max(...(stats.byStage.map((s) => s.total) ?? [1]), 1)}
-
+      {@const stageColors = ['#6366f1', '#f59e0b', '#22c55e', '#ec4899', '#06b6d4', '#8b5cf6', '#f43f5e', '#14b8a6']}
+      {@const donutData = stats.byStage.map((s, i) => ({ label: s.stageName, value: s.total, color: stageColors[i % stageColors.length] }))}
+      {@const donutSize = 160}
+      {@const donutStroke = 28}
+      {@const createdData = stats.byTime.map((b) => b.created)}
+      {@const completedData = stats.byTime.map((b) => b.completed)}
+      {@const chartW = 800}
+      {@const chartH = 200}
+      {@const createdPath = buildLinePath(createdData, chartW, chartH)}
+      {@const completedPath = buildLinePath(completedData, chartW, chartH)}
+      {@const maxChartVal = Math.max(...createdData, ...completedData, 1)}
+      {@const tickCount = 4}
+      {@const dateLabels = stats.byTime.map((b) => {
+        const d = new Date(b.date);
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      })}
+      {@const labelStep = Math.max(1, Math.ceil(dateLabels.length / 8))}
+      {@const donutResult = buildDonutSegments(donutData, donutSize, donutStroke)}
       <section class="space-y-6 pt-2">
-        <!-- Hero KPI 4-Cards Grid (Flowboard Light Aesthetic) -->
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <!-- Card 1: Pelanggan Aktif -->
-          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
-            <div class="absolute top-0 left-0 right-0 h-[3px] bg-primary"></div>
+          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsActive')}</span>
-              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft text-primary border border-primary-border/60 shadow-xs">
+              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsActive')}</span>
+              <div class="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
                 <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
               </div>
             </div>
             <div>
-              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.active}</p>
-              <p class="text-[11px] text-mute mt-1">{tr('board.activeInPipeline') || 'Pelanggan aktif dalam alur kerja'}</p>
+              <p class="ds-stat text-ink">{stats.totals.active}</p>
+              <p class="ds-caption text-mute mt-1">{tr('board.activeInPipeline') || 'Pelanggan aktif dalam alur kerja'}</p>
             </div>
           </div>
 
-          <!-- Card 2: Menunggu Tindakan -->
-          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
-            <div class="absolute top-0 left-0 right-0 h-[3px] bg-status-progress"></div>
+          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsWaiting')}</span>
-              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-status-progress-soft text-status-progress-ink border border-status-progress/40 shadow-xs">
+              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsWaiting')}</span>
+              <div class="flex size-9 items-center justify-center rounded-xl bg-status-progress-soft text-status-progress-ink">
                 <HugeiconsIcon icon={Clock01Icon} size={18} strokeWidth={1.8} />
               </div>
             </div>
             <div>
-              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.waiting}</p>
-              <p class="text-[11px] text-mute mt-1">{tr('board.waitingActionDesc') || 'Menunggu maklum balas / semakan'}</p>
+              <p class="ds-stat text-ink">{stats.totals.waiting}</p>
+              <p class="ds-caption text-mute mt-1">{tr('board.waitingActionDesc') || 'Menunggu maklum balas / semakan'}</p>
             </div>
           </div>
 
-          <!-- Card 3: Tertunggak -->
-          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
-            <div class="absolute top-0 left-0 right-0 h-[3px] bg-status-urgent"></div>
+          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsOverdue')}</span>
-              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-status-urgent-soft text-status-urgent-ink border border-status-urgent/40 shadow-xs">
+              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsOverdue')}</span>
+              <div class="flex size-9 items-center justify-center rounded-xl bg-status-urgent-soft text-status-urgent-ink">
                 <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
               </div>
             </div>
             <div>
-              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.overdue}</p>
-              <p class="text-[11px] text-mute mt-1">{tr('board.overdueDesc') || 'Melebihi had masa tindak balas'}</p>
+              <p class="ds-stat text-ink">{stats.totals.overdue}</p>
+              <p class="ds-caption text-mute mt-1">{tr('board.overdueDesc') || 'Melebihi had masa tindak balas'}</p>
             </div>
           </div>
 
-          <!-- Card 4: Selesai -->
-          <div class="relative rounded-2xl border border-hairline bg-card p-5 shadow-card hover:shadow-card-hover transition-all duration-150 overflow-hidden space-y-3">
-            <div class="absolute top-0 left-0 right-0 h-[3px] bg-status-done"></div>
+          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-mute uppercase tracking-wider">{tr('board.statsDone')}</span>
-              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-status-done-soft text-status-done-ink border border-status-done/40 shadow-xs">
+              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsDone')}</span>
+              <div class="flex size-9 items-center justify-center rounded-xl bg-status-done-soft text-status-done-ink">
                 <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
               </div>
             </div>
             <div>
-              <p class="text-3xl font-extrabold text-ink tracking-tight">{stats.totals.done}</p>
-              <p class="text-[11px] text-mute mt-1">
+              <p class="ds-stat text-ink">{stats.totals.done}</p>
+              <p class="ds-caption text-mute mt-1">
                 {#if totalAll > 0}
                   {Math.round((totalDone / totalAll) * 100)}% {tr('board.completionRate') || 'kadar selesai'}
                 {:else}
@@ -732,104 +833,94 @@
           </div>
         </div>
 
-        <!-- Middle Grid: Distribution by Stage & Team Workload -->
+        <!-- Middle Grid: Donut by Stage & Team Workload -->
         <div class="grid gap-5 lg:grid-cols-2">
-          <!-- Card 1: Taburan Mengikut Peringkat -->
-          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
-            <div class="flex items-center justify-between border-b border-hairline/60 pb-3">
-              <div class="flex items-center gap-2">
-                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary border border-primary-border/60">
-                  <HugeiconsIcon icon={BarChartIcon} size={15} strokeWidth={2} />
-                </div>
-                <h3 class="text-sm font-bold text-ink">{tr('board.statsByStage')}</h3>
-              </div>
-              <span class="rounded-full bg-lane border border-hairline px-2.5 py-0.5 text-xs font-semibold text-mute">
-                {stats.byStage.length} {stats.byStage.length === 1 ? 'peringkat' : 'peringkat'}
-              </span>
+          <!-- Donut Chart: Distribution by Stage -->
+          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="ds-section-title text-ink">{tr('board.statsByStage')}</h3>
+              <span class="ds-caption text-mute">{stats.byStage.length} peringkat</span>
             </div>
 
-            <div class="space-y-3.5 pt-1">
-              {#if stats.byStage.length === 0}
-                <p class="text-xs text-mute py-4 text-center">{tr('board.noStages')}</p>
-              {:else}
-                {#each stats.byStage as stage (stage.stageId)}
-                  {@const pct = totalActive > 0 ? Math.round((stage.total / totalActive) * 100) : 0}
-                  {@const barPct = Math.round((stage.total / maxStageCount) * 100)}
-                  <div class="space-y-1.5">
-                    <div class="flex items-center justify-between text-xs">
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span class="font-bold text-ink truncate">{stage.stageName}</span>
-                        {#if stage.overdue > 0}
-                          <span class="inline-flex items-center rounded-full bg-status-urgent-soft text-status-urgent-ink border border-status-urgent/30 px-1.5 py-0.2 text-[10px] font-semibold">
-                            {stage.overdue} {tr('board.statsOverdue').toLowerCase()}
-                          </span>
-                        {/if}
-                      </div>
-                      <div class="flex items-center gap-2 shrink-0 font-medium">
-                        <span class="text-ink font-bold">{stage.total}</span>
-                        <span class="text-mute text-[11px]">({pct}%)</span>
-                      </div>
-                    </div>
-
-                    <!-- Progress Bar Track -->
-                    <div class="h-2 w-full rounded-full bg-lane overflow-hidden border border-hairline/50">
-                      <div
-                        class="h-full rounded-full bg-primary transition-all duration-300"
-                        style="width: {barPct}%;"
-                      ></div>
-                    </div>
+            {#if stats.byStage.length === 0 || donutResult.total === 0}
+              <p class="ds-body text-mute py-8 text-center">{tr('board.noStages')}</p>
+            {:else}
+              <div class="flex items-center gap-6 pt-2">
+                <!-- Donut SVG -->
+                <div class="relative shrink-0" style="width: {donutSize}px; height: {donutSize}px">
+                  <svg width={donutSize} height={donutSize} viewBox="0 0 {donutSize} {donutSize}" style="transform: rotate(-90deg)">
+                    <circle cx={donutSize / 2} cy={donutSize / 2} r={donutResult.radius} fill="none" stroke="var(--color-lane, #e8edf4)" stroke-width={donutStroke} />
+                    {#each donutResult.segments as seg}
+                      <circle cx={donutSize / 2} cy={donutSize / 2} r={donutResult.radius} fill="none" stroke={seg.color} stroke-width={donutStroke} stroke-dasharray={seg.dash} stroke-dashoffset={seg.offset} />
+                    {/each}
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="ds-stat text-ink text-2xl">{donutResult.total}</span>
+                    <span class="ds-caption text-mute text-[11px]">total</span>
                   </div>
-                {/each}
-              {/if}
-            </div>
+                </div>
+
+                <!-- Legend -->
+                <div class="flex-1 space-y-2 min-w-0">
+                  {#each donutResult.segments as seg, i}
+                    {@const stage = stats.byStage[i]}
+                    {@const pct = donutResult.total > 0 ? Math.round((seg.value / donutResult.total) * 100) : 0}
+                    <div class="flex items-center gap-2.5">
+                      <span class="size-3 rounded-full shrink-0" style="background: {seg.color}"></span>
+                      <span class="ds-label text-ink truncate flex-1">{seg.label}</span>
+                      {#if stage?.overdue > 0}
+                        <span class="inline-flex items-center rounded-full bg-status-urgent-soft text-status-urgent-ink px-1.5 py-0.2 text-[12px] font-semibold shrink-0">
+                          {stage.overdue} {tr('board.statsOverdue').toLowerCase()}
+                        </span>
+                      {/if}
+                      <span class="ds-label text-ink font-medium shrink-0">{seg.value}</span>
+                      <span class="ds-caption text-mute shrink-0 w-10 text-right">({pct}%)</span>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
           </div>
 
-          <!-- Card 2: Beban Kerja PIC Pasukan -->
-          <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
-            <div class="flex items-center justify-between border-b border-hairline/60 pb-3">
-              <div class="flex items-center gap-2">
-                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary border border-primary-border/60">
-                  <HugeiconsIcon icon={UserGroupIcon} size={15} strokeWidth={2} />
-                </div>
-                <h3 class="text-sm font-bold text-ink">{tr('board.statsByAssignee')}</h3>
-              </div>
-              <span class="rounded-full bg-lane border border-hairline px-2.5 py-0.5 text-xs font-semibold text-mute">
-                {stats.byAssignee.length} PIC
-              </span>
+          <!-- Team Workload -->
+          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="ds-section-title text-ink">{tr('board.statsByAssignee')}</h3>
+              <span class="ds-caption text-mute">{stats.byAssignee.length} PIC</span>
             </div>
 
-            <div class="space-y-3 pt-1">
+            <div class="space-y-2.5 pt-1">
               {#if stats.byAssignee.length === 0}
-                <p class="text-xs text-mute py-4 text-center">{tr('board.unassigned')}</p>
+                <p class="ds-body text-mute py-8 text-center">{tr('board.unassigned')}</p>
               {:else}
                 {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
-                  <div class="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-canvas-sunken/60 p-3 text-xs transition-colors hover:bg-card">
+                  <div class="flex items-center justify-between gap-3 rounded-xl bg-canvas-sunken/50 p-3 transition-colors hover:bg-canvas-sunken">
                     <div class="flex items-center gap-2.5 min-w-0">
-                      <Avatar name={assignee.assigneeName ?? tr('board.statsUnassigned')} size={28} />
+                      <Avatar name={assignee.assigneeName ?? tr('board.statsUnassigned')} size={30} />
                       <div class="min-w-0">
-                        <p class="font-bold text-ink truncate text-xs">
+                        <p class="ds-label text-ink truncate">
                           {assignee.assigneeName ?? tr('board.statsUnassigned')}
                         </p>
-                        <p class="text-[10px] text-mute truncate">{assignee.active} {tr('board.statsActive').toLowerCase()}</p>
+                        <p class="ds-caption text-mute truncate">{assignee.active} {tr('board.statsActive').toLowerCase()}</p>
                       </div>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-1.5 shrink-0">
-                      <Badge tone="queued" variant="soft" class="text-[10px] font-semibold">
+                      <Badge tone="queued" variant="soft" class="text-[12px] font-semibold">
                         {assignee.active} {tr('board.statsActive').toLowerCase()}
                       </Badge>
                       {#if assignee.waiting > 0}
-                        <Badge tone="progress" variant="soft" class="text-[10px] font-semibold">
+                        <Badge tone="progress" variant="soft" class="text-[12px] font-semibold">
                           {assignee.waiting} {tr('board.statsWaiting').toLowerCase()}
                         </Badge>
                       {/if}
                       {#if assignee.overdue > 0}
-                        <Badge tone="urgent" variant="soft" class="text-[10px] font-semibold">
+                        <Badge tone="urgent" variant="soft" class="text-[12px] font-semibold">
                           {assignee.overdue} {tr('board.statsOverdue').toLowerCase()}
                         </Badge>
                       {/if}
                       {#if assignee.done > 0}
-                        <Badge tone="done" variant="soft" class="text-[10px] font-semibold">
+                        <Badge tone="done" variant="soft" class="text-[12px] font-semibold">
                           {assignee.done} {tr('board.statsDone').toLowerCase()}
                         </Badge>
                       {/if}
@@ -841,55 +932,102 @@
           </div>
         </div>
 
-        <!-- Bottom Card: Aktiviti Mengikut Garis Masa -->
-        <div class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
-          <div class="flex items-center justify-between border-b border-hairline/60 pb-3">
-            <div class="flex items-center gap-2">
-              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary border border-primary-border/60">
-                <HugeiconsIcon icon={Calendar03Icon} size={15} strokeWidth={2} />
+        <!-- Line Chart: Activity Over Time with Date Range Picker -->
+        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-5">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <h3 class="ds-section-title text-ink">{tr('board.statsByTime')}</h3>
+            <div class="flex items-center gap-4">
+              <!-- Date Range Picker -->
+              <div class="w-[200px]">
+                <DateRangePicker
+                  bind:start={activityFromDate}
+                  bind:end={activityToDate}
+                  placeholder="Rentang tanggal"
+                />
               </div>
-              <h3 class="text-sm font-bold text-ink">{tr('board.statsByTime')}</h3>
+              <div class="flex items-center gap-1.5">
+                <span class="size-2.5 rounded-full bg-primary"></span>
+                <span class="ds-caption text-mute">{tr('board.statsCreated')}</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="size-2.5 rounded-full bg-status-done"></span>
+                <span class="ds-caption text-mute">{tr('board.statsCompleted')}</span>
+              </div>
             </div>
           </div>
 
-          <div class="grid gap-3 sm:grid-cols-3">
-            {#each stats.byTime as bucket (bucket.bucket)}
-              {@const periodLabel = bucket.bucket === '7d' ? tr('board.statsLast7d') : bucket.bucket === '30d' ? tr('board.statsLast30d') : tr('board.statsLast90d')}
-              <div class="rounded-xl border border-hairline bg-canvas-sunken/60 hover:bg-card p-4 text-xs space-y-3 transition-all duration-150 shadow-xs">
-                <div class="flex items-center justify-between">
-                  <span class="font-bold text-ink bg-card border border-hairline px-2.5 py-0.5 rounded-lg text-[11px] shadow-xs">
-                    {periodLabel}
-                  </span>
-                </div>
+          {#if statsLoading}
+            <div class="flex items-center justify-center py-12">
+              <Skeleton shape="rect" class="h-48 w-full rounded-xl" />
+            </div>
+          {:else if stats.byTime.length === 0}
+            <p class="ds-body text-mute py-8 text-center">Tiada data aktiviti</p>
+          {:else}
+            <div class="relative">
+              <svg viewBox="0 0 {chartW} {chartH}" class="w-full" style="height: {chartH}px" preserveAspectRatio="none">
+                <!-- Grid lines + Y-axis labels -->
+                {#each Array(tickCount + 1) as _, i}
+                  {@const ratio = i / tickCount}
+                  {@const yVal = Math.round(maxChartVal * (1 - ratio))}
+                  <line
+                    x1="0" y1={chartH * ratio} x2={chartW} y2={chartH * ratio}
+                    stroke="var(--color-hairline, #e2e8f0)" stroke-width="1" stroke-dasharray="4 4"
+                  />
+                {/each}
+                <!-- Created line (indigo) -->
+                {#if createdPath.line}
+                  <path d={createdPath.area} fill="rgba(79, 70, 229, 0.06)" />
+                  <path
+                    d={createdPath.line} fill="none"
+                    stroke="var(--color-primary, #4f46e5)" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round"
+                  />
+                  {#each createdData as val, i}
+                    {@const x = 8 + (i / Math.max(createdData.length - 1, 1)) * (chartW - 16)}
+                    {@const min = 0}
+                    {@const max = maxChartVal}
+                    {@const range = max - min || 1}
+                    {@const y = 8 + (1 - (val - min) / range) * (chartH - 16)}
+                    <circle cx={x} cy={y} r="3" fill="var(--color-primary, #4f46e5)" />
+                  {/each}
+                {/if}
+                <!-- Completed line (green) -->
+                {#if completedPath.line}
+                  <path d={completedPath.area} fill="rgba(34, 197, 94, 0.06)" />
+                  <path
+                    d={completedPath.line} fill="none"
+                    stroke="var(--color-status-done, #22c55e)" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round"
+                  />
+                  {#each completedData as val, i}
+                    {@const x = 8 + (i / Math.max(completedData.length - 1, 1)) * (chartW - 16)}
+                    {@const min = 0}
+                    {@const max = maxChartVal}
+                    {@const range = max - min || 1}
+                    {@const y = 8 + (1 - (val - min) / range) * (chartH - 16)}
+                    <circle cx={x} cy={y} r="3" fill="var(--color-status-done, #22c55e)" />
+                  {/each}
+                {/if}
+              </svg>
+            </div>
 
-                <div class="grid grid-cols-2 gap-3 pt-1">
-                  <div class="rounded-lg bg-card border border-hairline p-2.5 space-y-0.5">
-                    <div class="flex items-center gap-1 text-mute text-[10px]">
-                      <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={2} class="text-primary" />
-                      <span>{tr('board.statsCreated')}</span>
-                    </div>
-                    <p class="text-xl font-extrabold text-ink tracking-tight">{bucket.created}</p>
-                  </div>
-
-                  <div class="rounded-lg bg-card border border-hairline p-2.5 space-y-0.5">
-                    <div class="flex items-center gap-1 text-mute text-[10px]">
-                      <HugeiconsIcon icon={Tick02Icon} size={12} strokeWidth={2} class="text-status-done-ink" />
-                      <span>{tr('board.statsCompleted')}</span>
-                    </div>
-                    <p class="text-xl font-extrabold text-status-done-ink tracking-tight">{bucket.completed}</p>
-                  </div>
-                </div>
-              </div>
-            {/each}
-          </div>
+            <!-- X-axis date labels (sparse) -->
+            <div class="flex justify-between px-1">
+              {#each dateLabels as label, i}
+                {#if i % labelStep === 0 || i === dateLabels.length - 1}
+                  <span class="ds-caption text-mute">{label}</span>
+                {/if}
+              {/each}
+            </div>
+          {/if}
         </div>
       </section>
     {:else}
-      <!-- Full Skeleton Loading Layout -->
+      <!-- Skeleton Loading -->
       <div class="space-y-6 pt-2">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {#each [1, 2, 3, 4] as _i}
-            <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
+            <div class="rounded-2xl bg-card p-5 space-y-3 shadow-card">
               <div class="flex justify-between items-center">
                 <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
                 <Skeleton shape="rect" class="h-9 w-9 rounded-xl" />
@@ -900,12 +1038,12 @@
           {/each}
         </div>
         <div class="grid gap-5 lg:grid-cols-2">
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
+          <div class="rounded-2xl bg-card p-5 space-y-4 shadow-card">
             <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
             <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
             <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
           </div>
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
+          <div class="rounded-2xl bg-card p-5 space-y-4 shadow-card">
             <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
             <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
             <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
@@ -915,10 +1053,10 @@
     {/if}
   {:else}
     <!-- TAB 2 (KANBAN) OR TAB 3 (TABLE): FILTER BAR -->
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-hairline pb-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3">
       <!-- Search & Filters -->
       <div class="flex flex-wrap items-center gap-2">
-        <div class="w-full sm:w-60">
+        <div class="w-full sm:w-72">
           <SearchInput
             bind:value={searchQuery}
             placeholder={tr('board.searchPlaceholder')}
@@ -930,7 +1068,7 @@
         {#if members.length > 0}
           <select
             bind:value={selectedMemberFilter}
-            class="h-8 rounded-lg border border-hairline bg-card px-2.5 text-xs text-ink shadow-control transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+            class="h-9 rounded-lg bg-card px-2.5 text-base text-ink border border-hairline transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
             aria-label={tr('board.filterMember')}
           >
             <option value="all">{tr('board.allMembers')}</option>
@@ -944,7 +1082,7 @@
         <!-- Tag / WhatsApp Error Status Filter Pill -->
         <select
           bind:value={selectedTagFilter}
-          class="h-8 rounded-lg border border-hairline bg-card px-2.5 text-xs text-ink shadow-control transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+          class="h-9 rounded-lg bg-card px-2.5 text-base text-ink border border-hairline transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
           aria-label={tr('board.filterStatus')}
         >
           <option value="all">{tr('board.allStatus')}</option>
@@ -958,7 +1096,7 @@
 
     <!-- Filter Active Summary notice -->
     {#if isFilterActive}
-      <div class="flex items-center justify-between px-1 text-xs text-mute">
+      <div class="flex items-center justify-between px-1 text-[13px] text-mute">
         <span>
           {tr('board.showingFiltered', { filtered: totalFilteredCount, total: totalCards })}
         </span>
@@ -1018,7 +1156,7 @@
       {/if}
     {:else if activeTab === 'table'}
       <!-- Data Table View -->
-      <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
+      <div class="rounded-2xl bg-card shadow-card border border-hairline overflow-hidden">
         {#if tableRows.length === 0}
           <div class="p-12 text-center">
             <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
@@ -1026,8 +1164,8 @@
           </div>
         {:else}
           <div class="overflow-x-auto">
-            <table class="w-full border-collapse text-left text-sm">
-              <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+            <table class="w-full border-collapse text-left text-base">
+              <thead class="border-b border-hairline bg-canvas-sunken text-[13px] font-semibold text-mute">
                 <tr>
                   <th class="px-5 py-3">{tr('common.customer')}</th>
                   <th class="px-5 py-3">{tr('common.whatsapp')}</th>
@@ -1045,7 +1183,7 @@
                     <td class="px-5 py-3.5 font-medium text-ink">
                       {row.customerName}
                       {#if row.product}
-                        <span class="block text-xs text-mute font-normal">{row.product}</span>
+                        <span class="block text-[13px] text-mute font-normal">{row.product}</span>
                       {/if}
                     </td>
                     <td class="px-5 py-3.5 text-mute">{row.customerWa}</td>
@@ -1058,10 +1196,10 @@
                       {#if row.assigneeName}
                         <div class="flex items-center gap-1.5">
                           <Avatar name={row.assigneeName} size={18} />
-                          <span class="text-xs font-medium">{row.assigneeName}</span>
+                          <span class="text-[13px] font-medium">{row.assigneeName}</span>
                         </div>
                       {:else}
-                        <span class="text-xs text-mute">{tr('board.unassigned')}</span>
+                        <span class="text-[13px] text-mute">{tr('board.unassigned')}</span>
                       {/if}
                     </td>
                     <td class="px-5 py-3.5 text-mute">
@@ -1116,7 +1254,7 @@
     <div class="space-y-5 pb-6">
       <!-- WhatsApp Alert Banner -->
       {#if cardDetail.waErrorFlag || cardDetail.waFollowupsStopped}
-        <div class="rounded-xl border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-xs space-y-1 shadow-xs">
+        <div class="rounded-xl border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-[13px] space-y-1 shadow-xs">
           <div class="flex items-center gap-1.5 font-bold text-status-urgent-ink">
             <HugeiconsIcon icon={Alert02Icon} size={15} strokeWidth={2} />
             <span>
@@ -1127,14 +1265,14 @@
               {/if}
             </span>
           </div>
-          <p class="text-status-urgent-ink/80 text-[11px] leading-relaxed pl-5">
+          <p class="text-status-urgent-ink/80 text-[12px] leading-relaxed pl-5">
             {tr('board.manualHint')}
           </p>
         </div>
       {/if}
 
       {#if detailError}
-        <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-xs font-semibold text-status-urgent-ink">
+        <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-[13px] font-semibold text-status-urgent-ink">
           {detailError}
         </div>
       {/if}
@@ -1153,13 +1291,13 @@
                   <Badge
                     tone={cardDetail.stage.color === 'emerald' ? 'done' : cardDetail.stage.color === 'amber' ? 'progress' : cardDetail.stage.color === 'rose' ? 'urgent' : 'queued'}
                     variant="soft"
-                    class="text-[10px] font-semibold px-2 py-0.2"
+                    class="text-[12px] font-semibold px-2 py-0.2"
                   >
                     {cardDetail.stage.name}
                   </Badge>
                 {/if}
                 {#if cardDetail.card.tag}
-                  <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft" class="text-[10px] font-semibold px-2 py-0.2">
+                  <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft" class="text-[12px] font-semibold px-2 py-0.2">
                     {cardDetail.card.tag}
                   </Badge>
                 {/if}
@@ -1172,7 +1310,7 @@
               href="https://wa.me/{cleanPhone(cardDetail.customer.wa)}"
               target="_blank"
               rel="noreferrer"
-              class="flex items-center gap-1.5 rounded-full bg-[#25D366] hover:bg-[#20bd5a] text-white px-3.5 py-1.5 text-xs font-bold shadow-xs transition-all active:scale-95 shrink-0"
+              class="flex items-center gap-1.5 rounded-full bg-[#25D366] hover:bg-[#20bd5a] text-white px-3.5 py-1.5 text-[13px] font-bold shadow-xs transition-all active:scale-95 shrink-0"
             >
               <HugeiconsIcon icon={WhatsappIcon} size={15} strokeWidth={2} />
               <span>{tr('board.chatWhatsApp')}</span>
@@ -1182,14 +1320,11 @@
       </section>
 
       <!-- Customer Details Grid Card -->
-      <section class="rounded-2xl border border-hairline bg-canvas-sunken/70 p-3.5 space-y-2.5 text-xs shadow-xs">
+      <section class="rounded-2xl border border-hairline bg-canvas-sunken/70 p-3.5 space-y-2.5 text-sm shadow-xs">
         <div class="flex items-center justify-between gap-2">
           <span class="text-mute font-medium">{tr('board.customerNumber')}</span>
           {#if cardDetail.customer?.wa}
-            <div class="flex items-center gap-1 font-mono font-semibold text-ink">
-              <span>{cardDetail.customer.wa}</span>
-              <CopyToClipboard value={cardDetail.customer.wa} />
-            </div>
+            <CopyToClipboard value={cardDetail.customer.wa} size="sm" />
           {:else}
             <span class="text-mute">—</span>
           {/if}
@@ -1213,7 +1348,7 @@
                 const val = (e.target as HTMLSelectElement).value;
                 updateAssignee(val || null);
               }}
-              class="h-8 rounded-lg border border-hairline bg-card px-2 text-xs font-semibold text-ink shadow-xs outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15 cursor-pointer"
+              class="h-9 rounded-lg border border-hairline bg-card px-2.5 text-sm font-semibold text-ink shadow-xs outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15 cursor-pointer"
             >
               <option value="">{tr('board.unassigned')}</option>
               {#each members as member (member.id)}
@@ -1230,15 +1365,14 @@
           <div class="space-y-0.5">
             <div class="flex items-center gap-1.5">
               <HugeiconsIcon icon={CheckListIcon} size={16} strokeWidth={2} class="text-primary" />
-              <h3 class="text-xs font-bold text-ink uppercase tracking-wider">
+              <h3 class="text-sm font-bold text-ink uppercase tracking-wider">
                 {tr('board.checklistStage', { stage: cardDetail.stage?.name ?? '' })}
               </h3>
-            </div>
-            <p class="text-[11px] text-mute">
+            <p class="text-[13px] text-mute">
               {tr('board.checklistHint')}
             </p>
           </div>
-          <span class="rounded-full border border-hairline bg-lane px-2.5 py-0.5 text-xs font-bold text-ink-soft shrink-0">
+          <span class="rounded-full border border-hairline bg-lane px-2.5 py-0.5 text-[13px] font-bold text-ink-soft shrink-0">
             {sheetChecklistDone}/{sheetChecklistTotal}
           </span>
         </div>
@@ -1254,7 +1388,7 @@
 
         {#if cardDetail.checklist.length === 0}
           <div class="rounded-xl border border-dashed border-hairline bg-canvas-sunken/50 p-4 text-center">
-            <p class="text-xs text-mute font-medium">{tr('board.noChecklist')}</p>
+            <p class="text-[13px] text-mute font-medium">{tr('board.noChecklist')}</p>
           </div>
         {:else}
           <ul class="space-y-2 pt-1">
@@ -1266,11 +1400,11 @@
                   class="mt-0.5"
                 />
                 <div class="min-w-0 flex-1">
-                  <p class="text-xs font-semibold text-ink transition-colors {item.done ? 'line-through text-mute' : ''}">
+                  <p class="text-sm font-semibold text-ink transition-colors {item.done ? 'line-through text-mute' : ''}">
                     {item.label}
                   </p>
                   {#if item.required}
-                    <span class="inline-block mt-0.5 text-[10px] font-semibold text-primary-ink bg-primary-soft border border-primary-border/40 px-1.5 py-0.2 rounded-md">
+                    <span class="inline-block mt-0.5 text-[12px] font-semibold text-primary-ink bg-primary-soft border border-primary-border/40 px-1.5 py-0.2 rounded-md">
                       {tr('board.requiredItem')}
                     </span>
                   {/if}
@@ -1283,16 +1417,16 @@
 
       <!-- Stage Progression / Movement Section -->
       <section class="space-y-3 rounded-2xl border border-hairline bg-card p-4 shadow-card">
-        <span class="text-xs font-bold text-ink uppercase tracking-wider block">{tr('board.moveToStage')}</span>
+        <span class="text-sm font-bold text-ink uppercase tracking-wider block">{tr('board.moveToStage')}</span>
         <div class="flex flex-wrap gap-2 pt-0.5">
           {#each board as col (col.id)}
             {@const isCurrent = col.id === cardDetail.stage?.id}
             <Button
               variant={isCurrent ? 'primary' : 'secondary'}
-              size="sm"
+              size="md"
               disabled={isCurrent || moveLoading}
               onclick={() => moveStage(col.id)}
-              class="rounded-xl text-xs font-semibold shadow-xs {isCurrent ? 'opacity-90 cursor-default' : ''}"
+              class="rounded-xl text-sm font-semibold shadow-xs {isCurrent ? 'opacity-90 cursor-default' : ''}"
             >
               <span>{col.name}</span>
               {#if !isCurrent}
@@ -1306,11 +1440,11 @@
       <!-- Next Workflow Handoff Section -->
       {#if cardDetail.nextWorkflow}
         <section class="rounded-2xl border border-primary-border/70 bg-primary-soft/40 p-4 shadow-card space-y-2.5">
-          <div class="flex items-center gap-1.5 text-primary-ink font-bold text-xs">
+          <div class="flex items-center gap-1.5 text-primary-ink font-bold text-[13px]">
             <HugeiconsIcon icon={Layers01Icon} size={15} strokeWidth={2} />
             <span>{tr('board.handoffNext')}</span>
           </div>
-          <p class="text-xs text-mute">
+          <p class="text-[13px] text-mute">
             {tr('board.handoffDescription')}
           </p>
           <Button
@@ -1411,7 +1545,7 @@
         <select
           {...args}
           bind:value={createAssigneeId}
-          class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+          class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-base text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         >
           <option value="">{tr('board.autoDefaultAssignee')}</option>
           {#each members as member (member.id)}
@@ -1422,7 +1556,7 @@
     </FormField>
 
     {#if createError}
-      <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-xs font-semibold text-status-urgent-ink">
+      <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-[13px] font-semibold text-status-urgent-ink">
         {createError}
       </div>
     {/if}
@@ -1452,12 +1586,12 @@
 >
   <div class="space-y-4">
     <!-- Format Sample Box -->
-    <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-1.5 text-xs text-mute">
+    <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-1.5 text-[13px] text-mute">
       <p class="font-semibold text-ink">{tr('board.rowFormat')}</p>
-      <code class="block rounded-lg border border-hairline bg-card p-2 font-mono text-[11px] text-ink">
+      <code class="block rounded-lg border border-hairline bg-card p-2 font-mono text-[12px] text-ink">
         Customer, WhatsApp, Product, Tag
       </code>
-      <p class="pt-1 text-[11px]">
+      <p class="pt-1 text-[12px]">
         {tr('board.example')} <code>Siti Aminah, 60123456789, April webinar, VIP</code>
       </p>
     </div>
@@ -1468,7 +1602,7 @@
         <select
           {...args}
           bind:value={importMode}
-          class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+          class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-base text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         >
           <option value="skip">{tr('board.duplicateSkip')}</option>
           <option value="update">{tr('board.duplicateUpdate')}</option>
@@ -1484,20 +1618,20 @@
           bind:value={importCsv}
           rows={6}
           placeholder={`Siti Aminah, 60123456789, April webinar, VIP\nAhmad Dahlan, 601298765432, Onboarding, Urgent`}
-          class="w-full rounded-2xl border border-hairline bg-card p-3 font-mono text-xs text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+          class="w-full rounded-2xl border border-hairline bg-card p-3 font-mono text-[13px] text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         ></textarea>
       {/snippet}
     </FormField>
 
     {#if importError}
-      <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-xs font-semibold text-status-urgent-ink">
+      <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-[13px] font-semibold text-status-urgent-ink">
         {importError}
       </div>
     {/if}
 
     <!-- Result Box -->
     {#if importResult}
-      <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 text-xs space-y-2">
+      <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 text-[13px] space-y-2">
         <p class="font-bold text-ink">{tr('board.importReport')}</p>
         <div class="flex flex-wrap gap-3">
           <span class="rounded-full bg-status-done-soft px-3 py-1 font-semibold text-status-done-ink">
