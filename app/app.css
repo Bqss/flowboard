@@ -1,14 +1,15 @@
 @import 'tailwindcss';
 @import './ds.css';
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* ------------------------------------------------------------------ *
  * Flowboard marketing system — the same bright workspace language used by
- * the dashboard and auth surfaces: Plus Jakarta Sans, a white canvas,
+ * the dashboard and auth surfaces: Inter, a white canvas,
  * indigo actions, slate lanes, rounded cards, and semantic status colors.
  * ------------------------------------------------------------------ */
 
 @theme {
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 
   /* Brand & action */
   --color-primary: #4f46e5;
@@ -120,6 +121,22 @@ body {
   font-feature-settings: 'kern', 'liga';
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+.marketing-shell {
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+  background:
+    radial-gradient(circle at 72% 3%, color-mix(in oklab, var(--color-primary) 6%, transparent), transparent 24rem),
+    var(--color-canvas);
+  isolation: isolate;
+}
+
+.marketing-shell :is(h1, h2, h3, p) {
+  text-wrap: pretty;
+}
+
+.marketing-shell :is(h1, h2) {
+  text-wrap: balance;
 }
 
 .font-display {

@@ -43,7 +43,7 @@
 						: 'text-mute hover:bg-lane/80 hover:text-ink'
 				)
 			: cn(
-					'h-9 w-full gap-3 rounded-lg px-2.5 text-[13.5px] font-medium leading-none [&_svg]:size-[18px]',
+					'h-9 w-full gap-3 rounded-lg px-2.5 text-[14.5px] font-medium leading-none [&_svg]:size-[18px]',
 					active
 						? 'bg-primary-soft text-primary font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r-full before:bg-primary'
 						: 'text-mute hover:bg-lane/80 hover:text-ink'
@@ -76,10 +76,10 @@
 			class={cn(
 				'ds-caption grid place-items-center rounded-full text-center font-bold tracking-tight',
 				variant === 'rail'
-					? 'absolute -top-0.5 -right-0.5 min-w-4 border-2 border-card bg-status-urgent px-1 text-[10px] text-white leading-4'
+					? 'absolute -top-0.5 -right-0.5 min-w-4 border-2 border-card bg-status-urgent px-1 text-[11px] text-white leading-4'
 					: active
-						? 'ml-auto min-w-5 bg-primary/15 px-2 py-0.5 text-[11px] text-primary'
-						: 'ml-auto min-w-5 bg-lane px-2 py-0.5 text-[11px] text-mute'
+						? 'ml-auto min-w-5 bg-primary/15 px-2 py-0.5 text-[12px] text-primary'
+						: 'ml-auto min-w-5 bg-lane px-2 py-0.5 text-[12px] text-mute'
 			)}
 		>
 			{badge}

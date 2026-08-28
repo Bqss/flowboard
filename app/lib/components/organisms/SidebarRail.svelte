@@ -231,7 +231,7 @@
 				type="text"
 				bind:value={searchQuery}
 				placeholder={searchPlaceholder}
-				class="h-8.5 w-full rounded-lg border border-hairline bg-canvas-sunken/80 pl-8 pr-7 text-[12.5px] text-ink placeholder:text-mute/70 transition-all focus:border-primary/50 focus:bg-card focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+				class="h-8.5 w-full rounded-lg border border-hairline bg-canvas-sunken/80 pl-8 pr-7 text-[13.5px] text-ink placeholder:text-mute/70 transition-all focus:border-primary/50 focus:bg-card focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
 			/>
 			{#if searchQuery}
 				<button
@@ -268,11 +268,11 @@
 
 		{#if !hasResults && searchQuery.trim()}
 			<div class="px-3 py-6 text-center">
-				<p class="text-xs text-mute">{noResultsText}</p>
+				<p class="text-[13px] text-mute">{noResultsText}</p>
 				<button
 					type="button"
 					onclick={() => (searchQuery = '')}
-					class="mt-2 text-[11px] font-semibold text-primary hover:underline"
+					class="mt-2 text-[12px] font-semibold text-primary hover:underline"
 				>
 					Clear filter
 				</button>
@@ -282,7 +282,7 @@
 			{#if filteredItems.length > 0}
 				<div>
 					{#if !isRail}
-						<p class="px-2 pb-1.5 text-[10.5px] font-bold uppercase tracking-wider text-faint select-none">
+						<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
 							{workspaceLabel}
 						</p>
 					{/if}
@@ -330,7 +330,7 @@
 			{#if filteredSettingsItems.length > 0}
 				<div>
 					{#if !isRail}
-						<p class="px-2 pb-1.5 text-[10.5px] font-bold uppercase tracking-wider text-faint select-none">
+						<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
 							{settingsLabel}
 						</p>
 					{:else if filteredItems.length > 0}
@@ -381,10 +381,10 @@
 				<div>
 					{#if !isRail}
 						<div class="flex items-center justify-between px-2 pb-1.5">
-							<p class="text-[10.5px] font-bold uppercase tracking-wider text-primary select-none">
+							<p class="text-[11.5px] font-bold uppercase tracking-wider text-primary select-none">
 								{adminLabel}
 							</p>
-							<span class="rounded bg-primary/10 px-1 py-0.2 text-[9px] font-semibold tracking-wide text-primary">ADMIN</span>
+							<span class="rounded bg-primary/10 px-1 py-0.2 text-[10px] font-semibold tracking-wide text-primary">ADMIN</span>
 						</div>
 					{:else if filteredItems.length > 0 || filteredSettingsItems.length > 0}
 						<div class="my-1.5 h-px w-6 bg-primary/20" aria-hidden="true"></div>
@@ -469,8 +469,8 @@
 								<Logo size={22} />
 							</div>
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-[13px] font-bold text-ink leading-tight">{workspaceName}</p>
-								<p class="truncate text-[11px] text-mute">{workspaceRole ?? subtitle}</p>
+								<p class="truncate text-[14px] font-bold text-ink leading-tight">{workspaceName}</p>
+								<p class="truncate text-[12px] text-mute">{workspaceRole ?? subtitle}</p>
 							</div>
 							<HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={2} class="shrink-0 text-mute transition-transform group-hover:text-ink" />
 						</button>
@@ -482,8 +482,8 @@
 						<Logo size={22} />
 					</div>
 					<div class="min-w-0">
-						<p class="truncate text-[13px] font-bold text-ink leading-tight">{workspaceName}</p>
-						<p class="truncate text-[11px] text-mute">{subtitle}</p>
+						<p class="truncate text-[14px] font-bold text-ink leading-tight">{workspaceName}</p>
+						<p class="truncate text-[12px] text-mute">{subtitle}</p>
 					</div>
 				</a>
 			{/if}
@@ -514,7 +514,7 @@
 				type="button"
 				onclick={onToggleAdminMode}
 				class={cn(
-					'flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-all',
+					'flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-[13px] font-semibold transition-all',
 					adminMode
 						? 'border-primary/30 bg-primary-soft text-primary shadow-xs'
 						: 'border-hairline bg-canvas-sunken text-mute hover:border-hairline-strong hover:text-ink'
@@ -588,8 +588,8 @@
 								<span class="absolute bottom-0 right-0 size-2 rounded-full border border-card bg-presence-online"></span>
 							</div>
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-[13px] font-semibold text-ink leading-tight">{userName}</p>
-								<p class="truncate text-[11px] text-mute">{userRole ?? userEmail ?? 'Flowboard Member'}</p>
+								<p class="truncate text-[14px] font-semibold text-ink leading-tight">{userName}</p>
+								<p class="truncate text-[12px] text-mute">{userRole ?? userEmail ?? 'Flowboard Member'}</p>
 							</div>
 						</button>
 					{/snippet}
@@ -635,8 +635,8 @@
 					<Logo size={22} />
 				</div>
 				<div>
-					<p class="text-[14px] font-bold text-ink leading-tight">{workspaceName}</p>
-					<p class="text-[11px] text-mute">{subtitle}</p>
+					<p class="text-[15px] font-bold text-ink leading-tight">{workspaceName}</p>
+					<p class="text-[12px] text-mute">{subtitle}</p>
 				</div>
 			</a>
 			<button
@@ -664,8 +664,8 @@
 				<div class="flex min-w-0 items-center gap-2.5">
 					<Avatar name={userName} src={userSrc} size={34} />
 					<div class="min-w-0">
-						<p class="truncate text-[13px] font-semibold text-ink">{userName}</p>
-						<p class="truncate text-[11px] text-mute">{userEmail ?? userRole ?? 'Member'}</p>
+						<p class="truncate text-[14px] font-semibold text-ink">{userName}</p>
+						<p class="truncate text-[12px] text-mute">{userEmail ?? userRole ?? 'Member'}</p>
 					</div>
 				</div>
 				{#if onLogout}

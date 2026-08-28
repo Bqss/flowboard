@@ -150,11 +150,11 @@
 			role="group"
 			aria-label={`${columnLabel} ${column.title}`}
 			class={cn(
-				'flex w-lane shrink-0 flex-col rounded-2xl bg-lane/90 p-3.5 select-none border border-hairline/80 shadow-xs transition-all duration-150',
+			'flex w-lane shrink-0 flex-col rounded-2xl bg-canvas-sunken p-3.5 select-none shadow-xs border border-hairline transition-all duration-150',
 				dropTargetColumnId === column.id &&
 					draggingCardId &&
 					dragSourceColumnId !== column.id &&
-					'bg-primary-soft/30 ring-2 ring-primary/30 border-primary-border/60'
+					'bg-primary-soft/40 ring-2 ring-primary/30'
 			)}
 			ondragover={(event) => onDragOver(event, column.id)}
 			ondragleave={(event) => onDragLeave(event, column.id)}
@@ -166,28 +166,28 @@
 					<span class={cn('size-2.5 shrink-0 rounded-full shadow-xs', laneDot[tone])} aria-hidden="true"></span>
 					<h3 class="text-sm font-bold text-ink truncate tracking-tight">{column.title}</h3>
 				</div>
-				<span class="rounded-full border border-hairline bg-card px-2.5 py-0.5 text-xs font-semibold text-mute shadow-xs">
+			<span class="rounded-full bg-card/80 px-2.5 py-0.5 text-xs font-semibold text-mute">
 					{column.items.length} {column.items.length === 1 ? 'kad' : 'kad'}
 				</span>
 			</header>
 
 			<!-- Add Customer Button -->
-			<button
-				type="button"
-				class="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-hairline-strong/80 hover:border-primary hover:bg-primary-soft/40 bg-card/60 py-2.5 px-3 text-xs font-semibold text-ink-soft hover:text-primary transition-all cursor-pointer group shadow-xs active:scale-[0.99]"
-				onclick={() => {
-					onadd?.(column.id);
-					onaddcard?.(column.id);
-				}}
-			>
-				<HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={2} class="text-mute group-hover:text-primary transition-colors" />
-				<span>{addLabel}</span>
-			</button>
+	<button
+		type="button"
+		class="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-hairline bg-card py-2.5 px-3 text-xs font-bold text-ink-soft shadow-control hover:border-primary hover:bg-primary-soft hover:text-primary transition-all cursor-pointer group active:scale-[0.99]"
+		onclick={() => {
+			onadd?.(column.id);
+			onaddcard?.(column.id);
+		}}
+	>
+		<HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={2.2} class="text-mute group-hover:text-primary transition-colors" />
+		<span>{addLabel}</span>
+	</button>
 
 			<!-- Cards Stack -->
 			<div class="flex min-h-[140px] flex-1 flex-col gap-2.5">
 				{#if column.items.length === 0}
-					<div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-hairline-strong/70 bg-card/40 p-6 text-center space-y-1">
+				<div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-hairline p-6 text-center space-y-1.5">
 						<p class="text-xs font-medium text-mute">{emptyTitle}</p>
 						{#if dragEnabled && oncardmove}
 							<p class="text-[11px] text-faint">{emptyDropHint}</p>
@@ -206,14 +206,14 @@
 							ondragend={onDragEnd}
 							onclick={() => handleCardClick(column.id, card.id)}
 							class={cn(
-								'group relative cursor-grab rounded-xl bg-card p-3.5 text-left shadow-card border border-hairline hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing space-y-2.5 overflow-hidden',
+						'group relative cursor-grab rounded-xl bg-card pl-4.5 p-3.5 text-left border border-hairline shadow-card hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing space-y-2.5 overflow-hidden',
 								card.selected && 'ring-2 ring-primary border-transparent shadow-card-hover',
 								draggingCardId === card.id && 'opacity-40 ring-2 ring-primary/40'
 							)}
 						>
-							<!-- Top 2.5px Accent Line -->
+							<!-- Left Accent Bar -->
 							<div
-								class="absolute top-0 left-0 right-0 h-[2.5px] rounded-t-xl"
+								class="absolute top-3 bottom-3 left-0 w-1 rounded-full"
 								style="background-color: {accentHex};"
 							></div>
 
@@ -233,7 +233,7 @@
 								</div>
 
 								{#if card.assignee}
-									<div class="flex min-w-0 items-center gap-1.5 rounded-full border border-hairline bg-canvas-sunken px-2 py-0.5 shadow-xs shrink-0">
+								<div class="flex min-w-0 items-center gap-1.5 rounded-full bg-canvas-sunken px-2 py-0.5 shrink-0">
 										<Avatar name={card.assignee} src={card.assigneeAvatar} size={16} class="shrink-0" />
 										<span class="truncate text-[11px] font-semibold text-ink-soft max-w-[90px]">
 											{card.assignee}
@@ -258,7 +258,7 @@
 
 							<!-- Footer Row: Checklist Progress -->
 							{#if card.progress}
-								<div class="mt-2.5 flex items-center justify-between border-t border-hairline/60 pt-2 text-xs">
+							<div class="mt-2.5 flex items-center justify-between pt-2 text-xs">
 									<div class="flex items-center gap-1.5">
 										<HugeiconsIcon
 											icon={CheckListIcon}

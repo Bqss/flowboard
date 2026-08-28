@@ -74,7 +74,7 @@
 		class={cn(
 			'ds-body h-full w-full min-w-0 rounded-full bg-transparent text-ink outline-none placeholder:text-mute [&::-webkit-search-cancel-button]:hidden',
 			submit ? 'pl-4' : 'pl-10',
-			size === 'sm' && 'text-[13px]'
+			size === 'sm' && '!text-sm'
 		)}
 		{...rest}
 	/>

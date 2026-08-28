@@ -132,4 +132,4 @@ export const modalScrimClass =
 export const modalPanelClass =
 	'w-full max-w-lg rounded-xl bg-card p-6 shadow-[var(--shadow-modal)] origin-center will-change-[transform,opacity]';
 
-export const cardShellClass = 'rounded-card bg-card shadow-card';
+export const cardShellClass = 'rounded-card bg-card shadow-card border border-hairline';
