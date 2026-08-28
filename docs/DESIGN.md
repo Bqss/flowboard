@@ -83,79 +83,79 @@ colors:
 
 typography:
   display-lg:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 36px
     fontWeight: 800
     lineHeight: 1.1
     letterSpacing: "-0.03em"
   display-md:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 30px
     fontWeight: 800
     lineHeight: 1.15
     letterSpacing: "-0.025em"
   heading-lg:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 24px
     fontWeight: 800
     lineHeight: 1.2
     letterSpacing: "-0.02em"
   heading-md:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 18px
     fontWeight: 800
     lineHeight: 1.3
     letterSpacing: "-0.015em"
   heading-sm:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 16px
     fontWeight: 700
     lineHeight: 1.35
     letterSpacing: "-0.01em"
   card-title:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 15px
     fontWeight: 700
     lineHeight: 1.4
     letterSpacing: "-0.01em"
   body-md:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 15px
     fontWeight: 500
     lineHeight: 1.55
     letterSpacing: 0
   body-sm:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 14px
     fontWeight: 500
     lineHeight: 1.5
     letterSpacing: 0
   label-md:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 15px
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "-0.005em"
   label-sm:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 14px
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: 0
   meta-md:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 13px
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: 0
   badge-sm:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 12px
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "0.005em"
   micro:
-    fontFamily: Plus Jakarta Sans
+    fontFamily: Inter
     fontSize: 11px
     fontWeight: 700
     lineHeight: 1.2
@@ -483,13 +483,13 @@ Use it for the login/register split panel, a marketing hero backdrop, or a large
 ## Typography
 
 ### Font Family
-**Plus Jakarta Sans** is the specified face: a geometric grotesque with a double-storey `a`, single-storey `g`, circular `o`, and flat-terminal digits — the closest freely-available match to the reference screenshots, which use a commercial geometric grotesque of the same class. Load weights **500, 600, 700, 800** only; the system never uses 400 (regular reads too thin against the near-black headings) and never uses 900.
+**Inter** is the specified face: a clean, neutral UI sans-serif optimized for screen readability — open counters, consistent stroke contrast, and a tall x-height that keeps small text crisp at 13–15px. Load weights **400, 500, 600, 700, 800** via the variable font in `app/app.html`.
 
 ```
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..800&display=swap');
 ```
 
-Acceptable substitutes, in order: **Satoshi**, **General Sans**, **Switzer** (all Fontshare, same geometric-grotesque class). **Inter is not a substitute** — it is a neutral UI face and it flattens the system's personality; if Inter is the only option, compensate by pushing headings to 800 and tightening tracking to -0.03em. Do not substitute Poppins, Montserrat, or Nunito: single-storey `a` / rounded terminals change the voice entirely.
+Acceptable substitutes, in order: **Geist**, **Manrope**, **IBM Plex Sans** (all clean UI sans-serifs with similar readability characteristics). Do not substitute Poppins, Montserrat, or Nunito: rounded terminals and geometric letterforms change the voice entirely.
 
 There is no monospace or serif face in the system.
 
@@ -1118,7 +1118,7 @@ Reference class strings when **extending** the library (not for one-off pages):
 
 ## Known Gaps
 
-- **Font is inferred.** The reference screenshots use a commercial geometric grotesque that could not be identified with certainty; Plus Jakarta Sans is the specified free equivalent. Verify against the reference before final sign-off, and swap for Satoshi if the client owns a license.
+- **Font is inferred.** The reference screenshots use a commercial geometric grotesque that could not be identified with certainty; Inter is the chosen clean UI face for readability. Verify against the reference before final sign-off.
 - **Dark mode is undefined.** Every captured surface is light. A dark board variant would need a new surface ladder — do not derive it by inverting these tokens.
 - **Executive dashboard charts** — `ChartCard` and `GaugeCard` exist but chart axis/legend styling is not fully specified from reference screenshots.
 - **WhatsApp / automation surfaces not captured.** Conversation threads, template editors, and reminder schedule UI have no reference; icons are mapped but layout is not.

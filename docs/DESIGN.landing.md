@@ -1,12 +1,14 @@
 ---
-version: 1.1
+version: 1.2
 name: Flowboard-workspace-landing
 mode: persuade
 platform: web
 description: |
-  Flowboard's English marketing surface uses the same visual grammar as the
-  authenticated workspace and login flow: a white canvas, indigo actions,
-  slate surfaces, rounded cards, soft shadows, and explicit workflow states.
+  Flowboard's English marketing surface extends the authenticated workspace
+  grammar with a "routing glass" treatment: optical glass layers, transparent
+  routing sheets, and an atmospheric indigo flow field, all built on the same
+  white canvas, indigo actions, slate surfaces, rounded cards, soft shadows,
+  and explicit workflow states as the product.
 ---
 
 # Flowboard landing design system
@@ -22,11 +24,35 @@ customer-onboarding team. It answers three questions in the first viewport:
 
 The visual language is intentionally continuous with the dashboard and login
 surfaces. A visitor should recognize the same product before and after signing
-in: Plus Jakarta Sans, white workspace surfaces, indigo actions, pill controls,
-20px cards, slate metadata, and a clear status vocabulary.
+in: Inter, white workspace surfaces, indigo actions, pill controls,
+rounded cards, slate metadata, and a clear status vocabulary.
 
 Light is the default landing mode. The navbar theme toggle switches the complete
 surface to the dark app extension; sections never mix light and dark tokens.
+
+## Routing glass direction (v1.2)
+
+The v1.2 redesign treats the landing as a table of operation layers made from
+optical glass and transparent routing sheets. Indigo is the active path
+connecting customer → checklist → reply → handover. The hero lets a visitor
+trace a handover; subsequent sections reveal and disassemble the operational
+layers through scroll and spatial composition.
+
+This direction extends the base grammar with three sanctioned additions:
+
+- **Micro-labels** at 9–10px for stage detail, signal captions, and locale
+  pills. These are display-only metadata and never carry body content.
+- **Display radii** of 19px, 23px, and 30px for the hero console, route
+  orbit, and stage panels. These are larger than the 16–20px card scale
+  because they read as optical glass objects, not workspace cards.
+- **Atmospheric indigo alpha tints** — `rgba(129, 140, 248, 0.26–0.28)`
+  for radial highlights and `rgba(20, 18, 62, 0.34)` for deep glass shadow
+  on the dark handover panel. These are decorative-only and never replace
+  the documented status palette.
+
+A lightweight WebGL/canvas flow field (`FlowField.svelte`) sits behind the
+hero as a decorative atmospheric layer. It has a canvas fallback, ignores
+pointer events, and is suppressed under `prefers-reduced-motion`.
 
 ## Product truth
 
@@ -45,7 +71,7 @@ surface to the dark app extension; sections never mix light and dark tokens.
 - Full pills are reserved for buttons, tags, and compact controls.
 - Cards and product records use 16–20px radii; the landing has no sharp rectangular panels.
 - Status colors carry workflow meaning: indigo queued, amber in progress, rose urgent or handover, green done.
-- Typography is Plus Jakarta Sans throughout. Metadata may use uppercase tracking, but not decorative monospace.
+- Typography is Inter throughout. Metadata may use uppercase tracking, but not decorative monospace.
 
 ### Signature artifact
 
@@ -110,64 +136,87 @@ as one product. `app/app.css` exposes the same roles to landing utility classes.
 
 ## Typography
 
-- Primary face: Plus Jakarta Sans, 500–800 weights loaded in `app/app.html`.
+- Primary face: Inter, 500–800 weights loaded in `app/app.html`.
 - Hero heading: 44–68px fluid, 800 weight, approximately `-0.04em` tracking.
 - Section heading: 30–48px fluid, 800 weight, approximately `-0.035em` tracking.
 - Body: 18px, 1.6 line height, maximum 65–75 characters per line.
 - UI labels: 13–15px, 600–700 weight.
 - Metadata: 11–12px, 700 weight, modest uppercase tracking when it describes a system label or state.
+- Micro-labels (v1.2): 9–10px, 600–700 weight, display-only metadata for
+  stage detail, signal captions, and locale pills. Never used for body
+  content or primary labels.
 
 ## Shape and depth
 
 - Buttons, tags, and compact controls use `rounded-full`.
 - Cards and product records use `rounded-2xl` and `border border-hairline`.
 - Card depth uses `shadow-card`; primary actions use `shadow-primary`.
-- No gradients, glass panels, hard-offset shadows, or decorative glow.
+- The routing-glass objects (hero console, route orbit, stage panels) use the
+  v1.2 display radii 19px / 23px / 30px. These are optical-glass surfaces, not
+  workspace cards, and are documented above under "Routing glass direction".
+- Atmospheric indigo alpha tints are decorative-only and never replace the
+  status palette.
+- No glass panels on workspace cards, no hard-offset shadows on cards, and no
+  decorative glow that competes with status color.
 
 ## Composition
 
 ### Navigation
 
-- Fixed 64px top bar with a white card surface, hairline border, and control shadow.
+- Floating rounded navigation island with backdrop blur (and a fallback for
+  reduced transparency) instead of a full-width glued bar.
+- Subtle inner highlight and tinted shadow; hairline border preserved.
 - Flowboard's indigo `F` mark and wordmark match auth and workspace branding.
 - Links use the same semibold slate text as dashboard navigation.
-- Primary action is a pill. Theme toggle remains available on desktop and mobile.
-- Mobile navigation becomes a rounded-control drawer with the same action order.
+- Primary action is a pill. Theme toggle and language switcher remain
+  available on desktop and mobile.
+- Mobile navigation becomes a rounded drawer with the same action order.
 
 ### Hero
 
-- White canvas and two-column desktop composition: product thesis and actions at left, illustrative product record at right.
-- The record shows the actual mechanism instead of a decorative illustration.
-- Primary CTA is indigo; `See how it moves` is a white bordered secondary action.
-- `Trace handover` remains keyboard reachable and announces the changed state.
+- Full-viewport composition with the atmospheric `FlowField` behind the content.
+- Two-column desktop composition: product thesis and actions at left, a spatial
+  routing console at right with 3D perspective and a four-stage route orbit.
+- The console shows the actual mechanism (customer, stage route, next action)
+  instead of a decorative illustration.
+- Primary CTA is indigo with an arrow affordance; the secondary action is a
+  white bordered control.
+- `Trace handover` toggles a real local demo state, remains keyboard
+  reachable, and announces the changed state in an `aria-live` region.
 
 ### Signals panel
 
-`FeatureGrid.svelte` is an asymmetric explanation panel, not a six-card grid. It
-shows three operational signals:
+`FeatureGrid.svelte` is an asymmetric 12-column bento panel, not a six-card
+grid. It shows three operational signals through visual demonstrations:
 
-- Context: one card, one journey.
-- Execution: required work stays in view.
-- Attention: the system surfaces what is stuck.
+- Context: one large panel showing the customer journey with stage markers.
+- Execution: a supporting panel showing required checklist items.
+- Attention: a dark handover panel showing reply and handover context.
 
-Each row uses a status marker, concise copy, and a lightly tinted status surface.
+Each panel uses a status marker, concise copy, and a lightly tinted status
+surface. A `view-timeline` entry animation is used where supported.
 
 ### Operating rhythm
 
-`HowItWorks.svelte` shows three sequential stations:
+`HowItWorks.svelte` shows three sequential stations as stacked, sticky journey
+cards with scroll-driven motion:
 
-1. Shape the journey.
-2. Make the work explicit.
-3. Follow the signal.
+1. Shape the journey — workflow builder demonstration.
+2. Make the work explicit — checklist sheet demonstration.
+3. Follow the signal — visible handover demonstration.
 
-A rounded owner/staff strip explains the division of responsibility without
-adding another repeated card grid.
+A two-column owner/staff responsibility bridge explains the division of
+responsibility without adding another repeated card grid. On mobile, rotations
+and sticky overlap are removed for readability.
 
 ### Workflow record
 
-`UseCases.svelte` shows one workflow spine with stages, detail, count, and status
-marker. It uses the same lane/card relationship as the dashboard without claiming
-real business metrics.
+`UseCases.svelte` is an interactive workflow stage explorer with previous/next
+controls, keyboard arrow-key navigation, and tablist/tab semantics. The active
+stage panel is supported by mechanism cards for assignee attachment, required
+work visibility, and message context. An attention panel explains that the next
+action appears where the team works. It uses the same lane/card relationship as
+the dashboard without claiming real business metrics.
 
 ### Closing CTA
 
@@ -209,10 +258,13 @@ language as the app shell. Links remain short and factual.
 - No generic six-card feature grid.
 - No fake metrics, testimonials, customer logos, or invented benchmarks.
 - No developer-tool boilerplate, command-line claims, or framework-first hero copy.
-- No glow-heavy gradients, glass panels, or arbitrary decorative shadows.
+- No glow-heavy gradients or arbitrary decorative shadows on workspace cards.
+  (Routing-glass objects may use the documented atmospheric indigo alpha tints.)
+- No glass panels on workspace cards or authenticated surfaces.
 - No mixed light/dark sections.
 - No hidden product mechanism behind a vague headline.
 - No decorative monospace or status colors without a label.
+- No micro-labels (9–10px) for body content or primary labels.
 
 ## Implementation map
 
@@ -221,11 +273,12 @@ language as the app shell. Links remain short and factual.
 | Route composition | `app/pages/+page.svelte` |
 | Root theme and direction contract | `app/pages/+layout.svelte` |
 | Shared marketing tokens | `app/app.css` |
+| Atmospheric flow field | `app/lib/components/landing/organisms/FlowField.svelte` |
 | Navigation | `app/lib/components/landing/organisms/Nav.svelte` |
-| Hero product record | `app/lib/components/landing/organisms/Hero.svelte` |
+| Hero routing console | `app/lib/components/landing/organisms/Hero.svelte` |
 | Signal panel | `app/lib/components/landing/organisms/FeatureGrid.svelte` |
 | Operating rhythm | `app/lib/components/landing/organisms/HowItWorks.svelte` |
-| Workflow spine | `app/lib/components/landing/organisms/UseCases.svelte` |
+| Workflow stage explorer | `app/lib/components/landing/organisms/UseCases.svelte` |
 | Closing CTA | `app/lib/components/landing/organisms/CTASection.svelte` |
 | Footer | `app/lib/components/landing/organisms/Footer.svelte` |
 | Surface brief | `.impeccable/surfaces/app-pages-page-svelte.md` |

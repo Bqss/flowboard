@@ -75,6 +75,33 @@ export type LandingCopy = {
     live: string;
     stages: { label: string; detail: string; count: string }[];
   };
+  pricing: {
+    title: string;
+    body: string;
+    eyebrow: string;
+    note: string;
+    perWorkspace: string;
+    tiers: {
+      name: string;
+      price: string;
+      period: string;
+      description: string;
+      cta: string;
+      href: string;
+      featured: boolean;
+      features: string[];
+    }[];
+  };
+  faq: {
+    title: string;
+    body: string;
+    eyebrow: string;
+    items: { question: string; answer: string }[];
+    contactTitle: string;
+    contactBody: string;
+    contactCta: string;
+    contactHref: string;
+  };
   cta: {
     title: string;
     body: string;
@@ -92,7 +119,7 @@ export type LandingCopy = {
 export const landingCopy: Record<Locale, LandingCopy> = {
   en: {
     meta: {
-      title: 'Flowboard — Make the next handover obvious',
+      title: 'Flowboard - Make the next handover obvious',
       description:
         'Flowboard gives customer-onboarding teams a visible path from intake to completion, with the next handover clear for everyone.'
     },
@@ -102,9 +129,11 @@ export const landingCopy: Record<Locale, LandingCopy> = {
     },
     nav: {
       links: [
-        { href: '#features', label: 'System' },
-        { href: '#how-it-works', label: 'How it moves' },
-        { href: '#use-cases', label: 'The ledger' }
+        { href: '#features', label: 'Features' },
+        { href: '#how-it-works', label: 'How it works' },
+        { href: '#use-cases', label: 'Example journey' },
+        { href: '#pricing', label: 'Pricing' },
+        { href: '#faq', label: 'FAQ' }
       ],
       openMenu: 'Open menu',
       closeMenu: 'Close menu',
@@ -116,16 +145,16 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       start: 'Start'
     },
     hero: {
-      title: 'Make the next handover obvious.',
-      body: 'Keep every customer journey moving from intake to completion. Flowboard gives owners the system and staff the next action.',
+      title: 'Make every handover obvious.',
+      body: 'Turn each customer journey into a visible route, with required work, replies, and owners attached.',
       openWorkspace: 'Open workspace',
       startFree: 'Start free',
       seeHow: 'See how it moves',
       workflow: 'Workflow',
       checklist: 'Checklist',
       handover: 'Handover',
-      recordLabel: 'Demo record / 04—07',
-      recordTitle: 'Customer handover ledger',
+      recordLabel: 'Demo record / 04-07',
+      recordTitle: 'Customer handover record',
       illustrative: 'Illustrative',
       customerLabel: 'Customer',
       customer: 'Siti Aminah',
@@ -146,8 +175,8 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       ]
     },
     features: {
-      title: 'The work is visible before it becomes urgent.',
-      body: 'Flowboard turns customer operations into a shared view of context, progress, and attention. No status lives in one person’s private notes.',
+      title: 'One journey. One operational truth.',
+      body: 'Context, required work, and attention stay together, so nobody has to reconstruct progress from private notes or chat.',
       link: 'See the operating rhythm',
       eyebrow: 'Flowboard / customer operations',
       panelTitle: 'Signals your team can act on',
@@ -174,13 +203,13 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       ]
     },
     howItWorks: {
-      title: 'Set up once. Keep the team moving.',
-      body: 'The owner defines the operating rhythm. The team gets a clear next action. Flowboard connects both sides without adding another handoff tool.',
+      title: 'Design the route. Let signals lead.',
+      body: 'Owners define the system once. Staff see exactly what needs to move next, without adding another handoff tool.',
       steps: [
         {
           number: '01',
           title: 'Shape the journey',
-          body: 'Start manually or let the AI wizard draft the first version of your workflow.'
+          body: 'Build manually or start from an AI-assisted draft, then edit every stage.'
         },
         {
           number: '02',
@@ -201,8 +230,8 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       staffBody: 'Open the next card, complete the required step, and act on the signal.'
     },
     useCases: {
-      title: 'A workflow that reads like the work.',
-      body: 'Replace the spreadsheet maze with one operational spine. Every stage answers the same question: what should happen next?',
+      title: 'See the whole journey move.',
+      body: 'One operational spine connects every stage, required action, message, and owner from intake to completion.',
       tags: {
         workflow: 'Webinar registration',
         stageCount: '6 stages',
@@ -211,7 +240,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       ariaLabel: 'Flowboard workflow spine for webinar registration',
       activeWorkflow: 'Active workflow',
       workflowName: 'Webinar registration',
-      live: 'Live',
+      live: 'Illustrative',
       stages: [
         { label: 'Pending', detail: 'Verify customer data', count: '12' },
         { label: 'Confirmed', detail: 'Ready for the next step', count: '8' },
@@ -220,9 +249,89 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         { label: 'Converted', detail: 'Journey complete', count: '47' }
       ]
     },
+    pricing: {
+      title: 'Start free. Scale by workspace.',
+      body: 'Flowboard is billed per workspace, not per login. Try the full system with your team, then keep operating without per-seat surprises.',
+      eyebrow: 'Flowboard / pricing',
+      note: 'Final quotas and pricing are being finalized. Start free today and we will migrate your workspace when paid plans launch.',
+      perWorkspace: 'Billed per workspace',
+      tiers: [
+        {
+          name: 'Trial',
+          price: 'Free',
+          period: 'for the trial period',
+          description: 'Full access to workflows, checklists, reminders, and handovers with your team.',
+          cta: 'Start free',
+          href: '/register',
+          featured: false,
+          features: [
+            'Unlimited workflows during trial',
+            'Required checklists and gates',
+            'WhatsApp actions and reminders',
+            'Staff handovers',
+            'Up to 5 team members'
+          ]
+        },
+        {
+          name: 'Workspace',
+          price: 'Contact us',
+          period: 'billed per workspace',
+          description: 'Continue operating with higher quotas, billing portal access, and voucher redemption.',
+          cta: 'Talk to us',
+          href: '/register',
+          featured: true,
+          features: [
+            'Higher seat, workflow, and WhatsApp quotas',
+            'Billing portal: change plan, cancel, invoices',
+            'Voucher redemption at checkout',
+            'Priority handover support',
+            'No per-seat billing'
+          ]
+        }
+      ]
+    },
+    faq: {
+      title: 'Questions, answered.',
+      body: 'The specifics of how Flowboard fits a customer-onboarding operation, not a generic project board.',
+      eyebrow: 'Flowboard / FAQ',
+      items: [
+        {
+          question: 'Is Flowboard a project management tool?',
+          answer: 'No. Flowboard is a customer-onboarding operations tracker. It is built around the journey a customer takes from intake to completion, with required work, replies, and handovers attached to that journey — not around generic tasks or cross-project boards.'
+        },
+        {
+          question: 'Do customers log into Flowboard?',
+          answer: 'No. Customers never log into the board. Staff work the customer journey on their behalf. Customers interact through WhatsApp actions and replies; those signals come back to the card where the team already works.'
+        },
+        {
+          question: 'How do WhatsApp actions work?',
+          answer: 'WhatsApp actions are customer-facing: scheduled reminders, confirmations, and follow-up messages tied to a stage. Replies return to the customer card as a signal, so a reply can become a visible handover instead of disappearing in a chat thread.'
+        },
+        {
+          question: 'What is a handover in Flowboard?',
+          answer: 'A handover is a lightweight, visible pass of context from one staff member to another. It carries the customer, the stage, the message context, and the next action — so the receiving staff member does not have to reconstruct the situation from private notes.'
+        },
+        {
+          question: 'Can I customize workflows for different customer types?',
+          answer: 'Yes. Each workflow has its own stages, required checklists, assignees, and automations. You can build a workflow manually or start from an AI-assisted draft, then edit every stage.'
+        },
+        {
+          question: 'How is billing handled?',
+          answer: 'Billing is per workspace, not per login. A trial gives full access to the system with your team. When paid plans launch, quotas for seats, workflows, and WhatsApp sends apply per workspace — never per individual user.'
+        },
+        {
+          question: 'Is there a free trial?',
+          answer: 'Yes. Start free with full access to workflows, checklists, reminders, and handovers. No credit card required to begin.'
+        }
+      ],
+      contactTitle: 'Still have a question?',
+      contactBody: 'We answer questions about how Flowboard fits a specific onboarding operation — not generic sales pitches.',
+      contactCta: 'Start free and ask us',
+      contactHref: '/register'
+    },
     cta: {
-      title: 'Put the next step where the team can see it.',
-      body: 'Start with one workflow. Keep the journey visible. Let the team spend its energy on customers instead of reconstructing status.',
+      title: 'Give every customer a clear route.',
+      body: 'Start with one workflow. Keep the journey visible. Let your team focus on customers instead of reconstructing status.',
       openWorkspace: 'Open workspace',
       startFree: 'Start free',
       signIn: 'Sign in'
@@ -235,7 +344,9 @@ export const landingCopy: Record<Locale, LandingCopy> = {
           links: [
             { label: 'Features', href: '#features' },
             { label: 'How it works', href: '#how-it-works' },
-            { label: 'Example journey', href: '#use-cases' }
+            { label: 'Example journey', href: '#use-cases' },
+            { label: 'Pricing', href: '#pricing' },
+            { label: 'FAQ', href: '#faq' }
           ]
         },
         {
@@ -260,7 +371,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
   },
   ms: {
     meta: {
-      title: 'Flowboard — Jadikan serahan seterusnya jelas',
+      title: 'Flowboard - Jadikan serahan seterusnya jelas',
       description:
         'Flowboard memberikan pasukan penerimaan pelanggan laluan yang jelas daripada penerimaan hingga selesai, dengan serahan seterusnya yang mudah difahami semua orang.'
     },
@@ -270,9 +381,11 @@ export const landingCopy: Record<Locale, LandingCopy> = {
     },
     nav: {
       links: [
-        { href: '#features', label: 'Sistem' },
-        { href: '#how-it-works', label: 'Cara ia bergerak' },
-        { href: '#use-cases', label: 'Lejar' }
+        { href: '#features', label: 'Ciri' },
+        { href: '#how-it-works', label: 'Cara ia berfungsi' },
+        { href: '#use-cases', label: 'Perjalanan contoh' },
+        { href: '#pricing', label: 'Harga' },
+        { href: '#faq', label: 'FAQ' }
       ],
       openMenu: 'Buka menu',
       closeMenu: 'Tutup menu',
@@ -284,17 +397,17 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       start: 'Mula'
     },
     hero: {
-      title: 'Jadikan serahan seterusnya jelas.',
-      body: 'Pastikan setiap perjalanan pelanggan bergerak daripada penerimaan hingga selesai. Flowboard memberikan pemilik sistem dan staf tindakan seterusnya.',
+      title: 'Jadikan setiap serahan jelas.',
+      body: 'Tukarkan setiap perjalanan pelanggan menjadi laluan jelas dengan kerja wajib, balasan dan pemilik yang sentiasa terikat.',
       openWorkspace: 'Buka ruang kerja',
       startFree: 'Mula percuma',
       seeHow: 'Lihat cara ia bergerak',
       workflow: 'Aliran kerja',
       checklist: 'Senarai semak',
       handover: 'Serahan',
-      recordLabel: 'Rekod demo / 04—07',
-      recordTitle: 'Lejar serahan pelanggan',
-      illustrative: 'Ilustrasi',
+      recordLabel: 'Rekod demo / 04-07',
+      recordTitle: 'Rekod serahan pelanggan',
+      illustrative: 'Rekod contoh',
       customerLabel: 'Pelanggan',
       customer: 'Siti Aminah',
       customerContext: 'Pendaftaran webinar · pemilik: Diana',
@@ -304,7 +417,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       resetTrace: 'Set semula jejak',
       traceHandover: 'Jejak serahan',
       traceMessage: 'Balasan diterima pada 09:42. Diana mempunyai konteks dan langkah seterusnya.',
-      replyMessage: 'Balasan boleh menjadi serahan yang jelas, bukan hilang dalam perbualan chat.',
+      replyMessage: 'Balasan boleh menjadi serahan yang jelas, bukan hilang dalam perbualan.',
       ariaLabel: 'Rekod serahan pelanggan Flowboard sebagai ilustrasi',
       stages: [
         { label: 'Penerimaan', detail: 'Pelanggan ditambah' },
@@ -314,8 +427,8 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       ]
     },
     features: {
-      title: 'Kerja kelihatan sebelum menjadi mendesak.',
-      body: 'Flowboard menukar operasi pelanggan menjadi paparan bersama tentang konteks, kemajuan dan perhatian. Tiada status tersembunyi dalam nota peribadi seseorang.',
+      title: 'Satu perjalanan. Satu kebenaran operasi.',
+      body: 'Konteks, kerja wajib dan perhatian kekal bersama supaya tiada siapa perlu membina semula kemajuan daripada nota atau perbualan.',
       link: 'Lihat rentak operasi',
       eyebrow: 'Flowboard / operasi pelanggan',
       panelTitle: 'Isyarat yang boleh diambil tindakan oleh pasukan',
@@ -342,13 +455,13 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       ]
     },
     howItWorks: {
-      title: 'Sediakan sekali. Pastikan pasukan terus bergerak.',
-      body: 'Pemilik menentukan rentak operasi. Pasukan mendapat tindakan seterusnya yang jelas. Flowboard menghubungkan kedua-duanya tanpa menambah satu lagi alat serahan.',
+      title: 'Reka laluan. Biarkan isyarat memimpin.',
+      body: 'Pemilik menentukan sistem sekali. Staf melihat apa yang perlu bergerak seterusnya tanpa menambah satu lagi alat serahan.',
       steps: [
         {
           number: '01',
           title: 'Bentuk perjalanan',
-          body: 'Mulakan secara manual atau biarkan wizard AI menyediakan draf versi pertama aliran kerja.'
+          body: 'Bina secara manual atau mulakan dengan draf berbantu AI, kemudian sunting setiap peringkat.'
         },
         {
           number: '02',
@@ -369,8 +482,8 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       staffBody: 'Buka kad seterusnya, lengkapkan langkah wajib dan bertindak berdasarkan isyarat.'
     },
     useCases: {
-      title: 'Aliran kerja yang mencerminkan kerja.',
-      body: 'Gantikan labirin hamparan dengan satu tulang belakang operasi. Setiap peringkat menjawab soalan yang sama: apakah yang perlu berlaku seterusnya?',
+      title: 'Lihat seluruh perjalanan bergerak.',
+      body: 'Satu laluan operasi menghubungkan setiap peringkat, tindakan wajib, mesej dan pemilik daripada penerimaan hingga selesai.',
       tags: {
         workflow: 'Pendaftaran webinar',
         stageCount: '6 peringkat',
@@ -379,7 +492,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       ariaLabel: 'Tulang belakang aliran kerja Flowboard untuk pendaftaran webinar',
       activeWorkflow: 'Aliran kerja aktif',
       workflowName: 'Pendaftaran webinar',
-      live: 'Aktif',
+      live: 'Rekod contoh',
       stages: [
         { label: 'Menunggu', detail: 'Sahkan data pelanggan', count: '12' },
         { label: 'Disahkan', detail: 'Sedia untuk langkah seterusnya', count: '8' },
@@ -388,9 +501,89 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         { label: 'Berjaya', detail: 'Perjalanan selesai', count: '47' }
       ]
     },
+    pricing: {
+      title: 'Mula percuma. Skala mengikut ruang kerja.',
+      body: 'Flowboard ditambah bil mengikut ruang kerja, bukan setiap log masuk. Cuba sistem penuh dengan pasukan anda, kemudian teruskan beroperasi tanpa kos setiap kerusi.',
+      eyebrow: 'Flowboard / harga',
+      note: 'Kuota dan harga akhir sedang dimuktamadkan. Mula percuma hari ini dan kami akan memindahkan ruang kerja anda apabila pelan berbayar dilancarkan.',
+      perWorkspace: 'Dibil mengikut ruang kerja',
+      tiers: [
+        {
+          name: 'Percubaan',
+          price: 'Percuma',
+          period: 'untuk tempoh percubaan',
+          description: 'Akses penuh kepada aliran kerja, senarai semak, peringatan dan serahan dengan pasukan anda.',
+          cta: 'Mula percuma',
+          href: '/register',
+          featured: false,
+          features: [
+            'Aliran kerja tanpa had semasa percubaan',
+            'Senarai semak wajib dan pintu',
+            'Tindakan dan peringatan WhatsApp',
+            'Serahan staf',
+            'Sehingga 5 ahli pasukan'
+          ]
+        },
+        {
+          name: 'Ruang kerja',
+          price: 'Hubungi kami',
+          period: 'dibil mengikut ruang kerja',
+          description: 'Teruskan beroperasi dengan kuota lebih tinggi, akses portal bil, dan penebusan baucar.',
+          cta: 'Bercakap dengan kami',
+          href: '/register',
+          featured: true,
+          features: [
+            'Kuota kerusi, aliran kerja dan WhatsApp lebih tinggi',
+            'Portal bil: tukar pelan, batal, invois',
+            'Penebusan baucar semasa bayar',
+            'Sokongan serahan keutamaan',
+            'Tiada bil setiap kerusi'
+          ]
+        }
+      ]
+    },
+    faq: {
+      title: 'Soalan, dijawab.',
+      body: 'Butiran bagaimana Flowboard sesuai dengan operasi penerimaan pelanggan, bukan papan projek generik.',
+      eyebrow: 'Flowboard / FAQ',
+      items: [
+        {
+          question: 'Adakah Flowboard alat pengurusan projek?',
+          answer: 'Tidak. Flowboard ialah penjejak operasi penerimaan pelanggan. Ia dibina berdasarkan perjalanan pelanggan dari penerimaan hingga selesai, dengan kerja wajib, balasan dan serahan terikat pada perjalanan itu — bukan tugas generik atau papan lintas projek.'
+        },
+        {
+          question: 'Adakah pelanggan log masuk ke Flowboard?',
+          answer: 'Tidak. Pelanggan tidak pernah log masuk ke papan. Staf menguruskan perjalanan pelanggan bagi pihak mereka. Pelanggan berinteraksi melalui tindakan dan balasan WhatsApp; isyarat itu kembali ke kad di mana pasukan sudah bekerja.'
+        },
+        {
+          question: 'Bagaimana tindakan WhatsApp berfungsi?',
+          answer: 'Tindakan WhatsApp berhadapan pelanggan: peringatan dijadualkan, pengesahan dan mesej susulan terikat pada peringkat. Balasan kembali ke kad pelanggan sebagai isyarat, jadi balasan boleh menjadi serahan yang jelas, bukan hilang dalam perbualan.'
+        },
+        {
+          question: 'Apakah serahan dalam Flowboard?',
+          answer: 'Serahan ialah penghantaran konteks yang ringan dan jelas dari seorang staf ke staf lain. Ia membawa pelanggan, peringkat, konteks mesej dan tindakan seterusnya — jadi staf penerima tidak perlu membina semula situasi daripada nota peribadi.'
+        },
+        {
+          question: 'Bolehkah saya sesuaikan aliran kerja untuk jenis pelanggan berbeza?',
+          answer: 'Ya. Setiap aliran kerja mempunyai peringkat, senarai semak wajib, penerima tugas dan automasi tersendiri. Anda boleh membina aliran kerja secara manual atau mulakan dengan draf berbantu AI, kemudian sunting setiap peringkat.'
+        },
+        {
+          question: 'Bagaimana bil dikendalikan?',
+          answer: 'Bil mengikut ruang kerja, bukan setiap log masuk. Percubaan memberikan akses penuh kepada sistem dengan pasukan anda. Apabila pelan berbayar dilancarkan, kuota kerusi, aliran kerja dan kiriman WhatsApp mengikut ruang kerja — bukan setiap pengguna individu.'
+        },
+        {
+          question: 'Adakah terdapat percubaan percuma?',
+          answer: 'Ya. Mula percuma dengan akses penuh kepada aliran kerja, senarai semak, peringatan dan serahan. Tiada kad kredit diperlukan untuk bermula.'
+        }
+      ],
+      contactTitle: 'Masih ada soalan?',
+      contactBody: 'Kami menjawab soalan tentang bagaimana Flowboard sesuai dengan operasi penerimaan tertentu — bukan jualan generik.',
+      contactCta: 'Mula percuma dan tanya kami',
+      contactHref: '/register'
+    },
     cta: {
-      title: 'Letakkan langkah seterusnya di tempat yang boleh dilihat pasukan.',
-      body: 'Mulakan dengan satu aliran kerja. Pastikan perjalanan kelihatan. Biarkan pasukan menggunakan tenaganya untuk pelanggan, bukan membina semula status.',
+      title: 'Beri setiap pelanggan laluan yang jelas.',
+      body: 'Mulakan dengan satu aliran kerja. Pastikan perjalanan kelihatan. Biar pasukan fokus pada pelanggan, bukan membina semula status.',
       openWorkspace: 'Buka ruang kerja',
       startFree: 'Mula percuma',
       signIn: 'Log masuk'
@@ -403,14 +596,16 @@ export const landingCopy: Record<Locale, LandingCopy> = {
           links: [
             { label: 'Ciri', href: '#features' },
             { label: 'Cara ia berfungsi', href: '#how-it-works' },
-            { label: 'Contoh perjalanan', href: '#use-cases' }
+            { label: 'Contoh perjalanan', href: '#use-cases' },
+            { label: 'Harga', href: '#pricing' },
+            { label: 'FAQ', href: '#faq' }
           ]
         },
         {
           title: 'Untuk pasukan',
           links: [
             { label: 'Webinar', href: '#use-cases' },
-            { label: 'Penerimaan pelanggan', href: '#use-cases' },
+            { label: 'Onboarding pelanggan', href: '#use-cases' },
             { label: 'Susulan operasi', href: '#features' }
           ]
         },

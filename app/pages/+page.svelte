@@ -3,6 +3,8 @@
   import FeatureGrid from '$lib/components/landing/organisms/FeatureGrid.svelte';
   import HowItWorks from '$lib/components/landing/organisms/HowItWorks.svelte';
   import UseCases from '$lib/components/landing/organisms/UseCases.svelte';
+  import Pricing from '$lib/components/landing/organisms/Pricing.svelte';
+  import FAQ from '$lib/components/landing/organisms/FAQ.svelte';
   import CTASection from '$lib/components/landing/organisms/CTASection.svelte';
   import { locale } from '$lib/i18n/index.js';
   import { landingCopy } from '$lib/i18n/landing.js';
@@ -21,4 +23,6 @@
 <FeatureGrid />
 <HowItWorks />
 <UseCases />
+<Pricing user={data.user} />
+<FAQ />
 <CTASection user={data.user} />

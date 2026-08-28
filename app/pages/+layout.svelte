@@ -32,6 +32,7 @@
 
   $effect(() => {
     if (isDashboard || isDesignSystem || isAuth) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     gsap.registerPlugin(ScrollTrigger);
 
@@ -52,21 +53,21 @@
   });
 </script>
 
-{@html `<!-- THESIS: Flowboard makes customer onboarding feel as clear as the workspace itself. OWN-WORLD: Bright white workspace surfaces, indigo actions, slate lanes, rounded cards, and status colors shared with the dashboard. COMPOSITION: One confident hero, one product record, then a short sequence of operational proof. MOMENT: Trace handover turns a customer reply into a visible staff action. REACH: The card system collapses into a vertical route on small screens; light and dark keep the same hierarchy. -->`}
-<ModeWatcher defaultMode="light" themeColors={{ dark: '#0f172a', light: '#ffffff' }} />
-<div class="flex min-h-screen flex-col bg-canvas text-body">
+{@html `<!-- THESIS: Flowboard turns customer operations into a route the whole team can see, refusing the generic centered SaaS hero and repeated feature grid. OWN-WORLD: Cold white routing glass, slate depth, indigo signal paths, concentric 12 to 30 pixel radii, and precise Geist typography. STORY: See a customer reply become a required handover, understand the operating layers, then start a workspace. FIRST VIEWPORT: A compact left thesis faces a large interactive routing console, with the Start free action visible and a native WebGL signal field behind it. FORM: Layered routing glass, grounded direction five, seed 28a00e56. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md. -->`}
+<ModeWatcher defaultMode="light" themeColors={{ dark: '#0b1020', light: '#f8fafc' }} />
+<div class="flex min-h-[100dvh] flex-col bg-canvas text-body" class:marketing-shell={isHome}>
   {#if isDashboard || isDesignSystem || isAuth}
     {@render children()}
   {:else}
     <Nav user={data.user} />
 
     {#if isHome}
-      <main class="flex-1">
+      <main id="main-content" class="flex-1" tabindex="-1">
         {@render children()}
       </main>
       <Footer />
     {:else}
-      <main class="flex flex-1 flex-col px-6 pb-24 pt-28">
+      <main id="main-content" class="flex flex-1 flex-col px-6 pb-24 pt-28" tabindex="-1">
         {@render children()}
       </main>
       <Footer />
