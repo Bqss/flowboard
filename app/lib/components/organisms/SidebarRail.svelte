@@ -655,6 +655,28 @@
 		<!-- Mobile Search -->
 		{@render searchInput(true)}
 
+		<!-- Admin Mode Toggle -->
+		{#if isPlatformAdmin && onToggleAdminMode}
+			<div class="px-4 pt-2.5 pb-1">
+				<button
+					type="button"
+					onclick={onToggleAdminMode}
+					class={cn(
+						'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-[13px] font-semibold transition-all',
+						adminMode
+							? 'border-primary/30 bg-primary-soft text-primary'
+							: 'border-hairline bg-canvas-sunken text-mute hover:border-hairline-strong hover:text-ink'
+					)}
+				>
+					<span class="inline-flex items-center gap-1.5">
+						<HugeiconsIcon icon={ShieldUserIcon} size={15} strokeWidth={2} class={adminMode ? 'text-primary' : 'text-faint'} />
+						<span>{adminMode ? (labels.exitAdmin ?? 'Exit Admin') : (labels.adminMode ?? 'Admin Mode')}</span>
+					</span>
+					<span class={cn('size-2 rounded-full', adminMode ? 'bg-primary animate-pulse' : 'bg-mute/40')}></span>
+				</button>
+			</div>
+		{/if}
+
 		<!-- Nav -->
 		{@render navList(false)}
 
