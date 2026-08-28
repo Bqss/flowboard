@@ -8,6 +8,7 @@ export type WorkflowDraftAction = {
 export type WorkflowDraftChecklist = {
   label: string;
   required?: boolean;
+  deadlineHours?: number | null;
   action?: WorkflowDraftAction;
 };
 
@@ -16,6 +17,7 @@ export type WorkflowDraftStage = {
   color?: string;
   onReplyNotify?: boolean;
   overdueReminderHours?: number | null;
+  autoMoveOnComplete?: boolean;
   checklists: WorkflowDraftChecklist[];
 };
 
@@ -38,6 +40,7 @@ const webinarDraft = (prompt: string): WorkflowDraft => {
       {
         name: 'Pending Users',
         color: 'indigo',
+        autoMoveOnComplete: true,
         checklists: [
           { label: 'Verifikasi data pendaftar', required: true },
           { label: 'Kirim welcome WA', required: true, action: { kind: 'send', messageTemplate: 'Halo {{nama}}, terima kasih sudah mendaftar. Kami akan follow-up segera.', delayMinutes: 0 } }
@@ -46,6 +49,7 @@ const webinarDraft = (prompt: string): WorkflowDraft => {
       {
         name: 'Confirmed',
         color: 'amber',
+        autoMoveOnComplete: true,
         checklists: [
           { label: 'Konfirmasi pembayaran / slot', required: true },
           { label: 'Kirim detail webinar', required: true, action: { kind: 'send', messageTemplate: 'Halo {{nama}}, pendaftaran Anda sudah dikonfirmasi. Simpan tanggal webinar ya.', delayMinutes: 0 } }
@@ -57,14 +61,15 @@ const webinarDraft = (prompt: string): WorkflowDraft => {
         onReplyNotify: true,
         overdueReminderHours: 24,
         checklists: [
-          { label: 'Kirim reminder H-1 pagi', required: true, action: { kind: 'send', messageTemplate: 'Halo {{nama}}, besok webinar dimulai. Jangan lupa hadir ya!', delayMinutes: 0 } },
-          { label: 'Kirim link Zoom', required: true, action: { kind: 'send', messageTemplate: 'Link Zoom: {{link}} — sampai jumpa besok, {{nama}}!', delayMinutes: 5 } },
-          { label: 'Follow-up sore jika belum bales', required: false, action: { kind: 'followup', messageTemplate: 'Halo {{nama}}, apakah sudah siap untuk webinar besok?', delayMinutes: 480, followupIfNoReply: true } }
+          { label: 'Kirim reminder H-1 pagi', required: true, deadlineHours: 24, action: { kind: 'send', messageTemplate: 'Halo {{nama}}, besok webinar dimulai. Jangan lupa hadir ya!', delayMinutes: 0 } },
+          { label: 'Kirim link Zoom', required: true, deadlineHours: 24, action: { kind: 'send', messageTemplate: 'Link Zoom: {{link}} — sampai jumpa besok, {{nama}}!', delayMinutes: 5 } },
+          { label: 'Follow-up sore jika belum bales', required: false, deadlineHours: 12, action: { kind: 'followup', messageTemplate: 'Halo {{nama}}, apakah sudah siap untuk webinar besok?', delayMinutes: 480, followupIfNoReply: true } }
         ]
       },
       {
         name: 'Attended',
         color: 'emerald',
+        autoMoveOnComplete: true,
         checklists: [{ label: 'Tandai kehadiran', required: true }]
       },
       {
@@ -72,7 +77,7 @@ const webinarDraft = (prompt: string): WorkflowDraft => {
         color: 'violet',
         checklists: [
           { label: 'Kirim materi recording', required: false, action: { kind: 'send', messageTemplate: 'Terima kasih hadir, {{nama}}! Ini materi webinar: {{link}}', delayMinutes: 0 } },
-          { label: 'Follow-up minat produk', required: true, action: { kind: 'followup', messageTemplate: 'Halo {{nama}}, apakah tertarik lanjut ke program berikutnya?', delayMinutes: 1440, followupIfNoReply: true } }
+          { label: 'Follow-up minat produk', required: true, deadlineHours: 48, action: { kind: 'followup', messageTemplate: 'Halo {{nama}}, apakah tertarik lanjut ke program berikutnya?', delayMinutes: 1440, followupIfNoReply: true } }
         ]
       },
       {
@@ -94,6 +99,7 @@ const genericOnboardingDraft = (prompt: string): WorkflowDraft => {
       {
         name: 'Pending',
         color: 'indigo',
+        autoMoveOnComplete: true,
         checklists: [
           { label: 'Validasi data pelanggan', required: true },
           { label: 'Kirim pesan sambutan', required: true, action: { kind: 'send', messageTemplate: 'Halo {{nama}}, selamat datang! Tim kami siap membantu proses onboarding Anda.', delayMinutes: 0 } }
@@ -104,11 +110,12 @@ const genericOnboardingDraft = (prompt: string): WorkflowDraft => {
         color: 'amber',
         onReplyNotify: true,
         overdueReminderHours: 48,
-        checklists: [{ label: 'Follow-up progress', required: true }]
+        checklists: [{ label: 'Follow-up progress', required: true, deadlineHours: 48 }]
       },
       {
         name: 'Done',
         color: 'emerald',
+        autoMoveOnComplete: true,
         checklists: [{ label: 'Konfirmasi selesai', required: true }]
       }
     ]
@@ -125,9 +132,13 @@ const parseDraftJson = (raw: string): WorkflowDraft | null => {
   }
 };
 
-const generateWithOpenAi = async (prompt: string): Promise<WorkflowDraft | null> => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+const generateWithRouter = async (prompt: string, userPhone?: string | null): Promise<WorkflowDraft | null> => {
+  const apiKey = process.env.BASOFI_AI_API_KEY;
+  const baseURL = process.env.BASOFI_AI_ENDPOINT;
+  if (!apiKey || !baseURL) return null;
+
+  const model = process.env.AI_MODEL ?? 'gemini-3-flash-preview';
+  const phoneContext = userPhone ? `\nThe user's WhatsApp phone number is ${userPhone}. Use {{phone}} in templates where the customer should contact them back.` : '';
 
   const system = `You generate onboarding workflow drafts for Flowboard (Kanban for customer onboarding).
 Return ONLY valid JSON with shape:
@@ -137,12 +148,14 @@ Return ONLY valid JSON with shape:
     {
       "name": string,
       "color": "indigo"|"amber"|"rose"|"emerald"|"violet"|"cyan",
-      "onReplyNotify": boolean (optional),
-      "overdueReminderHours": number|null (optional),
+      "onReplyNotify": boolean (optional — notify assignee when customer replies),
+      "overdueReminderHours": number|null (optional — reminder after N hours with no progress),
+      "autoMoveOnComplete": boolean (optional — auto-advance card to next stage when all required checklists are done),
       "checklists": [
         {
           "label": string,
           "required": boolean,
+          "deadlineHours": number|null (optional — deadline for this checklist item in hours),
           "action": {
             "kind": "none"|"send"|"followup",
             "messageTemplate": string|null,
@@ -154,18 +167,21 @@ Return ONLY valid JSON with shape:
     }
   ]
 }
-Use Indonesian labels. WA templates must use {{nama}}, {{wa}}, {{product}}, {{tag}}, {{link}}.
+Use Indonesian labels. WA templates must use {{nama}}, {{wa}}, {{product}}, {{tag}}, {{link}}.${phoneContext}
+Set autoMoveOnComplete=true for stages where the customer should advance automatically once all required checklists are done (e.g. after payment confirmation, after attendance marking).
+Set deadlineHours on time-sensitive checklist items (e.g. "Kirim reminder H-1" → deadlineHours: 24).
 Include WA actions where the user mentions reminders or follow-up.`;
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch(`${baseURL}/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+      model,
       temperature: 0.4,
+      stream: false,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
@@ -185,13 +201,13 @@ Include WA actions where the user mentions reminders or follow-up.`;
   return parseDraftJson(content);
 };
 
-export const generateWorkflowDraft = async (prompt: string): Promise<WorkflowDraft> => {
+export const generateWorkflowDraft = async (prompt: string, userPhone?: string | null): Promise<WorkflowDraft> => {
   const trimmed = prompt.trim();
   if (!trimmed) {
     return genericOnboardingDraft('Onboarding Pelanggan');
   }
 
-  const fromAi = await generateWithOpenAi(trimmed);
+  const fromAi = await generateWithRouter(trimmed, userPhone);
   if (fromAi) return fromAi;
 
   const lower = trimmed.toLowerCase();
@@ -209,9 +225,11 @@ export const normalizeWorkflowDraft = (draft: WorkflowDraft): WorkflowDraft => (
     color: stage.color ?? STAGE_COLORS[index % STAGE_COLORS.length],
     onReplyNotify: stage.onReplyNotify ?? false,
     overdueReminderHours: stage.overdueReminderHours ?? null,
+    autoMoveOnComplete: stage.autoMoveOnComplete ?? false,
     checklists: (stage.checklists ?? []).map((item) => ({
       label: item.label.trim(),
       required: item.required ?? true,
+      deadlineHours: item.deadlineHours ?? null,
       action: item.action?.kind && item.action.kind !== 'none'
         ? {
             kind: item.action.kind,

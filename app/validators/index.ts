@@ -8,6 +8,7 @@ import { t } from 'elysia';
 export const RegisterSchema = t.Object({
   email: t.String({ format: 'email' }),
   name: t.String({ minLength: 1 }),
+  phone: t.String({ minLength: 1 }),
   password: t.String({ minLength: 8 })
 });
 
@@ -30,7 +31,8 @@ export const UserIdParam = t.Object({
 });
 
 export const UpdateUserSchema = t.Object({
-  name: t.String({ minLength: 1 })
+  name: t.String({ minLength: 1 }),
+  phone: t.Optional(t.String())
 });
 
 export const WorkspaceIdParam = t.Object({
@@ -156,10 +158,12 @@ export const WorkflowDraftSchema = t.Object({
       color: t.Optional(t.String({ maxLength: 50 })),
       onReplyNotify: t.Optional(t.Boolean()),
       overdueReminderHours: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
+      autoMoveOnComplete: t.Optional(t.Boolean()),
       checklists: t.Array(
         t.Object({
           label: t.String({ minLength: 1, maxLength: 200 }),
           required: t.Optional(t.Boolean()),
+          deadlineHours: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
           action: t.Optional(ChecklistActionDraftSchema)
         })
       )

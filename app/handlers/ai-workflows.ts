@@ -13,9 +13,11 @@ type SaveDraftBody = {
     color?: string;
     onReplyNotify?: boolean;
     overdueReminderHours?: number | null;
+    autoMoveOnComplete?: boolean;
     checklists: Array<{
       label: string;
       required?: boolean;
+      deadlineHours?: number | null;
       action?: {
         kind: 'none' | 'send' | 'followup';
         messageTemplate?: string | null;
@@ -43,8 +45,8 @@ export async function generateDraft({
     return { error: 'Owner access required' };
   }
 
-  const draft = await generateWorkflowDraft(body.prompt);
-  return { draft, provider: process.env.OPENAI_API_KEY ? 'openai' : 'heuristic' };
+  const draft = await generateWorkflowDraft(body.prompt, user.phone);
+  return { draft, provider: process.env.BASOFI_AI_API_KEY ? 'ai' : 'heuristic' };
 }
 
 export async function saveDraft({
