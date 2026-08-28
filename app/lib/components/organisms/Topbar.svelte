@@ -43,7 +43,7 @@
 <header
 	bind:this={ref}
 	class={cn(
-		'flex h-16 shrink-0 items-center justify-between gap-4 border-b border-hairline bg-card px-6 lg:px-8',
+		'sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-hairline bg-card/95 px-6 backdrop-blur-sm lg:px-8',
 		className
 	)}
 	{...rest}

@@ -359,7 +359,7 @@
     }}
   />
 
-  <div class="flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
+  <div class="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
     <Topbar
       title={data.workspace?.name ?? 'Flowboard'}
       showSearch={false}
@@ -463,7 +463,7 @@
       {/snippet}
     </Topbar>
 
-    <main class="flex-1 overflow-auto bg-canvas p-6 md:p-8">
+    <main class="flex-1 bg-canvas px-6 pt-12 pb-8 md:px-8 md:pt-16 md:pb-10">
       <div class="mx-auto w-full max-w-[1280px]">
         {@render children()}
       </div>
