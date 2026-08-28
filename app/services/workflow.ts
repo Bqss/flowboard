@@ -11,7 +11,7 @@ import {
   type Workflow
 } from '@db';
 import { findOrCreateCustomer, normalizeWa } from './customer';
-import { parseCustomerCsv } from '../lib/csv';
+import { parseCustomerCsv, type ColumnMapping } from '../lib/csv';
 import { getChecklistActionForTemplate, onCardEnteredStage, upsertChecklistAction } from './whatsapp';
 import type { ChecklistActionKind, CardSource } from '@db';
 import type { WorkflowDraft } from './ai-workflow';
@@ -537,9 +537,10 @@ export type ImportCardsResult = {
 export const importCardsFromCsv = async (
   workflow: Workflow,
   csvText: string,
-  mode: 'skip' | 'update' = 'skip'
+  mode: 'skip' | 'update' = 'skip',
+  columnMapping?: ColumnMapping
 ): Promise<ImportCardsResult> => {
-  const rows = parseCustomerCsv(csvText);
+  const rows = parseCustomerCsv(csvText, columnMapping);
   const result: ImportCardsResult = { created: 0, skipped: 0, updated: 0, errors: [] };
 
   for (let index = 0; index < rows.length; index += 1) {

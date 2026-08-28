@@ -11,6 +11,7 @@
     type ApiBoardColumn,
     type ApiWorkflowStats
   } from '$lib/api/client';
+  import { parseCsvHeader, autoDetectColumns } from '$lib/csv.js';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import {
@@ -146,6 +147,13 @@
   let importError = $state<string | null>(null);
   let importCsv = $state('');
   let importFileName = $state<string | null>(null);
+  let importColumns = $state<string[]>([]);
+  let importMapping = $state<{ name: number; wa: number; product: number; tag: number }>({
+    name: 0,
+    wa: 1,
+    product: 2,
+    tag: 3
+  });
   let importMode = $state<'skip' | 'update'>('skip');
   let importResult = $state<{
     created: number;
@@ -555,7 +563,13 @@
     try {
       const res = await api.importCardsCsv(data.workspace.id, workflowId, {
         csv: importCsv.trim(),
-        mode: importMode
+        mode: importMode,
+        columnMapping: {
+          name: importMapping.name,
+          wa: importMapping.wa,
+          ...(importMapping.product >= 0 && { product: importMapping.product }),
+          ...(importMapping.tag >= 0 && { tag: importMapping.tag })
+        }
       });
       importResult = res.result;
       if (res.result.created > 0 || res.result.updated > 0) {
@@ -566,6 +580,30 @@
     } finally {
       importLoading = false;
     }
+  }
+
+  function detectColumnsFromCsv(text: string) {
+    const header = parseCsvHeader(text);
+    if (header.length === 0) return;
+    importColumns = header;
+    const auto = autoDetectColumns(header);
+    if (auto) {
+      importMapping = {
+        name: auto.name,
+        wa: auto.wa,
+        product: auto.product ?? -1,
+        tag: auto.tag ?? -1
+      };
+    } else {
+      // Fallback: first 4 columns in order
+      importMapping = {
+        name: 0,
+        wa: Math.min(1, header.length - 1),
+        product: header.length > 2 ? 2 : -1,
+        tag: header.length > 3 ? 3 : -1
+      };
+    }
+  }
 
   function handleFileUpload(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -578,6 +616,7 @@
         importCsv = text;
         importFileName = file.name;
         importError = null;
+        detectColumnsFromCsv(text);
       }
     };
     reader.onerror = () => {
@@ -589,6 +628,7 @@
   function clearImportFile() {
     importCsv = '';
     importFileName = null;
+    importColumns = [];
   }
 
   // Checklist statistics for active sheet card
@@ -1677,12 +1717,60 @@
             {...args}
             bind:value={importCsv}
             rows={6}
+            onblur={() => { if (importCsv.trim() && importColumns.length === 0) detectColumnsFromCsv(importCsv); }}
             placeholder={`Siti Aminah, 60123456789, April webinar, VIP\nAhmad Dahlan, 601298765432, Onboarding, Urgent`}
             class="w-full rounded-2xl border border-hairline bg-card p-3 font-mono text-[13px] text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           ></textarea>
         </div>
       {/snippet}
     </FormField>
+
+    <!-- Column Mapping -->
+    {#if importColumns.length > 0}
+      <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-3">
+        <div class="flex items-center gap-2">
+          <HugeiconsIcon icon={Settings02Icon} size={16} strokeWidth={1.8} class="text-primary" />
+          <p class="text-sm font-semibold text-ink">{tr('board.columnMapping')}</p>
+        </div>
+        <p class="text-xs text-mute">{tr('board.columnMappingHint')}</p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold text-ink">{tr('board.mapName')} <span class="text-status-urgent">*</span></span>
+            <select bind:value={importMapping.name} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+              {#each importColumns as col, idx}
+                <option value={idx}>{col || `Column ${idx + 1}`}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold text-ink">{tr('board.mapWa')} <span class="text-status-urgent">*</span></span>
+            <select bind:value={importMapping.wa} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+              {#each importColumns as col, idx}
+                <option value={idx}>{col || `Column ${idx + 1}`}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold text-ink">{tr('board.mapProduct')}</span>
+            <select bind:value={importMapping.product} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+              <option value={-1}>— {tr('common.none')} —</option>
+              {#each importColumns as col, idx}
+                <option value={idx}>{col || `Column ${idx + 1}`}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="space-y-1.5">
+            <span class="text-xs font-semibold text-ink">{tr('board.mapTag')}</span>
+            <select bind:value={importMapping.tag} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+              <option value={-1}>— {tr('common.none')} —</option>
+              {#each importColumns as col, idx}
+                <option value={idx}>{col || `Column ${idx + 1}`}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+      </div>
+    {/if}
 
     {#if importError}
       <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-[13px] font-semibold text-status-urgent-ink">

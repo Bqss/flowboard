@@ -102,9 +102,17 @@ type UpdateAssigneeBody = {
   assigneeId: string | null;
 };
 
+type ColumnMapping = {
+  name: number;
+  wa: number;
+  product?: number;
+  tag?: number;
+};
+
 type ImportCardsBody = {
   csv: string;
   mode?: 'skip' | 'update';
+  columnMapping?: ColumnMapping;
 };
 
 type MoveCardBody = {
@@ -591,7 +599,7 @@ export async function importCards({
   }
 
   try {
-    const result = await importCardsFromCsv(workflow, body.csv, body.mode ?? 'skip');
+    const result = await importCardsFromCsv(workflow, body.csv, body.mode ?? 'skip', body.columnMapping);
     return { result };
   } catch (error) {
     return handleWorkflowError(error, set);

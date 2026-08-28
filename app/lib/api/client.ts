@@ -684,7 +684,11 @@ export const api = {
   importCardsCsv: (
     workspaceId: string,
     workflowId: string,
-    body: { csv: string; mode?: 'skip' | 'update' },
+    body: {
+      csv: string;
+      mode?: 'skip' | 'update';
+      columnMapping?: { name: number; wa: number; product?: number; tag?: number };
+    },
     fetchFn?: FetchLike
   ) =>
     request<{
