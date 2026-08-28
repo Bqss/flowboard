@@ -304,7 +304,7 @@
     <div class="flex flex-wrap items-center justify-between gap-4 pt-1">
       <div>
         <h1 class="ds-page-title text-ink">{tr('common.workflows')}</h1>
-        <p class="ds-caption mt-1 text-mute">{tr('workflows.description')}</p>
+        <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('workflows.description')}</p>
       </div>
       <Button variant="primary" onclick={openChooser} class="shadow-xs">
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={2} />
@@ -315,19 +315,18 @@
 
   <!-- TOOLBAR: SEARCH & COUNT -->
   {#if !loadingData && workflows.length > 0}
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-hairline pb-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
       <div class="relative w-full max-w-sm">
         <HugeiconsIcon
           icon={Search01Icon}
-          size={15}
+          size={17}
           strokeWidth={1.8}
           class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
         />
         <input
-          type="text"
+          class="h-10 w-full rounded-xl bg-card pl-9 pr-8 text-base text-ink placeholder:text-mute/70 ring-1 ring-hairline/30 transition-all focus:ring-2 focus:ring-[var(--focus)] focus:outline-none"
           bind:value={workflowSearch}
           placeholder={tr('common.search') + '…'}
-          class="h-9 w-full rounded-xl border border-hairline bg-card pl-9 pr-8 text-xs text-ink placeholder:text-mute/70 shadow-xs transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
         />
         {#if workflowSearch}
           <button
@@ -341,7 +340,7 @@
         {/if}
       </div>
 
-      <div class="text-xs text-mute font-medium">
+      <div class="text-[13px] text-mute font-medium">
         <span>{filteredWorkflows.length} {filteredWorkflows.length === 1 ? 'workflow' : 'workflows'}</span>
       </div>
     </div>
@@ -378,7 +377,7 @@
     <div class="rounded-2xl border border-hairline bg-card p-10 text-center space-y-3 shadow-card">
       <HugeiconsIcon icon={Search01Icon} size={32} strokeWidth={1.5} class="mx-auto text-faint" />
       <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
-      <p class="ds-caption text-mute">Tidak ada workflow yang cocok dengan kata kunci "{workflowSearch}".</p>
+      <p class="text-sm font-normal leading-relaxed text-mute">Tidak ada workflow yang cocok dengan kata kunci "{workflowSearch}".</p>
       <Button variant="secondary" size="sm" onclick={() => (workflowSearch = '')}>
         {tr('common.clearSearch')}
       </Button>
@@ -519,41 +518,41 @@
 </div>
 
 <!-- WORKFLOW CREATION MODALS -->
-<Dialog bind:open={chooseOpen} title={tr('workflows.chooseTitle')} description={tr('workflows.chooseDescription')}>
-  <div class="grid gap-3 sm:grid-cols-3">
+<Dialog bind:open={chooseOpen} title={tr('workflows.chooseTitle')} description={tr('workflows.chooseDescription')} size="xl">
+  <div class="grid gap-3 sm:grid-cols-3 pt-1">
     <button
       type="button"
       onclick={startManual}
-      class="group rounded-xl border border-hairline bg-card p-4 text-left shadow-card transition-all hover:border-primary-border hover:shadow-card-hover"
+      class="group flex flex-col rounded-2xl bg-card p-5 text-left ring-1 ring-hairline/30 transition-all hover:ring-primary/40 hover:shadow-card-hover"
     >
-      <div class="flex size-9 items-center justify-center rounded-lg bg-primary-soft text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+      <div class="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary transition-colors group-hover:bg-primary group-hover:text-white">
         <HugeiconsIcon icon={Edit02Icon} size={20} strokeWidth={1.8} />
       </div>
-      <p class="mt-3 font-semibold text-ink">{tr('workflows.manual')}</p>
-      <p class="ds-caption mt-1 text-mute">{tr('workflows.manualDescription')}</p>
+      <p class="mt-3.5 text-base font-semibold text-ink">{tr('workflows.manual')}</p>
+      <p class="text-[13px] text-mute mt-1 leading-relaxed">{tr('workflows.manualDescription')}</p>
     </button>
     <button
       type="button"
       onclick={startAi}
-      class="group rounded-xl border border-primary/30 bg-primary-soft/30 p-4 text-left shadow-card transition-all hover:border-primary hover:shadow-card-hover"
+      class="group flex flex-col rounded-2xl bg-primary-soft/20 p-5 text-left ring-1 ring-primary/30 transition-all hover:ring-primary hover:shadow-card-hover"
     >
-      <div class="flex size-9 items-center justify-center rounded-lg bg-primary text-white shadow-xs">
+      <div class="flex size-10 items-center justify-center rounded-xl bg-primary text-white shadow-sm">
         <HugeiconsIcon icon={AiMagicIcon} size={20} strokeWidth={1.8} />
       </div>
-      <p class="mt-3 font-semibold text-ink">{tr('workflows.aiSetup')}</p>
-      <p class="ds-caption mt-1 text-mute">{tr('workflows.aiDescription')}</p>
+      <p class="mt-3.5 text-base font-semibold text-ink">{tr('workflows.aiSetup')}</p>
+      <p class="text-[13px] text-mute mt-1 leading-relaxed">{tr('workflows.aiDescription')}</p>
     </button>
     <button
       type="button"
       onclick={createExampleWorkflow}
       disabled={loading}
-      class="group rounded-xl border border-status-done/30 bg-status-done-soft/30 p-4 text-left shadow-card transition-all hover:border-status-done hover:shadow-card-hover disabled:cursor-not-allowed disabled:opacity-50"
+      class="group flex flex-col rounded-2xl bg-status-done-soft/20 p-5 text-left ring-1 ring-status-done/30 transition-all hover:ring-status-done hover:shadow-card-hover disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <div class="flex size-9 items-center justify-center rounded-lg bg-status-done-soft text-status-done-strong group-hover:bg-status-done group-hover:text-white transition-colors">
+      <div class="flex size-10 items-center justify-center rounded-xl bg-status-done-soft text-status-done-strong transition-colors group-hover:bg-status-done group-hover:text-white">
         <HugeiconsIcon icon={Copy01Icon} size={20} strokeWidth={1.8} />
       </div>
-      <p class="mt-3 font-semibold text-ink">{tr('workflows.example')}</p>
-      <p class="ds-caption mt-1 text-mute">{tr('workflows.exampleDescription')}</p>
+      <p class="mt-3.5 text-base font-semibold text-ink">{tr('workflows.example')}</p>
+      <p class="text-[13px] text-mute mt-1 leading-relaxed">{tr('workflows.exampleDescription')}</p>
     </button>
   </div>
 </Dialog>
@@ -566,7 +565,7 @@
       {/snippet}
     </FormField>
     {#if error}
-      <p class="ds-caption text-status-urgent">{error}</p>
+      <p class="text-sm font-normal leading-relaxed text-status-urgent">{error}</p>
     {/if}
   </div>
   {#snippet footer()}

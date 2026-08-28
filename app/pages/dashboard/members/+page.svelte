@@ -207,7 +207,7 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-1">
       <div>
         <h1 class="ds-page-title text-ink">{tr('members.title')}</h1>
-        <p class="ds-caption mt-1 text-mute">
+        <p class="text-sm font-normal leading-relaxed text-mute mt-1">
           {tr('members.description', { workspace: data.workspace?.name ?? '' })}
         </p>
       </div>

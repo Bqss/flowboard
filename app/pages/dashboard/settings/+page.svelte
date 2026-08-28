@@ -23,6 +23,7 @@
 
   let loadingProfile = $state(false);
   let name = $state('');
+  let phone = $state('');
   let email = $derived(data.user?.email || '');
 
   let profileSuccess = $state<string | null>(null);
@@ -31,6 +32,9 @@
   $effect(() => {
     if (data.user?.name) {
       name = data.user.name;
+    }
+    if (data.user?.phone !== undefined) {
+      phone = data.user.phone ?? '';
     }
   });
 
@@ -110,7 +114,7 @@
     profileSuccess = null;
     profileError = null;
     try {
-      await api.updateUser(data.user.id, { name });
+      await api.updateUser(data.user.id, { name, phone: phone || undefined });
       await invalidateAll();
       profileSuccess = tr('settings.profileSaved');
     } catch (err) {
@@ -172,7 +176,7 @@
     />
     <div class="pt-1">
       <h1 class="ds-page-title text-ink">{tr('settings.title')}</h1>
-      <p class="ds-caption mt-1 text-mute">{tr('settings.description')}</p>
+      <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('settings.description')}</p>
     </div>
   </header>
 
@@ -202,7 +206,7 @@
             <HugeiconsIcon icon={Image01Icon} size={15} strokeWidth={1.8} />
             <span>{uploadingAvatar ? tr('settings.uploading') : tr('settings.changePhoto')}</span>
           </Button>
-          <p class="ds-caption mt-1.5 text-mute">{tr('settings.photoHint')}</p>
+          <p class="text-sm font-normal leading-relaxed text-mute mt-1.5">{tr('settings.photoHint')}</p>
         </div>
       </div>
 
@@ -216,6 +220,12 @@
         <FormField label={tr('settings.fullName')} required>
           {#snippet control(args)}
             <Input {...args} bind:value={name} placeholder={tr('settings.fullNamePlaceholder')} />
+          {/snippet}
+        </FormField>
+
+        <FormField label={tr('settings.phone')} helper={tr('settings.phoneHint')}>
+          {#snippet control(args)}
+            <Input {...args} bind:value={phone} placeholder={tr('settings.phonePlaceholder')} />
           {/snippet}
         </FormField>
 
@@ -316,7 +326,7 @@
       <HugeiconsIcon icon={BellRingIcon} size={20} strokeWidth={1.8} class="text-primary" />
       <div>
         <h2 class="ds-section-title text-ink">{tr('settings.notifications')}</h2>
-        <p class="ds-caption mt-1 text-mute">{tr('settings.notificationsDescription')}</p>
+        <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('settings.notificationsDescription')}</p>
       </div>
     </div>
 
@@ -379,7 +389,7 @@
           />
           <span class="min-w-0">
             <span class="block text-sm font-medium text-ink">{tr('settings.emailDigest')}</span>
-            <span class="ds-caption block text-mute">{tr('settings.emailDigestHelper')}</span>
+            <span class="text-sm font-normal leading-relaxed text-mute block">{tr('settings.emailDigestHelper')}</span>
           </span>
         </label>
 

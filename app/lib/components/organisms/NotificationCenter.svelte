@@ -4,7 +4,9 @@
 	import { dismissable } from '$lib/components/molecules/shared.js';
 	import { IconButton } from '$lib/components/atoms/index.js';
 	import BellIcon from '@lucide/svelte/icons/bell';
+	import { HugeiconsIcon } from '@hugeicons/svelte';
 	import type { NotificationItem } from './shared.js';
+	import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		items: NotificationItem[];
@@ -76,24 +78,29 @@
 			role="region"
 			aria-label={title}
 		>
-			<div class="flex items-center justify-between border-b border-hairline px-4 py-3">
-				<span class="ds-section-title text-ink">{title}</span>
-				{#if unread > 0}
-					<button
-						type="button"
-						onclick={onmarkAllRead}
-						class="ds-caption text-primary transition-colors hover:text-primary"
-					>
-						{markAllReadText}
-					</button>
-				{:else}
-					<span class="ds-caption text-mute">{allReadText}</span>
-				{/if}
-			</div>
+		<div class="flex items-center justify-between border-b border-hairline px-4 py-3">
+			<span class="ds-label text-ink">{title}</span>
+			{#if unread > 0}
+				<button
+					type="button"
+					onclick={onmarkAllRead}
+					class="ds-caption text-primary transition-colors hover:text-primary"
+				>
+					{markAllReadText}
+				</button>
+			{:else}
+				<span class="ds-caption text-mute">{allReadText}</span>
+			{/if}
+		</div>
 
 			<div class="max-h-80 overflow-y-auto" data-testid={listTestId}>
 				{#if items.length === 0}
-					<p class="ds-body px-4 py-8 text-center text-mute">{emptyText}</p>
+					<div class="flex flex-col items-center gap-3 px-4 py-10 text-center">
+						<div class="flex size-10 items-center justify-center rounded-full bg-lane text-mute">
+							<HugeiconsIcon icon={CheckmarkCircle02Icon} size={20} strokeWidth={1.8} />
+						</div>
+						<p class="ds-caption text-mute">{emptyText}</p>
+					</div>
 				{:else}
 					{#each items as item (item.id)}
 						<button
