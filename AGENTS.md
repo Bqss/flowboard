@@ -4,8 +4,6 @@
 
 ## AI Quickstart — First time here?
 
-Read in this order:
-
 1. **[CODEMAP.md](./CODEMAP.md)** — codebase topology in one read.
 2. **This file** — conventions, anti-patterns, dependency policy.
 3. **[docs/DESIGN.md](./docs/DESIGN.md)** — the design system for the app UI (light kanban workspace). Read before writing any markup.
@@ -13,6 +11,8 @@ Read in this order:
 5. **[`app/pages/`](./app/pages/)** — SvelteKit frontend routes.
 6. **[`.agents/skills/SKILL.md`](./.agents/skills/SKILL.md)** — skill index.
 7. **`/design-system`** — live component showcase (browse before building UI).
+
+> **Graphify knowledge graph:** If `.graphify/graph.json` exists, query it **before** reading files to answer architecture or codebase questions — it is faster and shows cross-file connections you would miss by reading sequentially. See [Graphify — Knowledge Graph](#graphify--knowledge-graph) below.
 
 > **Two design systems, no crossover.** [`docs/DESIGN.md`](./docs/DESIGN.md) governs the authenticated app (light canvas, indigo `#4f46e5`, Hugeicons stroke-rounded, derived from `reference/`). [`docs/DESIGN.landing.md`](./docs/DESIGN.landing.md) governs the dark marketing landing page. Never mix their tokens in one screen.
 
@@ -166,11 +166,15 @@ Run `bun run db:generate` and `bun run db:migrate` after changing schema.
 
 ## Build/Test
 
+> **NEVER launch the dev server (`bun run dev`, `vite dev`, or any similar command).**
+> The user runs their own dev server. Do not start one via `hub start`, `bash`, or any other mechanism.
+> For UI verification, connect to the user's existing server (typically `localhost:3000`) — do not spawn a new process.
+
 ```bash
-bun run dev          # Dev server (Vite)
-bun run build        # Production build
-bun run start        # Run production server
-bun run check        # Typecheck & Svelte check
+bun run check        # Typecheck & Svelte check (safe to run)
+bun run build        # Production build (only if explicitly asked)
+bun run start        # Run production server (NEVER — user runs their own)
+bun run dev          # Dev server (NEVER — user runs their own)
 ```
 
 ## Tooling
@@ -179,3 +183,57 @@ bun run check        # Typecheck & Svelte check
 |---|---|
 | `bun run check` | Typecheck & Svelte check |
 | `bun run scripts/codemap.ts` | Regenerate `CODEMAP.md` |
+| `graphify query "<question>"` | Query knowledge graph before reading files |
+| `graphify path "A" "B"` | Shortest path between two concepts in graph |
+| `graphify explain "NodeName"` | Plain-language explanation of a graph node |
+| `/graphify --update` | Rebuild graph after doc/paper/image changes |
+| `graphify hook install` | Auto-rebuild graph after every git commit |
+
+## Graphify — Knowledge Graph
+
+A persistent knowledge graph of this codebase lives in `.graphify/graph.json`. It maps entities (functions, modules, concepts) and their relationships with an honest audit trail — every edge is tagged `EXTRACTED`, `INFERRED`, or `AMBIGUOUS`.
+
+### Before answering codebase questions — query first
+
+When `.graphify/graph.json` exists, **query the graph before opening files** to answer architecture, dependency, or "how does X connect to Y" questions. The graph is faster than sequential file reads and surfaces cross-file connections you would miss.
+
+```bash
+graphify query "How does authentication work?"          # BFS — broad context
+graphify query "How does authentication work?" --dfs    # DFS — trace a specific path
+graphify path "AuthModule" "Database"                   # shortest path between two concepts
+graphify explain "KanbanBoard"                          # plain-language explanation of a node
+graphify summary                                        # compact first-hop orientation
+```
+
+If the graph does not exist yet, run `/graphify` to build it (one-time, ~1-2 min for this repo).
+
+### After code changes — keep the graph fresh
+
+| Scenario | What to do |
+|---|---|
+| Code-only changes (`.ts`, `.svelte`, etc.) | Git hook auto-rebuilds — no action needed if `graphify hook install` was run |
+| Doc/paper/image added or changed | Run `/graphify --update` (semantic re-extraction needs LLM) |
+| Branch switch / merge / rewrite | Check `.graphify/branch.json` for `"stale": true`; if stale, run `/graphify --update` before trusting query results |
+| `.graphify/needs_update` file exists | Graph is stale — run `/graphify --update` before relying on semantic results |
+
+**One-time setup** (already done for this repo if the hook is present):
+
+```bash
+graphify hook install    # auto-rebuild graph.json + GRAPH_REPORT.md after every git commit (code files only, no LLM)
+```
+
+### Review workflow (for PRs and code review)
+
+```bash
+graphify minimal-context --task "review PR" --graph .graphify/graph.json   # first review call — compact context
+graphify review-analysis --files src/auth.ts --graph .graphify/graph.json   # blast radius + impacted communities
+graphify recommend-commits --files src/auth.ts,src/session.ts               # advisory commit grouping
+```
+
+Keep graph review context within ≤5 graph tool calls and ≤800 graph-context tokens. If the graph is stale, update it first.
+
+### What NOT to do
+
+- Do not edit `.graphify/graph.json` or derived artifacts directly — always use graphify commands.
+- Do not delete `.graphify/` — use `graphify state prune` for non-destructive cleanup.
+- Do not commit `.graphify/branch.json`, `.graphify/worktree.json`, `.graphify/needs_update`, or `.graphify/cache/`.
