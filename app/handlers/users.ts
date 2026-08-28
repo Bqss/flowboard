@@ -4,7 +4,7 @@ import { toPublicUser, type Ctx } from '../core';
 
 /** User handlers. Routing + validation live in `routes/users.ts`. */
 
-type UpdateBody = { name: string };
+type UpdateBody = { name: string; phone?: string };
 type IdParams = { id: string };
 
 export async function list() {
@@ -31,7 +31,7 @@ export async function show({ params, set }: Ctx<unknown, IdParams>) {
 export async function update({ params, body, set }: Ctx<UpdateBody, IdParams>) {
   const [user] = await db
     .update(users)
-    .set({ name: body.name, updatedAt: new Date() })
+    .set({ name: body.name, phone: body.phone, updatedAt: new Date() })
     .where(eq(users.id, params.id))
     .returning();
 

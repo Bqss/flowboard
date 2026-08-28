@@ -63,7 +63,6 @@
 	)}
 	{...rest}
 >
-	<div class="pointer-events-none absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true"></div>
 
 	<div class="mb-7">
 		<div class="mb-5 flex justify-end">

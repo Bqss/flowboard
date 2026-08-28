@@ -11,9 +11,10 @@
 	import { Input as AtomInput } from '$lib/components/atoms/index.js';
 	import { cardShellClass } from './shared.js';
 
-	type Props = WithElementRef<Omit<HTMLFormAttributes, 'onsubmit'>, HTMLFormElement> & {
+type Props = WithElementRef<Omit<HTMLFormAttributes, 'onsubmit'>, HTMLFormElement> & {
 		name?: string;
 		email?: string;
+		phone?: string;
 		password?: string;
 		confirmPassword?: string;
 		loading?: boolean;
@@ -22,7 +23,7 @@
 		title?: string;
 		subtitle?: string;
 		submitLabel?: string;
-		onSubmit?: (payload: { name: string; email: string; password: string }) => void;
+		onSubmit?: (payload: { name: string; email: string; phone: string; password: string }) => void;
 		class?: string;
 		footer?: import('svelte').Snippet;
 	};
@@ -31,6 +32,7 @@
 		ref = $bindable(null),
 		name = $bindable(''),
 		email = $bindable(''),
+		phone = $bindable(''),
 		password = $bindable(''),
 		confirmPassword = $bindable(''),
 		loading = false,
@@ -82,7 +84,7 @@
 	function submit(event: SubmitEvent) {
 		event.preventDefault();
 		if (emailError || passwordError || confirmPasswordError || !passwordStrength.valid) return;
-		onSubmit?.({ name, email: normalizeEmail(email), password });
+		onSubmit?.({ name, email: normalizeEmail(email), phone: phone.trim(), password });
 	}
 </script>
 
@@ -96,7 +98,6 @@
 	)}
 	{...rest}
 >
-	<div class="pointer-events-none absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true"></div>
 
 	<div class="mb-7">
 		<div class="mb-5 flex justify-end">
@@ -119,6 +120,17 @@
 					bind:value={name}
 					placeholder={copy.fields.name.placeholder}
 					autocomplete="name"
+				/>
+			{/snippet}
+		</FormField>
+
+		<FormField label={copy.fields.phone.label} required>
+			{#snippet control(args)}
+				<AtomInput
+					{...args}
+					bind:value={phone}
+					placeholder={copy.fields.phone.placeholder}
+					autocomplete="tel"
 				/>
 			{/snippet}
 		</FormField>

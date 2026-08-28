@@ -21,6 +21,7 @@
   let formName = $state('');
   let formEmail = $state('');
   let formPassword = $state('');
+  let formPhone = $state('');
   let loading = $state(false);
 
   function openCreate() {
@@ -29,6 +30,7 @@
     formName = '';
     formEmail = '';
     formPassword = '';
+    formPhone = '';
     showModal = true;
   }
 
@@ -38,6 +40,7 @@
     formName = user.name;
     formEmail = user.email;
     formPassword = '';
+    formPhone = '';
     showModal = true;
   }
 
@@ -49,9 +52,9 @@
     loading = true;
     try {
       if (modalMode === 'create') {
-        await api.createUser({ name: formName, email: formEmail, password: formPassword });
+        await api.createUser({ name: formName, email: formEmail, phone: formPhone, password: formPassword });
       } else {
-        await api.updateUser(editingId, { name: formName });
+        await api.updateUser(editingId, { name: formName, phone: formPhone || undefined });
       }
       location.reload();
     } catch (err) {
@@ -172,6 +175,16 @@
           placeholder="jane@company.com"
           disabled={modalMode === 'edit'}
           required
+        />
+      {/snippet}
+    </FormField>
+
+    <FormField label={tr('settings.phone')}>
+      {#snippet control(args)}
+        <Input
+          {...args}
+          bind:value={formPhone}
+          placeholder={tr('settings.phonePlaceholder')}
         />
       {/snippet}
     </FormField>

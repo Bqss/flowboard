@@ -24,7 +24,7 @@ import { isLockedOut, getRemainingLockoutMs, recordFailedAttempt, clearAttempts 
  * straight request→response logic.
  */
 
-type RegisterBody = { email: string; name: string; password: string };
+type RegisterBody = { email: string; name: string; phone: string; password: string };
 type LoginBody = { email: string; password: string };
 type ChangePasswordBody = { currentPassword: string; newPassword: string };
 
@@ -39,7 +39,7 @@ export async function register({ body, cookie, set, clientIp }: Ctx<RegisterBody
   const passwordHash = await hashPassword(body.password);
   const [user] = await db
     .insert(users)
-    .values({ email: body.email, name: body.name, passwordHash })
+    .values({ email: body.email, name: body.name, phone: body.phone, passwordHash })
     .returning();
 
   await createWorkspaceForUser(user.id, `${body.name}'s Workspace`);

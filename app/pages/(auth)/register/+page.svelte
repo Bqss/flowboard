@@ -11,13 +11,14 @@
 
   let name = $state('');
   let email = $state('');
+  let phone = $state('');
   let password = $state('');
   let confirmPassword = $state('');
   let error = $state<string | undefined>(undefined);
   let loading = $state(false);
   const copy = $derived(authCopy[$locale].register);
 
-  async function handleSubmit(payload: { name: string; email: string; password: string }) {
+  async function handleSubmit(payload: { name: string; email: string; phone: string; password: string }) {
     error = undefined;
     loading = true;
     const dest = data.redirectTo || '/dashboard';
@@ -41,6 +42,7 @@
 <RegisterForm
   bind:name
   bind:email
+  bind:phone
   bind:password
   bind:confirmPassword
   {copy}

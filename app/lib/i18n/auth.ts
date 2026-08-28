@@ -48,6 +48,7 @@ export type AuthRegisterCopy = {
 	submitLabel: string;
 	fields: {
 		name: FieldCopy;
+		phone: FieldCopy;
 		email: FieldCopy;
 		password: PasswordFieldCopy;
 		confirmPassword: PasswordFieldCopy;
@@ -162,6 +163,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 			fields: {
 				name: { label: 'Full name', placeholder: 'Your name' },
 				email: { label: 'Email', placeholder: 'you@company.com' },
+				phone: { label: 'Phone number', placeholder: '60123456789' },
 				password: {
 					label: 'Password',
 					placeholder: '••••••••',
@@ -259,6 +261,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 			fields: {
 				name: { label: 'Nama penuh', placeholder: 'Nama anda' },
 				email: { label: 'E-mel', placeholder: 'nama@syarikat.com' },
+				phone: { label: 'Nombor telefon', placeholder: '60123456789' },
 				password: {
 					label: 'Kata laluan',
 					placeholder: '••••••••',

@@ -10,6 +10,7 @@ export type ApiUser = {
   id: string;
   email: string;
   name: string;
+  phone?: string | null;
   avatarUrl?: string | null;
   activeWorkspaceId?: string | null;
   platformAdmin?: boolean;
@@ -182,9 +183,11 @@ export type ApiWorkflowDraft = {
     color?: string;
     onReplyNotify?: boolean;
     overdueReminderHours?: number | null;
+    autoMoveOnComplete?: boolean;
     checklists: Array<{
       label: string;
       required?: boolean;
+      deadlineHours?: number | null;
       action?: ApiChecklistAction;
     }>;
   }>;
@@ -318,7 +321,7 @@ export type ApiWorkflowStats = {
     done: number;
   }>;
   byTime: Array<{
-    bucket: string;
+    date: string;
     created: number;
     completed: number;
   }>;
@@ -461,7 +464,7 @@ export const api = {
   /** Generic GET for endpoints without a dedicated helper. */
   get: <T>(path: string, fetchFn?: FetchLike) => request<T>(path, { fetch: fetchFn }),
 
-  register: (body: { email: string; name: string; password: string }, fetchFn?: FetchLike) =>
+  register: (body: { email: string; name: string; phone: string; password: string }, fetchFn?: FetchLike) =>
     request<MeResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -482,14 +485,14 @@ export const api = {
 
   listUsers: (fetchFn?: FetchLike) => request<{ users: ApiUser[] }>('/users', { fetch: fetchFn }),
 
-  createUser: (body: { email: string; name: string; password: string }, fetchFn?: FetchLike) =>
+  createUser: (body: { email: string; name: string; phone: string; password: string }, fetchFn?: FetchLike) =>
     request<{ user: ApiUser }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(body),
       fetch: fetchFn
     }),
 
-  updateUser: (id: string, body: { name: string }, fetchFn?: FetchLike) =>
+  updateUser: (id: string, body: { name: string; phone?: string }, fetchFn?: FetchLike) =>
     request<{ user: ApiUser }>(`/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -600,7 +603,7 @@ export const api = {
     }),
 
   generateWorkflowDraft: (workspaceId: string, body: { prompt: string }, fetchFn?: FetchLike) =>
-    request<{ draft: ApiWorkflowDraft; provider: 'openai' | 'heuristic' }>(
+    request<{ draft: ApiWorkflowDraft; provider: 'ai' | 'heuristic' }>(
       `/workspaces/${workspaceId}/workflows/ai/draft`,
       { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
     ),
@@ -621,9 +624,9 @@ export const api = {
       { fetch: fetchFn }
     ),
 
-  getWorkflowStats: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
+  getWorkflowStats: (workspaceId: string, workflowId: string, rangeDays?: number, fetchFn?: FetchLike) =>
     request<{ stats: ApiWorkflowStats }>(
-      `/workspaces/${workspaceId}/workflows/${workflowId}/stats`,
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stats${rangeDays ? `?range=${rangeDays}` : ''}`,
       { fetch: fetchFn }
     ),
 
