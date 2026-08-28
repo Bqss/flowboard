@@ -38,6 +38,7 @@ import Chip from './Chip.svelte';
 import Image from './Image.svelte';
 import Logo from './Logo.svelte';
 import Portal from './Portal.svelte';
+import GoogleButton from './GoogleButton.svelte';
 
 export {
 	Heading,
@@ -79,4 +80,5 @@ export {
 	Image,
 	Logo,
 	Portal,
+	GoogleButton,
 };

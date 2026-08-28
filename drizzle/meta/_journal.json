@@ -134,6 +134,13 @@
       "when": 1787932465168,
       "tag": "0018_strange_yellowjacket",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787936819066,
+      "tag": "0019_legal_firestar",
+      "breakpoints": true
     }
   ]
 }

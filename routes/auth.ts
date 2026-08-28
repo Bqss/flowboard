@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia';
 import * as auth from '@handlers/auth';
+import * as oauth from '@handlers/oauth';
 import { createWithUser, createWithClientIp } from '@middlewares';
 import { RegisterSchema, LoginSchema, ChangePasswordSchema, AvatarSchema } from '@validators';
 
@@ -17,7 +18,6 @@ export const createAuthRoutes = () =>
     .post('/logout', auth.logout)
     .post('/change-password', auth.changePassword, { body: ChangePasswordSchema })
     .post('/avatar', auth.uploadAvatar, { body: AvatarSchema })
-    .get('/me', auth.me);
-
-/** @deprecated Prefer `createAuthRoutes()` when composing the API in dev. */
-export const authRoutes = createAuthRoutes();
+    .get('/me', auth.me)
+    .get('/google', oauth.googleRedirect)
+    .get('/google/callback', oauth.googleCallback);

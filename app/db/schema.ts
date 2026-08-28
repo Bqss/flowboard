@@ -44,14 +44,20 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
-  passwordHash: text('password_hash').notNull(),
+  passwordHash: text('password_hash'),
+  provider: text('provider'),
+  providerId: text('provider_id'),
   phone: text('phone'),
   avatarUrl: text('avatar_url'),
   activeWorkspaceId: uuid('active_workspace_id'),
   platformAdmin: boolean('platform_admin').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => [
+  uniqueIndex('users_provider_provider_id_idx').on(table.provider, table.providerId).where(sql`provider IS NOT NULL`)
+]);
+// Partial unique index: only one OAuth account per (provider, provider_id) pair.
+// Users who registered with email/password have NULL provider — excluded from the index.
 
 export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),

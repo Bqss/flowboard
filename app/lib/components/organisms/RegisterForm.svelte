@@ -6,7 +6,7 @@
 	import { assessPassword, type PasswordCheckId } from '$lib/password.js';
 	import { authCopy, type AuthRegisterCopy } from '$lib/i18n/auth.js';
 	import { locale } from '$lib/i18n/index.js';
-	import { Button, ProgressBar } from '$lib/components/atoms/index.js';
+	import { Button, GoogleButton, ProgressBar } from '$lib/components/atoms/index.js';
 	import { FormField, PasswordInput } from '$lib/components/molecules/index.js';
 	import { Input as AtomInput } from '$lib/components/atoms/index.js';
 	import { cardShellClass } from './shared.js';
@@ -111,6 +111,15 @@ type Props = WithElementRef<Omit<HTMLFormAttributes, 'onsubmit'>, HTMLFormElemen
 		</h1>
 		<p class="ds-body mt-2 text-mute">{subtitle ?? copy.subtitle}</p>
 	</div>
+
+<div class="mb-6 space-y-4">
+	<GoogleButton href="/api/auth/google" label={copy.google.button} />
+	<div class="flex items-center gap-3">
+		<div class="h-px flex-1 bg-hairline"></div>
+		<span class="text-xs font-medium text-faint">{copy.google.divider}</span>
+		<div class="h-px flex-1 bg-hairline"></div>
+	</div>
+</div>
 
 	<div class="space-y-4">
 		<FormField label={copy.fields.name.label} required>

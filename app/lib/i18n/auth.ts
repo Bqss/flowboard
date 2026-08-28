@@ -7,6 +7,10 @@ export type AuthErrorCopy = {
 	emailRegistered: string;
 	invalidInput: string;
 	tooManyAttempts: (minutes: number) => string;
+	oauthFailed: string;
+	oauthCancelled: string;
+	oauthEmailNotVerified: string;
+	oauthStateMismatch: string;
 };
 
 type FieldCopy = {
@@ -37,6 +41,10 @@ export type AuthLoginCopy = {
 	validation: {
 		invalidEmail: string;
 	};
+	google: {
+		button: string;
+		divider: string;
+	};
 	errors: AuthErrorCopy;
 };
 
@@ -66,6 +74,10 @@ export type AuthRegisterCopy = {
 	footer: {
 		prompt: string;
 		action: string;
+	};
+	google: {
+		button: string;
+		divider: string;
 	};
 	errors: AuthErrorCopy;
 };
@@ -146,12 +158,20 @@ export const authCopy: Record<Locale, AuthCopy> = {
 			remember: 'Keep me signed in on this device',
 			footer: { prompt: 'New to Flowboard?', action: 'Start free' },
 			validation: { invalidEmail: 'Enter a valid email address.' },
+			google: {
+				button: 'Continue with Google',
+				divider: 'or sign in with email'
+			},
 			errors: errorCopy({
 				generic: 'Something went wrong. Try again.',
 				invalidCredentials: 'Your email or password is incorrect.',
 				emailRegistered: 'This email is already registered.',
 				invalidInput: 'Check the highlighted fields and try again.',
-				tooManyAttempts: (minutes) => `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+				tooManyAttempts: (minutes) => `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+				oauthFailed: 'Google sign-in failed. Try again.',
+				oauthCancelled: 'Google sign-in was cancelled.',
+				oauthEmailNotVerified: 'Your Google email is not verified.',
+				oauthStateMismatch: 'Security check failed. Try again.'
 			})
 		},
 		register: {
@@ -193,12 +213,20 @@ export const authCopy: Record<Locale, AuthCopy> = {
 				passwordMismatch: 'Passwords do not match.'
 			},
 			footer: { prompt: 'Already have an account?', action: 'Sign in' },
+			google: {
+				button: 'Continue with Google',
+				divider: 'or create workspace with email'
+			},
 			errors: errorCopy({
 				generic: 'Something went wrong. Try again.',
 				invalidCredentials: 'Your email or password is incorrect.',
 				emailRegistered: 'This email is already registered.',
 				invalidInput: 'Check the highlighted fields and try again.',
-				tooManyAttempts: (minutes) => `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+				tooManyAttempts: (minutes) => `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+				oauthFailed: 'Google sign-in failed. Try again.',
+				oauthCancelled: 'Google sign-in was cancelled.',
+				oauthEmailNotVerified: 'Your Google email is not verified.',
+				oauthStateMismatch: 'Security check failed. Try again.'
 			})
 		}
 	},
@@ -244,12 +272,20 @@ export const authCopy: Record<Locale, AuthCopy> = {
 			remember: 'Kekalkan saya log masuk pada peranti ini',
 			footer: { prompt: 'Belum menggunakan Flowboard?', action: 'Mula percuma' },
 			validation: { invalidEmail: 'Masukkan alamat e-mel yang sah.' },
+			google: {
+				button: 'Teruskan dengan Google',
+				divider: 'atau log masuk dengan e-mel'
+			},
 			errors: errorCopy({
 				generic: 'Berlaku masalah. Cuba lagi.',
 				invalidCredentials: 'E-mel atau kata laluan tidak betul.',
 				emailRegistered: 'E-mel ini telah didaftarkan.',
 				invalidInput: 'Semak medan yang ditandakan dan cuba lagi.',
-				tooManyAttempts: (minutes) => `Terlalu banyak cubaan. Cuba lagi dalam ${minutes} minit.`
+				tooManyAttempts: (minutes) => `Terlalu banyak cubaan. Cuba lagi dalam ${minutes} minit.`,
+				oauthFailed: 'Log masuk Google gagal. Cuba lagi.',
+				oauthCancelled: 'Log masuk Google dibatalkan.',
+				oauthEmailNotVerified: 'E-mel Google anda belum disahkan.',
+				oauthStateMismatch: 'Semakan keselamatan gagal. Cuba lagi.'
 			})
 		},
 		register: {
@@ -291,12 +327,20 @@ export const authCopy: Record<Locale, AuthCopy> = {
 				passwordMismatch: 'Kata laluan tidak sepadan.'
 			},
 			footer: { prompt: 'Sudah mempunyai akaun?', action: 'Log masuk' },
+			google: {
+				button: 'Teruskan dengan Google',
+				divider: 'atau cipta ruang kerja dengan e-mel'
+			},
 			errors: errorCopy({
 				generic: 'Berlaku masalah. Cuba lagi.',
 				invalidCredentials: 'E-mel atau kata laluan tidak betul.',
 				emailRegistered: 'E-mel ini telah didaftarkan.',
 				invalidInput: 'Semak medan yang ditandakan dan cuba lagi.',
-				tooManyAttempts: (minutes) => `Terlalu banyak cubaan. Cuba lagi dalam ${minutes} minit.`
+				tooManyAttempts: (minutes) => `Terlalu banyak cubaan. Cuba lagi dalam ${minutes} minit.`,
+				oauthFailed: 'Log masuk Google gagal. Cuba lagi.',
+				oauthCancelled: 'Log masuk Google dibatalkan.',
+				oauthEmailNotVerified: 'E-mel Google anda belum disahkan.',
+				oauthStateMismatch: 'Semakan keselamatan gagal. Cuba lagi.'
 			})
 		}
 	}

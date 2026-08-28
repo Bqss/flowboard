@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
+  import { page } from '$app/stores';
   import { api, ApiError } from '$lib/api/client';
   import { locale } from '$lib/i18n/index.js';
   import { authCopy, localizeAuthError } from '$lib/i18n/auth.js';
@@ -17,6 +18,13 @@
   let error = $state<string | undefined>(undefined);
   let loading = $state(false);
   const copy = $derived(authCopy[$locale].register);
+  const oauthErrorMap = $derived<Record<string, string>>({
+    oauth_failed: copy.errors.oauthFailed,
+    oauth_cancelled: copy.errors.oauthCancelled,
+    oauth_email_not_verified: copy.errors.oauthEmailNotVerified,
+    oauth_state_mismatch: copy.errors.oauthStateMismatch
+  });
+  const oauthError = $derived(oauthErrorMap[$page.url.searchParams.get('error') ?? ''] ?? undefined);
 
   async function handleSubmit(payload: { name: string; email: string; phone: string; password: string }) {
     error = undefined;
@@ -46,7 +54,7 @@
   bind:password
   bind:confirmPassword
   {copy}
-  {error}
+  error={error ?? oauthError}
   {loading}
   title={copy.title}
   subtitle={copy.subtitle}

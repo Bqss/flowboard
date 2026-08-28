@@ -114,6 +114,10 @@ export async function changePassword({ body, user, cookie, set, clientIp }: Ctx<
     return { error: 'Unauthorized' };
   }
 
+  if (!user.passwordHash) {
+    set.status = 400;
+    return { error: 'This account uses Google sign-in. Set a password first.' };
+  }
   const valid = await verifyPassword(body.currentPassword, user.passwordHash);
   if (!valid) {
     logger.logSecurity('change_password_failed - bad current password', { userId: user.id, ip: clientIp });
