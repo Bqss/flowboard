@@ -234,7 +234,7 @@
 
       <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
         <div class="flex flex-wrap items-center gap-3 border-b border-hairline bg-canvas-sunken px-4 py-3">
-          <label class="flex items-center gap-2 text-xs font-semibold text-ink cursor-pointer">
+          <label class="flex items-center gap-2 text-[13px] font-semibold text-ink cursor-pointer">
             <Checkbox
               checked={selectedWaitingIds.length === waitingCards.length && waitingCards.length > 0}
               onchange={(e) => toggleAllWaiting(e.currentTarget.checked)}
@@ -243,7 +243,7 @@
           </label>
           <select
             bind:value={bulkAssigneeId}
-            class="h-8 rounded-full border border-hairline bg-card px-3 text-xs font-medium text-ink outline-none focus:border-primary"
+            class="h-8 rounded-full border border-hairline bg-card px-3 text-[13px] font-medium text-ink outline-none focus:border-primary"
             aria-label={tr('home.bulkAssignee')}
           >
             <option value="">{tr('home.clearAssignee')}</option>
@@ -263,7 +263,7 @@
         </div>
 
         {#if bulkError}
-          <p class="px-4 py-2 text-xs font-semibold text-status-urgent-ink bg-status-urgent-soft">
+          <p class="px-4 py-2 text-[13px] font-semibold text-status-urgent-ink bg-status-urgent-soft">
             {bulkError}
           </p>
         {/if}
@@ -277,7 +277,7 @@
               />
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <p class="text-sm font-bold text-ink">{card.customerName}</p>
+                  <p class="text-base font-bold text-ink">{card.customerName}</p>
                   {#if card.waErrorFlag}
                     <Badge tone="urgent" variant="soft">{tr('home.waError')}</Badge>
                   {:else if card.waFollowupsStopped}
@@ -345,7 +345,7 @@
               <!-- 4px Signature Tag Strip -->
               <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
 
-              <h3 class="text-base font-bold text-ink">{workflow.name}</h3>
+              <h3 class="text-lg font-bold text-ink">{workflow.name}</h3>
 
               <div class="mt-3 flex items-center gap-2">
                 <Avatar name={workflow.ownerName ?? tr('common.pic')} size={22} />
@@ -370,8 +370,7 @@
 
   <!-- Team & Shortcuts (Subtle descriptions added) -->
   <div class="grid gap-5 lg:grid-cols-2">
-    <!-- Team Members List -->
-    <section class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4">
+    <section class="flex flex-col rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4">
       <div class="space-y-3">
         <div class="space-y-1">
           <div class="flex items-center justify-between">
@@ -412,8 +411,8 @@
                 <div class="flex items-center gap-2.5 min-w-0">
                   <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={30} />
                   <div class="min-w-0">
-                    <p class="truncate text-sm font-semibold text-ink">{member.name}</p>
-                    <p class="truncate text-xs text-mute">{member.email}</p>
+                    <p class="truncate text-base font-semibold text-ink">{member.name}</p>
+                    <p class="truncate text-[13px] text-mute">{member.email}</p>
                   </div>
                 </div>
                 <Badge tone={member.role === 'owner' ? 'done' : 'idle'}>{member.role === 'owner' ? tr('common.owner') : tr('common.member')}</Badge>
@@ -439,39 +438,38 @@
         </div>
         <p class="ds-caption text-mute">{tr('home.shortcutsDescription')}</p>
       </div>
-
       <div class="grid gap-3 sm:grid-cols-3">
         <a
           href="/dashboard/workflows"
-          class="flex flex-col justify-between rounded-xl border border-hairline bg-lane p-3.5 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
+          class="flex flex-col rounded-xl border border-hairline bg-lane p-4 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
         >
-          <div class="flex items-center gap-2 text-primary">
+          <div class="flex size-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
             <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
-            <span class="text-sm font-semibold text-ink">{tr('home.stageSetup')}</span>
           </div>
-          <p class="ds-caption mt-1.5 text-mute">{tr('home.stageSetupDescription')}</p>
+          <span class="mt-2.5 text-base font-semibold text-ink leading-snug">{tr('home.stageSetup')}</span>
+          <p class="ds-caption mt-1 text-mute">{tr('home.stageSetupDescription')}</p>
         </a>
 
         <a
           href="/dashboard/members"
-          class="flex flex-col justify-between rounded-xl border border-hairline bg-lane p-3.5 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
+          class="flex flex-col rounded-xl border border-hairline bg-lane p-4 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
         >
-          <div class="flex items-center gap-2 text-primary">
+          <div class="flex size-9 items-center justify-center rounded-lg bg-status-queued-soft text-status-queued-ink">
             <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
-            <span class="text-sm font-semibold text-ink">{tr('home.inviteStaff')}</span>
           </div>
-          <p class="ds-caption mt-1.5 text-mute">{tr('home.inviteStaffDescription')}</p>
+          <span class="mt-2.5 text-base font-semibold text-ink leading-snug">{tr('home.inviteStaff')}</span>
+          <p class="ds-caption mt-1 text-mute">{tr('home.inviteStaffDescription')}</p>
         </a>
 
         <a
           href="/dashboard/settings"
-          class="flex flex-col justify-between rounded-xl border border-hairline bg-lane p-3.5 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
+          class="flex flex-col rounded-xl border border-hairline bg-lane p-4 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
         >
-          <div class="flex items-center gap-2 text-primary">
+          <div class="flex size-9 items-center justify-center rounded-lg bg-status-done-soft text-status-done-ink">
             <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
-            <span class="text-sm font-semibold text-ink">{tr('home.settings')}</span>
           </div>
-          <p class="ds-caption mt-1.5 text-mute">{tr('home.settingsDescription')}</p>
+          <span class="mt-2.5 text-base font-semibold text-ink leading-snug">{tr('home.settings')}</span>
+          <p class="ds-caption mt-1 text-mute">{tr('home.settingsDescription')}</p>
         </a>
       </div>
     </section>
