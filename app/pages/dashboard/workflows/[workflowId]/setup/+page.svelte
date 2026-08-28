@@ -33,6 +33,7 @@
     Delete02Icon,
     Edit02Icon,
     Settings01Icon,
+    Settings02Icon,
     KanbanIcon,
     DashboardSquare02Icon,
     Layers01Icon,
@@ -47,10 +48,12 @@
     WhatsappIcon,
     BubbleChatNotificationIcon,
     FlowConnectionIcon,
-    CheckmarkBadge01Icon
+    CheckmarkBadge01Icon,
+    CircleIcon
   } from '@hugeicons/core-free-icons';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
+  import { cn } from '$lib/utils.js';
   import type { LayoutData } from '../../../$types';
   let { data }: { data: LayoutData } = $props();
 
@@ -71,8 +74,15 @@
   let stages = $state<ApiWorkflowSetupStage[]>([]);
   let members = $state<ApiWorkspaceMember[]>([]);
 
-  // Workflow Settings Modal
-  let settingsOpen = $state(false);
+  // Workflow Settings (inline tab)
+  let activeSetupTab = $state<'stages' | 'settings'>('stages');
+
+  // Auto-select settings tab if URL has ?tab=settings
+  $effect(() => {
+    if (page.url.searchParams.get('tab') === 'settings') {
+      activeSetupTab = 'settings';
+    }
+  });
   let workflowName = $state('');
   let workflowDescription = $state('');
   let defaultAssigneeIds = $state<string[]>([]);
@@ -99,17 +109,18 @@
       .filter(Boolean) as ApiWorkspaceMember[]
   );
 
-  // New Stage Modal
   let createStageOpen = $state(false);
   let newStageName = $state('');
   let newStageColor = $state('indigo');
+  let newStageCustomColor = $state<string | null>(null);
   let creatingStage = $state(false);
 
   // Edit Stage Modal
   let stageToEdit = $state<ApiWorkflowSetupStage | null>(null);
   let editStageOpen = $state(false);
-  let editStageName = $state('');
   let editStageColor = $state('indigo');
+  let editStageName = $state('');
+  let editStageCustomColor = $state<string | null>(null);
   let editOnReplyNotify = $state(false);
   let editOverdueHours = $state('');
   let editNextWorkflowId = $state('');
@@ -254,6 +265,28 @@
   });
 
   const stageColorOptions = ['indigo', 'amber', 'rose', 'emerald'] as const;
+
+  // Check if a color value is a custom hex (not one of the template keys)
+  const isCustomColor = (color: string) => !stageColorOptions.includes(color as any);
+
+  // Resolve color meta — use template meta or generate from hex
+  const resolveColorMeta = (color: string) => {
+    if (stageColorMeta[color]) return stageColorMeta[color];
+    // Custom hex color — generate meta
+    return {
+      name: 'Custom',
+      description: 'Custom color',
+      color,
+      bgBadge: 'bg-lane',
+      textBadge: 'text-ink',
+      borderBadge: 'border-hairline',
+      topBorder: color,
+      icon: CircleIcon
+    };
+  };
+
+  // Preset custom colors for quick pick
+  const customColorPresets = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#64748b', '#0f172a'];
 
   async function loadSetupData() {
     if (!data.workspace?.id || !workflowId) return;
@@ -409,7 +442,6 @@
           defaultAssigneeIds: res.workflow.defaultAssigneeIds ?? defaultAssigneeIds
         };
       }
-      settingsOpen = false;
       toast.success(tr('setup.settingsSaved'));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : tr('setup.settingsError'));
@@ -430,6 +462,7 @@
       });
       newStageName = '';
       newStageColor = 'indigo';
+      newStageCustomColor = null;
       createStageOpen = false;
       await loadSetupData();
       toast.success(tr('setup.stageCreated'));
@@ -441,10 +474,9 @@
   }
 
   function startEditStage(stage: ApiWorkflowSetupStage) {
-    stageToEdit = stage;
-    editStageName = stage.name;
-    editStageColor = stage.color || 'indigo';
     const draft = stageAutomationDraft[stage.id];
+    editStageColor = stage.color || 'indigo';
+    editStageCustomColor = isCustomColor(editStageColor) ? editStageColor : null;
     editOnReplyNotify = draft?.onReplyNotify ?? stage.onReplyNotify ?? false;
     editOverdueHours =
       draft?.overdueReminderHours ??
@@ -707,14 +739,7 @@
             </Button>
           {/if}
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onclick={() => (settingsOpen = true)}
-          >
-            <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
-            <span>{tr('setup.workflowSettings')}</span>
-          </Button>
+
 
           <Button
             variant="primary"
@@ -746,7 +771,7 @@
       <!-- Tab 1: Statistik -->
       <a
         href="/dashboard/workflows/{workflowId}"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+        class="flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
       >
         <HugeiconsIcon icon={DashboardSquare02Icon} size={16} strokeWidth={1.8} />
         <span>{tr('board.stats')}</span>
@@ -755,7 +780,7 @@
       <!-- Tab 2: Kanban Board -->
       <a
         href="/dashboard/workflows/{workflowId}?tab=kanban"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+        class="flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
       >
         <HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} />
         <span>{tr('board.kanban')}</span>
@@ -764,27 +789,50 @@
       <!-- Tab 3: Table List -->
       <a
         href="/dashboard/workflows/{workflowId}?tab=table"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
+        class="flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
       >
         <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
         <span>{tr('board.table')}</span>
       </a>
 
-      <!-- Tab 4: Setup Stages (Active) -->
-      <div
-        class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-primary text-primary transition-all cursor-default whitespace-nowrap"
+      <!-- Tab 4: Setup Stages -->
+      <button
+        type="button"
+        onclick={() => (activeSetupTab = 'stages')}
+        class={cn(
+          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          activeSetupTab === 'stages'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
+        )}
       >
         <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
         <span>{tr('board.setupStages')}</span>
-      </div>
+      </button>
+
+      <!-- Tab 5: Workflow Settings -->
+      <button
+        type="button"
+        onclick={() => (activeSetupTab = 'settings')}
+        class={cn(
+          'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
+          activeSetupTab === 'settings'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
+        )}
+      >
+        <HugeiconsIcon icon={Settings02Icon} size={16} strokeWidth={1.8} />
+        <span>{tr('setup.workflowSettings')}</span>
+      </button>
     </div>
   </div>
 
+  {#if activeSetupTab === 'stages'}
   {#if loadingData}
     <!-- Skeleton Loading Screen (matching 320px lanes) -->
     <div class="flex gap-4 overflow-x-auto pb-4">
       {#each [1, 2, 3] as _i}
-        <div class="w-80 shrink-0 rounded-2xl bg-lane p-4 space-y-3">
+        <div class="w-80 shrink-0 rounded-2xl bg-card p-4 space-y-3 border border-hairline">
           <div class="flex items-center justify-between">
             <Skeleton shape="rect" class="h-6 w-32 rounded-md" />
             <Skeleton shape="rect" class="h-6 w-16 rounded-full" />
@@ -799,9 +847,9 @@
     </div>
   {:else if stages.length === 0}
     <!-- Empty State -->
-    <div class="flex flex-col items-center justify-center rounded-2xl bg-lane p-12 text-center">
+    <div class="flex flex-col items-center justify-center rounded-2xl bg-card p-12 text-center border border-hairline shadow-xs">
       <h2 class="ds-section-title text-ink">{tr('setup.emptyTitle')}</h2>
-      <p class="ds-body text-mute mt-1 max-w-md text-sm">
+      <p class="ds-body text-mute mt-1 max-w-md text-base">
         {tr('setup.emptyDescription')}
       </p>
       {#if canManage}
@@ -817,7 +865,7 @@
     <!-- Horizontal Kanban Lane Trays (Modernized 2026 Light Design) -->
     <div class="flex gap-4 overflow-x-auto pb-8 pt-1 items-start">
       {#each stages as stage, index (stage.id)}
-        {@const meta = stageColorMeta[stage.color] || stageColorMeta.indigo}
+        {@const meta = resolveColorMeta(stage.color)}
         {@const stageDraft = stageAutomationDraft[stage.id]}
         {@const targetWf = allWorkflows.find((w) => w.id === stage.nextWorkflowId)}
         {@const requiredCount = (stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0)}
@@ -826,23 +874,21 @@
         <!-- 330px Lane Tray -->
         <section
           id={`stage-lane-${stage.id}`}
-          class="w-[330px] shrink-0 rounded-2xl bg-lane/90 p-3 flex flex-col space-y-3 border border-hairline/80 shadow-xs"
+          class="w-[330px] shrink-0 rounded-2xl bg-canvas-sunken p-3 flex flex-col space-y-3 shadow-xs border border-hairline"
         >
           <!-- Lane Header Card -->
-          <div class="relative rounded-xl bg-card p-3.5 shadow-card space-y-2.5 border border-hairline overflow-hidden">
-            <!-- Top 3px Colored Border Strip -->
-            <div class="absolute top-0 left-0 right-0 h-[3px]" style="background-color: {meta.topBorder};"></div>
+          <div class="relative rounded-xl bg-card p-3.5 shadow-card space-y-2.5 overflow-hidden border border-hairline">
 
             <!-- Top Row: Stage Step, Color Badge & Controls -->
             <div class="flex items-center justify-between gap-2 pt-0.5">
               <div class="flex items-center gap-1.5 min-w-0">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-lane text-[11px] font-bold text-ink-soft shrink-0 border border-hairline">
+                <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-lane text-[13px] font-bold text-ink-soft shrink-0 ">
                   {index + 1}
                 </span>
                 <span
-                  class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border {meta.bgBadge} {meta.textBadge} {meta.borderBadge} shrink-0"
+                  class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[13px] font-semibold border {meta.bgBadge} {meta.textBadge} {meta.borderBadge} shrink-0"
                 >
-                  <HugeiconsIcon icon={meta.icon} size={12} strokeWidth={2} />
+                  <HugeiconsIcon icon={meta.icon} size={13} strokeWidth={2} />
                   <span>{meta.name}</span>
                 </span>
               </div>
@@ -896,15 +942,15 @@
 
             <!-- Stage Title & Counters -->
             <div>
-              <h3 class="text-sm font-bold text-ink leading-snug break-words tracking-tight">
+              <h3 class="text-base font-bold text-ink leading-snug break-words tracking-tight">
                 {stage.name}
               </h3>
-              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap text-xs">
-                <span class="inline-flex items-center rounded-md bg-lane border border-hairline px-2 py-0.5 text-[11px] font-medium text-mute">
+              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap text-[13px]">
+                <span class="inline-flex items-center rounded-md bg-lane px-2 py-0.5 text-[13px] font-medium text-mute">
                   {totalItems} {totalItems === 1 ? 'item' : 'items'}
                 </span>
                 {#if requiredCount > 0}
-                  <span class="inline-flex items-center rounded-md bg-primary-soft border border-primary-border/40 px-2 py-0.5 text-[10px] font-semibold text-primary-ink">
+                  <span class="inline-flex items-center rounded-md bg-primary-soft bg-primary-soft px-2 py-0.5 px-2 py-0.5 text-[12px] font-semibold text-primary-ink">
                     {requiredCount} {tr('setup.required').toLowerCase()}
                   </span>
                 {/if}
@@ -913,10 +959,10 @@
 
             <!-- Stage Automation Status Pills -->
             {#if stageDraft?.onReplyNotify || stageDraft?.overdueReminderHours || targetWf}
-              <div class="flex flex-wrap items-center gap-1 pt-1.5 border-t border-hairline/60 text-[10px]">
+              <div class="flex flex-wrap items-center gap-1 pt-1.5 border-t border-hairline/60 text-[12px]">
                 {#if stageDraft?.onReplyNotify}
                   <span
-                    class="inline-flex items-center gap-1 rounded-md bg-primary-soft border border-primary-border/50 px-1.5 py-0.5 font-medium text-primary-ink"
+                    class="inline-flex items-center gap-1 rounded-md bg-primary-soft  px-1.5 py-0.5 font-medium text-primary-ink"
                     title={tr('setup.replyNotifyAssignee')}
                   >
                     <HugeiconsIcon icon={BubbleChatNotificationIcon} size={11} strokeWidth={2} />
@@ -925,7 +971,7 @@
                 {/if}
                 {#if stageDraft?.overdueReminderHours}
                   <span
-                    class="inline-flex items-center gap-1 rounded-md bg-lane px-1.5 py-0.5 font-medium text-body border border-hairline"
+                    class="inline-flex items-center gap-1 rounded-md bg-lane px-1.5 py-0.5 font-medium text-body "
                     title={tr('setup.overdueReminder')}
                   >
                     <HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={2} />
@@ -934,7 +980,7 @@
                 {/if}
                 {#if targetWf}
                   <span
-                    class="inline-flex items-center gap-1 rounded-md bg-lane px-1.5 py-0.5 font-medium text-body border border-hairline max-w-[130px] truncate"
+                    class="inline-flex items-center gap-1 rounded-md bg-lane px-1.5 py-0.5 font-medium text-body  max-w-[130px] truncate"
                     title={`${tr('setup.nextWorkflow')}: ${targetWf.name}`}
                   >
                     <HugeiconsIcon icon={FlowConnectionIcon} size={11} strokeWidth={2} />
@@ -948,9 +994,9 @@
           <!-- Checklist Items Stack -->
           <div class="space-y-2 flex-1 min-h-[40px]">
             {#if totalItems === 0}
-              <div class="rounded-xl border border-dashed border-hairline-strong/80 bg-card/40 p-4 text-center">
-                <p class="text-xs font-medium text-mute">{tr('setup.noChecklist')}</p>
-                <p class="text-[11px] text-faint mt-0.5">{tr('setup.typeToAdd')}</p>
+              <div class="rounded-xl bg-canvas-sunken/40 p-4 text-center">
+                <p class="text-[13px] font-medium text-mute">{tr('setup.noChecklist')}</p>
+                <p class="text-[13px] text-faint mt-0.5">{tr('setup.typeToAdd')}</p>
               </div>
             {:else}
               {#each stage.templates as template (template.id)}
@@ -960,14 +1006,9 @@
                 <div
                   class="group relative rounded-xl bg-card p-3 shadow-card border border-hairline hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 space-y-1.5"
                 >
-                  <!-- Subtle left-edge accent line -->
-                  <div
-                    class="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full transition-colors"
-                    style="background-color: {isRequired ? 'var(--color-primary, #4f46e5)' : 'var(--color-hairline-strong, #cbd5e1)'};"
-                  ></div>
 
                   <!-- Checklist Card Content -->
-                  <div class="space-y-1.5 pl-1.5">
+                  <div class="space-y-1.5">
                     <!-- Top Row: Badges & Action Controls -->
                     <div class="flex items-center justify-between gap-1">
                       <div class="flex flex-wrap items-center gap-1 min-w-0">
@@ -981,7 +1022,7 @@
                             <Badge
                               tone={isRequired ? 'queued' : 'idle'}
                               variant="soft"
-                              class="text-[10px] font-semibold px-2 py-0.2"
+                              class="text-[12px] font-semibold px-2 py-0.2"
                             >
                               {isRequired ? tr('setup.required') : tr('common.optional')}
                             </Badge>
@@ -990,7 +1031,7 @@
                           <Badge
                             tone={isRequired ? 'queued' : 'idle'}
                             variant="soft"
-                            class="text-[10px] font-semibold px-2 py-0.2"
+                            class="text-[12px] font-semibold px-2 py-0.2"
                           >
                             {isRequired ? tr('setup.required') : tr('common.optional')}
                           </Badge>
@@ -1000,7 +1041,7 @@
                           <button
                             type="button"
                             onclick={() => openEditChecklistModal(stage.id, template)}
-                            class="inline-flex items-center gap-1 rounded-full bg-status-done-soft text-status-done-ink border border-status-done/30 px-2 py-0.2 text-[10px] font-semibold hover:opacity-80 transition-opacity cursor-pointer"
+                            class="inline-flex items-center gap-1 rounded-full bg-status-done-soft text-status-done-ink  px-2 py-0.2 text-[12px] font-semibold hover:opacity-80 transition-opacity cursor-pointer"
                             title={tr('setup.actionWa')}
                           >
                             <HugeiconsIcon icon={WhatsappIcon} size={11} strokeWidth={2} />
@@ -1046,15 +1087,15 @@
                     </div>
 
                     <!-- Checklist Item Label -->
-                    <p class="text-xs font-semibold text-ink leading-relaxed break-words pt-0.5">
+                    <p class="text-base font-semibold text-ink leading-relaxed break-words pt-0.5">
                       {template.label}
                     </p>
 
                     <!-- Message Template Snippet Preview (if attached) -->
                     {#if hasAction && template.action?.messageTemplate}
-                      <div class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-canvas-sunken border border-hairline p-2 text-[11px] text-body">
-                        <HugeiconsIcon icon={WhatsappIcon} size={12} strokeWidth={2} class="text-status-done-ink shrink-0 mt-0.5" />
-                        <p class="line-clamp-1 italic text-[10px] leading-tight text-mute">
+                      <div class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-canvas-sunken p-2 text-[13px] text-body">
+                        <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={2} class="text-status-done-ink shrink-0 mt-0.5" />
+                        <p class="line-clamp-1 italic text-[12px] leading-tight text-mute">
                           "{template.action.messageTemplate}"
                         </p>
                       </div>
@@ -1070,9 +1111,9 @@
             <button
               type="button"
               onclick={() => openCreateChecklistModal(stage.id)}
-              class="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-hairline-strong/80 hover:border-primary hover:bg-primary-soft/40 py-2 px-3 text-xs font-semibold text-ink-soft hover:text-primary transition-all cursor-pointer group shadow-xs"
+              class="w-full flex items-center justify-center gap-1.5 rounded-xl bg-card py-2.5 px-3 text-[13px] font-bold text-ink-soft shadow-control hover:border-primary hover:bg-primary-soft hover:text-primary transition-all cursor-pointer group active:scale-[0.99]"
             >
-              <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={2} class="text-mute group-hover:text-primary transition-colors" />
+              <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={2.2} class="text-mute group-hover:text-primary transition-colors" />
               <span>{tr('setup.addChecklistItem')}</span>
             </button>
           {/if}
@@ -1084,104 +1125,108 @@
         <button
           type="button"
           onclick={() => (createStageOpen = true)}
-          class="w-[280px] shrink-0 min-h-[160px] rounded-2xl border-2 border-dashed border-hairline-strong/80 hover:border-primary hover:bg-primary-soft/30 bg-card/40 flex flex-col items-center justify-center p-6 text-center transition-all cursor-pointer group shadow-xs"
+          class="w-[280px] shrink-0 min-h-[160px] rounded-2xl border-2 border-dashed border-hairline-strong hover:border-primary hover:bg-primary-soft/30 flex flex-col items-center justify-center p-6 text-center transition-all cursor-pointer group"
         >
-          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-lane border border-hairline group-hover:bg-primary-soft group-hover:text-primary transition-colors text-mute mb-2">
+          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-lane group-hover:bg-primary-soft group-hover:text-primary transition-colors text-mute mb-2">
             <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2} />
           </div>
-          <p class="text-xs font-bold text-ink group-hover:text-primary transition-colors">
+          <p class="text-[13px] font-bold text-ink group-hover:text-primary transition-colors">
             {tr('setup.newStage')}
           </p>
-          <p class="text-[11px] text-mute mt-0.5">
+          <p class="text-[12px] text-mute mt-0.5">
             {tr('setup.newStageDescription')}
           </p>
         </button>
       {/if}
     </div>
   {/if}
-</div>
 
-<!-- Modal: Workflow Settings -->
-<Dialog
-  bind:open={settingsOpen}
-  title={tr('setup.workflowSettings')}
-  description={tr('setup.workflowSettingsDescription')}
-  size="md"
->
-  <form
-    onsubmit={(e) => {
-      e.preventDefault();
-      saveWorkflowSettings();
-    }}
-    class="space-y-4 py-2"
-  >
-    <FormField label={tr('setup.workflowName')} required>
-      {#snippet control(args)}
-        <Input
-          {...args}
-          bind:value={workflowName}
-          disabled={!canManage}
-          placeholder={tr('setup.workflowNamePlaceholder')}
-          class="h-10 text-sm"
-        />
-      {/snippet}
-    </FormField>
+  {:else if activeSetupTab === 'settings'}
+    <!-- Workflow Settings Tab -->
+    <div class="space-y-6">
+      <div class="space-y-1">
+        <h2 class="ds-section-title text-ink">{tr('setup.workflowSettings')}</h2>
+        <p class="ds-caption text-mute">{tr('setup.workflowSettingsDescription')}</p>
+      </div>
 
-    <FormField
-      label={tr('setup.workflowDescription')}
-      helper={tr('setup.workflowDescriptionHelper')}
-    >
-      {#snippet control(args)}
-        <textarea
-          {...args}
-          bind:value={workflowDescription}
-          disabled={!canManage}
-          placeholder={tr('setup.workflowDescriptionPlaceholder')}
-          rows={3}
-          class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-mute focus:border-ink focus:outline-none disabled:opacity-50"
-        ></textarea>
-      {/snippet}
-    </FormField>
+        <div class="rounded-2xl border border-hairline bg-card shadow-card p-6 space-y-4">
+        <form
+          onsubmit={(e) => {
+            e.preventDefault();
+            saveWorkflowSettings();
+          }}
+          class="space-y-4"
+        >
+          <FormField label={tr('setup.workflowName')} required>
+            {#snippet control(args)}
+              <Input
+                {...args}
+                bind:value={workflowName}
+                disabled={!canManage}
+                placeholder={tr('setup.workflowNamePlaceholder')}
+                class="h-10 text-base"
+              />
+            {/snippet}
+          </FormField>
 
-    <FormField
-      label={tr('setup.assignees')}
-      helper={tr('setup.assigneesHelper')}
-    >
-      {#snippet control()}
-        <MultiSelectCombobox
-          options={memberOptions}
-          bind:values={defaultAssigneeIds}
-          bind:primary={defaultAssigneeId}
-          disabled={!canManage}
-          showPrimaryBadge
-          placeholder={tr('setup.assigneesPlaceholder')}
-          emptyText={tr('setup.noMembers')}
-        />
-      {/snippet}
-    </FormField>
+          <FormField
+            label={tr('setup.workflowDescription')}
+            helper={tr('setup.workflowDescriptionHelper')}
+          >
+            {#snippet control(args)}
+              <textarea
+                {...args}
+                bind:value={workflowDescription}
+                disabled={!canManage}
+                placeholder={tr('setup.workflowDescriptionPlaceholder')}
+                rows={3}
+                class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-base text-ink placeholder:text-mute focus:border-ink focus:outline-none disabled:opacity-50"
+              ></textarea>
+            {/snippet}
+          </FormField>
 
-    <div class="flex justify-end gap-2 pt-2">
-      <Button variant="secondary" onclick={() => (settingsOpen = false)}>
-        {tr('setup.cancel')}
-      </Button>
-      <Button
-        variant="primary"
-        type="submit"
-        loading={savingWorkflow}
-        disabled={!workflowName.trim()}
-      >
-        {tr('setup.saveSettings')}
-      </Button>
+          <FormField
+            label={tr('setup.assignees')}
+            helper={tr('setup.assigneesHelper')}
+          >
+            {#snippet control()}
+              <MultiSelectCombobox
+                options={memberOptions}
+                bind:values={defaultAssigneeIds}
+                bind:primary={defaultAssigneeId}
+                disabled={!canManage}
+                showPrimaryBadge
+                placeholder={tr('setup.assigneesPlaceholder')}
+                emptyText={tr('setup.noMembers')}
+              />
+            {/snippet}
+          </FormField>
+
+          {#if canManage}
+            <div class="flex justify-end gap-2 pt-2 border-t border-hairline">
+              <Button
+                variant="primary"
+                type="submit"
+                loading={savingWorkflow}
+                disabled={!workflowName.trim()}
+              >
+                <HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={1.8} />
+                <span>{tr('setup.saveSettings')}</span>
+              </Button>
+            </div>
+          {/if}
+        </form>
+        </div>
     </div>
-  </form>
-</Dialog>
+  {/if}
+</div>
 
 <!-- Modal: Add Stage -->
 <Dialog
   bind:open={createStageOpen}
   title={tr('setup.newStage')}
   description={tr('setup.newStageDescription')}
-  size="md"
+  size="xl"
 >
   <form
     onsubmit={(e) => {
@@ -1196,26 +1241,27 @@
           {...args}
           bind:value={newStageName}
           placeholder={tr('setup.stageNamePlaceholder')}
-          class="h-10 text-sm"
+          class="h-10 text-base"
           autofocus
         />
       {/snippet}
     </FormField>
 
     <!-- Visual Color & Icon Badge Picker -->
-    <div class="space-y-2">
+    <div class="space-y-3">
       <div>
-        <span class="ds-label text-ink font-semibold text-xs block">{tr('setup.colorIcon')}</span>
-        <p class="text-xs text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
+        <span class="ds-label text-ink font-semibold text-[13px] block">{tr('setup.colorIcon')}</span>
+        <p class="text-[13px] text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+      <!-- Template colors -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {#each stageColorOptions as colorKey}
           {@const kMeta = stageColorMeta[colorKey]}
-          {@const isSelected = newStageColor === colorKey}
+          {@const isSelected = !newStageCustomColor && newStageColor === colorKey}
           <button
             type="button"
-            onclick={() => (newStageColor = colorKey)}
-            class="flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-center transition-all cursor-pointer {isSelected ? 'border-primary bg-primary-soft/40 ring-2 ring-primary shadow-sm' : 'border-hairline bg-card hover:bg-lane hover:border-hairline-strong'}"
+            onclick={() => { newStageColor = colorKey; newStageCustomColor = null; }}
+            class="flex flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-all cursor-pointer {isSelected ? 'bg-primary-soft/40 ring-2 ring-primary shadow-sm' : 'bg-card hover:bg-lane ring-1 ring-hairline/30'}"
           >
             <span
               class="flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm"
@@ -1223,10 +1269,48 @@
             >
               <HugeiconsIcon icon={kMeta.icon} size={16} strokeWidth={2} />
             </span>
-            <span class="text-xs font-semibold text-ink">{kMeta.name}</span>
-            <span class="text-[10px] text-mute">{kMeta.description}</span>
+            <span class="text-[13px] font-semibold text-ink">{kMeta.name}</span>
+            <span class="text-[12px] text-mute">{kMeta.description}</span>
           </button>
         {/each}
+      </div>
+
+      <!-- Custom color picker -->
+      <div class="rounded-xl bg-canvas-sunken/50 ring-1 ring-hairline/30 p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-[13px] font-semibold text-ink">Custom color</span>
+          <div class="flex items-center gap-2">
+            <input
+              type="color"
+              value={newStageCustomColor ?? '#6366f1'}
+              oninput={(e) => { newStageCustomColor = e.currentTarget.value; newStageColor = e.currentTarget.value; }}
+              class="h-8 w-10 cursor-pointer rounded-lg border-0 bg-transparent p-0"
+              aria-label="Pick custom color"
+            />
+            {#if newStageCustomColor}
+              <span class="text-[12px] font-mono text-mute uppercase">{newStageCustomColor}</span>
+              <button
+                type="button"
+                onclick={() => { newStageCustomColor = null; newStageColor = 'indigo'; }}
+                class="text-[12px] text-mute hover:text-ink transition-colors"
+              >
+                Reset
+              </button>
+            {/if}
+          </div>
+        </div>
+        <!-- Preset swatches -->
+        <div class="flex flex-wrap gap-1.5">
+          {#each customColorPresets as preset}
+            <button
+              type="button"
+              onclick={() => { newStageCustomColor = preset; newStageColor = preset; }}
+              class="size-6 rounded-full ring-1 ring-hairline/30 transition-transform hover:scale-110 {newStageCustomColor === preset ? 'ring-2 ring-primary ring-offset-1' : ''}"
+              style="background-color: {preset};"
+              aria-label={preset}
+            ></button>
+          {/each}
+        </div>
       </div>
     </div>
 
@@ -1246,14 +1330,12 @@
     </div>
   </form>
 </Dialog>
-
-<!-- Modal: Edit Stage -->
 <Dialog
   bind:open={editStageOpen}
   onclose={closeEditStage}
   title={tr('setup.editStageTitle', { name: stageToEdit?.name ?? '' })}
   description={tr('setup.editStageDescription')}
-  size="md"
+  size="xl"
 >
   <form
     onsubmit={(e) => {
@@ -1268,26 +1350,26 @@
           {...args}
           bind:value={editStageName}
           placeholder={tr('setup.stageNamePlaceholder')}
-          class="h-10 text-sm"
+          class="h-10 text-base"
           autofocus
         />
       {/snippet}
     </FormField>
 
-    <!-- Visual Color & Icon Badge Picker -->
-    <div class="space-y-2">
+    <div class="space-y-3">
       <div>
-        <span class="ds-label text-ink font-semibold text-xs block">{tr('setup.colorIcon')}</span>
-        <p class="text-xs text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
+        <span class="ds-label text-ink font-semibold text-[13px] block">{tr('setup.colorIcon')}</span>
+        <p class="text-[13px] text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+      <!-- Template colors -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {#each stageColorOptions as colorKey}
           {@const kMeta = stageColorMeta[colorKey]}
-          {@const isSelected = editStageColor === colorKey}
+          {@const isSelected = !editStageCustomColor && editStageColor === colorKey}
           <button
             type="button"
-            onclick={() => (editStageColor = colorKey)}
-            class="flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-center transition-all cursor-pointer {isSelected ? 'border-primary bg-primary-soft/40 ring-2 ring-primary shadow-sm' : 'border-hairline bg-card hover:bg-lane hover:border-hairline-strong'}"
+            onclick={() => { editStageColor = colorKey; editStageCustomColor = null; }}
+            class="flex flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-all cursor-pointer {isSelected ? 'bg-primary-soft/40 ring-2 ring-primary shadow-sm' : 'bg-card hover:bg-lane ring-1 ring-hairline/30'}"
           >
             <span
               class="flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm"
@@ -1295,19 +1377,56 @@
             >
               <HugeiconsIcon icon={kMeta.icon} size={16} strokeWidth={2} />
             </span>
-            <span class="text-xs font-semibold text-ink">{kMeta.name}</span>
-            <span class="text-[10px] text-mute">{kMeta.description}</span>
+            <span class="text-[13px] font-semibold text-ink">{kMeta.name}</span>
+            <span class="text-[12px] text-mute">{kMeta.description}</span>
           </button>
         {/each}
       </div>
-    </div>
 
-    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/50 p-4">
-      <div>
-        <span class="ds-label text-ink font-semibold text-xs block">{tr('setup.stageRules')}</span>
-        <p class="text-xs text-mute mt-0.5">{tr('setup.stageRulesDescription')}</p>
+      <!-- Custom color picker -->
+      <div class="rounded-xl bg-canvas-sunken/50 ring-1 ring-hairline/30 p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-[13px] font-semibold text-ink">Custom color</span>
+          <div class="flex items-center gap-2">
+            <input
+              type="color"
+              value={editStageCustomColor ?? '#6366f1'}
+              oninput={(e) => { editStageCustomColor = e.currentTarget.value; editStageColor = e.currentTarget.value; }}
+              class="h-8 w-10 cursor-pointer rounded-lg border-0 bg-transparent p-0"
+              aria-label="Pick custom color"
+            />
+            {#if editStageCustomColor}
+              <span class="text-[12px] font-mono text-mute uppercase">{editStageCustomColor}</span>
+              <button
+                type="button"
+                onclick={() => { editStageCustomColor = null; editStageColor = 'indigo'; }}
+                class="text-[12px] text-mute hover:text-ink transition-colors"
+              >
+                Reset
+              </button>
+            {/if}
+          </div>
+        </div>
+        <!-- Preset swatches -->
+        <div class="flex flex-wrap gap-1.5">
+          {#each customColorPresets as preset}
+            <button
+              type="button"
+              onclick={() => { editStageCustomColor = preset; editStageColor = preset; }}
+              class="size-6 rounded-full ring-1 ring-hairline/30 transition-transform hover:scale-110 {editStageCustomColor === preset ? 'ring-2 ring-primary ring-offset-1' : ''}"
+              style="background-color: {preset};"
+              aria-label={preset}
+            ></button>
+          {/each}
+        </div>
       </div>
-      <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+    </div>
+    <div class="space-y-3 rounded-xl bg-canvas-sunken/50 ring-1 ring-hairline/30 p-4">
+      <div>
+        <span class="ds-label text-ink font-semibold text-[13px] block">{tr('setup.stageRules')}</span>
+        <p class="text-[13px] text-mute mt-0.5">{tr('setup.stageRulesDescription')}</p>
+      </div>
+      <label class="flex items-center gap-2 text-base text-ink cursor-pointer">
         <Checkbox bind:checked={editOnReplyNotify} />
         <span>{tr('setup.replyNotifyAssignee')}</span>
       </label>
@@ -1320,7 +1439,7 @@
             max="720"
             bind:value={editOverdueHours}
             placeholder={tr('setup.overduePlaceholder')}
-            class="h-10 text-sm"
+            class="h-10 text-base"
           />
         {/snippet}
       </FormField>
@@ -1332,7 +1451,7 @@
           <select
             {...args}
             bind:value={editNextWorkflowId}
-            class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            class="h-10 w-full rounded-full border border-hairline bg-card px-4 text-base text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           >
             <option value="">{tr('setup.noHandoff')}</option>
             {#each allWorkflows.filter((w) => w.id !== workflowId) as wf (wf.id)}
@@ -1407,7 +1526,7 @@
           {...args}
           bind:value={checklistModalLabel}
           placeholder={tr('setup.checklistLabelExample')}
-          class="h-10 text-sm"
+          class="h-10 text-base"
           autofocus
           required
         />
@@ -1417,8 +1536,8 @@
     <!-- Requirement Switch Card -->
     <div class="rounded-xl border border-hairline bg-canvas-sunken p-3 flex items-center justify-between gap-3">
       <div class="min-w-0">
-        <span class="text-xs font-bold text-ink block">{tr('setup.requiredComplete')}</span>
-        <p class="text-[11px] text-mute">{tr('setup.stageRequirement')}</p>
+        <span class="text-[13px] font-bold text-ink block">{tr('setup.requiredComplete')}</span>
+        <p class="text-[12px] text-mute">{tr('setup.stageRequirement')}</p>
       </div>
       <Checkbox bind:checked={checklistModalRequired} />
     </div>
@@ -1426,12 +1545,12 @@
     <!-- WhatsApp Automation Settings Box -->
     <div class="space-y-3 rounded-xl border border-hairline bg-card p-3.5 shadow-xs">
       <div class="flex items-center gap-2">
-        <div class="flex h-6 w-6 items-center justify-center rounded-full bg-status-done-soft text-status-done-ink border border-status-done/30 shrink-0">
+        <div class="flex h-6 w-6 items-center justify-center rounded-full bg-status-done-soft text-status-done-ink  shrink-0">
           <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={2} />
         </div>
         <div>
-          <span class="text-xs font-bold text-ink block">{tr('setup.whatsappAction')}</span>
-          <p class="text-[11px] text-mute">{tr('setup.whatsappActionDescription')}</p>
+          <span class="text-[13px] font-bold text-ink block">{tr('setup.whatsappAction')}</span>
+          <p class="text-[12px] text-mute">{tr('setup.whatsappActionDescription')}</p>
         </div>
       </div>
 
@@ -1460,12 +1579,12 @@
                 required
               />
               <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span class="text-[11px] text-mute font-medium">{tr('setup.insertVariable')}</span>
+                <span class="text-[12px] text-mute font-medium">{tr('setup.insertVariable')}</span>
                 {#each ['{{nama}}', '{{wa}}', '{{product}}', '{{tag}}', '{{link}}'] as v}
                   <button
                     type="button"
                     onclick={() => insertVariable(v)}
-                    class="inline-flex items-center rounded-md bg-lane border border-hairline px-1.5 py-0.5 text-[10px] font-mono font-semibold text-primary hover:bg-primary-soft hover:border-primary-border/60 transition-colors cursor-pointer"
+                    class="inline-flex items-center rounded-md bg-lane  px-1.5 py-0.5 text-[12px] font-mono font-semibold text-primary hover:bg-primary-soft hover:border-primary-border/60 transition-colors cursor-pointer"
                   >
                     {v}
                   </button>
@@ -1483,14 +1602,14 @@
                 type="number"
                 min="0"
                 bind:value={checklistModalDelay}
-                class="h-9 text-xs"
+                class="h-9 text-[13px]"
               />
             {/snippet}
           </FormField>
 
           {#if checklistModalActionKind === 'followup'}
             <div class="flex items-end pb-2">
-              <label class="flex items-center gap-2 text-xs text-ink cursor-pointer select-none">
+              <label class="flex items-center gap-2 text-[13px] text-ink cursor-pointer select-none">
                 <Checkbox bind:checked={checklistModalFollowupIfNoReply} />
                 <span>{tr('setup.onlyIfNoReply')}</span>
               </label>
