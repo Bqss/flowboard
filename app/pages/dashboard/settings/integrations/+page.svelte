@@ -17,7 +17,6 @@
     Add01Icon,
     Copy01Icon,
     Key02Icon,
-    Download04Icon,
     SentIcon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../../$types';
@@ -345,21 +344,16 @@
     }
   }
 
-  async function handleExportConfig(keyId: string) {
+  async function handleCopyConfig(keyId: string) {
     const workspaceId = data.workspace?.id;
     if (!workspaceId) return;
     exportingConfigKeyId = keyId;
     try {
       const response = await api.getApiKeyConfig(workspaceId, keyId);
-      const blob = new Blob([JSON.stringify(response.config, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `flowboard-mcp-config.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await navigator.clipboard.writeText(JSON.stringify(response.config, null, 2));
+      successMessage = tr('integrations.configCopied');
     } catch {
-      errorMessage = tr('integrations.configExportError');
+      errorMessage = tr('integrations.configCopyError');
     } finally {
       exportingConfigKeyId = null;
     }
@@ -487,7 +481,7 @@
 </svelte:head>
 
 <div class="space-y-8">
-  <header class="space-y-3">
+  <header class="space-y-4">
     <Breadcrumb
       items={[
         { label: tr('common.dashboard'), href: '/dashboard' },
@@ -496,9 +490,9 @@
       ]}
       showHomeIcon
     />
-    <div>
+    <div class="space-y-2">
       <h1 class="ds-page-title text-ink">{tr('integrations.title')}</h1>
-      <p class="ds-caption mt-1 max-w-2xl text-mute">{tr('integrations.description')}</p>
+      <p class="text-sm font-normal max-w-2xl leading-relaxed text-mute">{tr('integrations.description')}</p>
     </div>
   </header>
 
@@ -537,11 +531,11 @@
   {/if}
 
   <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card">
-    <div class="mb-5 flex items-start gap-3">
+    <div class="mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Link01Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
         <h2 class="ds-section-title text-ink">{tr('integrations.registered')}</h2>
-        <p class="ds-caption mt-1 text-mute">{tr('integrations.rotateDescription')}</p>
+        <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('integrations.rotateDescription')}</p>
       </div>
       {#if canManage && !loading}
         <Button variant="primary" size="sm" onclick={() => resetForm()}>
@@ -560,23 +554,23 @@
     {:else if connections.length === 0}
       <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
         <HugeiconsIcon icon={Link01Icon} size={24} strokeWidth={1.8} class="mx-auto text-mute" />
-        <p class="ds-body mt-2 text-mute">{tr('integrations.noneDescription')}</p>
+        <p class="text-sm text-mute mt-2">{tr('integrations.noneDescription')}</p>
       </div>
     {:else}
-      <div class="space-y-2">
+      <div class="space-y-3">
         {#each connections as connection (connection.id)}
           {@const recentJobs = jobs.filter((job) => job.connectionId === connection.id).slice(0, 3)}
-          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3">
-            <div class="flex items-center justify-between gap-3">
-              <div class="min-w-0 flex-1">
+          <div class="rounded-xl border border-hairline bg-canvas px-5 py-4">
+            <div class="flex items-center justify-between gap-4">
+              <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
                   <span class="ds-label truncate text-ink">{connection.name}</span>
                   <Badge tone={connection.enabled && !connection.revokedAt ? 'done' : 'idle'}>
                     {connection.enabled && !connection.revokedAt ? tr('integrations.active') : tr('integrations.revokedStatus')}
                   </Badge>
                 </div>
-                <p class="ds-caption mt-0.5 font-mono text-mute">{connection.instanceId}</p>
-                <p class="ds-caption mt-0.5 text-mute">
+                <p class="ds-caption font-mono text-mute">{connection.instanceId}</p>
+                <p class="text-sm font-normal leading-relaxed text-mute">
                   {tr('integrations.lastConnectorCall')} {formatDate(connection.lastUsedAt)}
                   · {tr('integrations.lastHealthCheck')} {formatDate(connection.lastCheckedAt)}
                   · {connection.hasSendApiKey ? tr('integrations.encrypted') : tr('integrations.notUsed')}
@@ -605,17 +599,17 @@
             {/if}
 
             {#if recentJobs.length > 0}
-              <div class="mt-3 rounded-lg border border-hairline bg-lane/40 p-3">
+              <div class="mt-4 rounded-lg border border-hairline bg-lane/40 p-4">
                 <div class="flex items-center justify-between gap-2">
                   <p class="ds-label text-ink">{tr('integrations.outboundLatest')}</p>
-                  <span class="ds-caption text-mute">{tr('integrations.latestCount', { count: recentJobs.length })}</span>
+                  <span class="text-xs font-normal text-mute">{tr('integrations.latestCount', { count: recentJobs.length })}</span>
                 </div>
-                <div class="mt-2 space-y-2">
+                <div class="mt-3 space-y-2.5">
                   {#each recentJobs as job (job.id)}
-                    <div class="flex items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center justify-between gap-3 text-sm">
                       <div class="min-w-0">
                         <p class="truncate font-mono text-mute">{job.toWa}</p>
-                        <p class="text-faint">{formatDate(job.updatedAt)} · {tr('integrations.attempt', { count: job.attempts })}</p>
+                        <p class="mt-0.5 text-xs text-faint">{formatDate(job.updatedAt)} · {tr('integrations.attempt', { count: job.attempts })}</p>
                       </div>
                       <Badge tone={job.status === 'failed' ? 'urgent' : job.status === 'delivered' || job.status === 'read' || job.status === 'sent' ? 'done' : 'queued'}>
                         {job.status}
@@ -628,7 +622,7 @@
 
             {#if testSendId === connection.id}
               <form
-                class="mt-3 space-y-2 rounded-lg border border-hairline bg-lane/40 p-3"
+                class="mt-4 space-y-2 rounded-lg border border-hairline bg-lane/40 p-4"
                 onsubmit={(event) => {
                   event.preventDefault();
                   sendTestMessage(connection);
@@ -639,7 +633,7 @@
                   <Input bind:value={testMessage} placeholder={tr('integrations.testMessage')} aria-label={tr('integrations.testMessage')} />
                   <Button variant="primary" type="submit" size="sm" loading={sendingTest}>{tr('integrations.send')}</Button>
                 </div>
-                <p class="ds-caption text-mute">{tr('integrations.testHint')}</p>
+                <p class="text-xs font-normal text-mute">{tr('integrations.testHint')}</p>
               </form>
             {/if}
           </div>
@@ -650,11 +644,11 @@
 
   <!-- MCP API keys -->
   <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card">
-    <div class="mb-5 flex items-start gap-3">
+    <div class="mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Key02Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
         <h2 class="ds-section-title text-ink">{tr('integrations.apiKeysTitle')}</h2>
-        <p class="ds-caption mt-1 text-mute">{tr('integrations.apiKeysDescription')}</p>
+        <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('integrations.apiKeysDescription')}</p>
       </div>
       {#if canManage && !apiKeysLoading}
         <Button variant="primary" size="sm" onclick={openApiKeyModal}>
@@ -672,20 +666,20 @@
       </div>
     {:else if apiKeys.length === 0}
       <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
-        <p class="ds-body text-mute">{tr('integrations.apiKeysEmpty')}</p>
+        <p class="text-sm text-mute">{tr('integrations.apiKeysEmpty')}</p>
       </div>
     {:else}
-      <div class="space-y-2">
+      <div class="space-y-3">
         {#each apiKeys as key (key.id)}
-          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3">
-            <div class="flex items-center justify-between gap-3">
-              <div class="min-w-0 flex-1">
+          <div class="rounded-xl border border-hairline bg-canvas px-5 py-4">
+            <div class="flex items-center justify-between gap-4">
+              <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
                   <span class="ds-label truncate text-ink">{key.label}</span>
                   <Badge tone="done">{tr('integrations.apiKeyActive')}</Badge>
                 </div>
-                <p class="ds-caption mt-0.5 font-mono text-mute">{key.keyPrefix}…</p>
-                <p class="ds-caption mt-0.5 text-mute">
+                <p class="ds-caption font-mono text-mute">{key.keyPrefix}…</p>
+                <p class="text-sm font-normal leading-relaxed text-mute">
                   {scopeLabel(key)}
                   · {tr('integrations.apiKeyToolsCount', { count: key.enabledTools.length })}
                   · {tr('integrations.apiKeyCreated')} {new Date(key.createdAt).toLocaleDateString()}
@@ -711,11 +705,11 @@
                   <Button
                     variant="ghost"
                     size="sm"
-                    onclick={() => handleExportConfig(key.id)}
+                    onclick={() => handleCopyConfig(key.id)}
                     disabled={exportingConfigKeyId === key.id}
                   >
-                    <HugeiconsIcon icon={Download04Icon} size={15} strokeWidth={1.8} />
-                    {tr('integrations.exportConfig')}
+                    <HugeiconsIcon icon={Copy01Icon} size={15} strokeWidth={1.8} />
+                    {tr('integrations.copyConfig')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -802,7 +796,7 @@
 </Dialog>
 
 <!-- Generate API Key modal -->
-<Dialog bind:open={apiKeyModalOpen} title={editingApiKeyId ? tr('integrations.apiKeyEdit') : tr('integrations.apiKeyCreate')} description={tr('integrations.apiKeysDescription')} size="md" onclose={closeApiKeyModal}>
+<Dialog bind:open={apiKeyModalOpen} title={editingApiKeyId ? tr('integrations.apiKeyEdit') : tr('integrations.apiKeyCreate')} description={tr('integrations.apiKeysDescription')} size="lg" onclose={closeApiKeyModal}>
   <form
     class="space-y-5"
     onsubmit={(e) => {
@@ -865,30 +859,32 @@
       </FormField>
     {/if}
 
-    <!-- Enabled tools checklist -->
+    <!-- Enabled tools checklist — 2 columns -->
     <FormField label={tr('integrations.apiKeyTools')} helper={tr('integrations.apiKeyToolsHelper')}>
       {#snippet control()}
         <div class="space-y-3">
-          <div>
-            <p class="ds-caption mb-1 text-mute">{tr('integrations.toolsRead')}</p>
-            <div class="space-y-1 rounded-lg border border-line bg-surface p-2">
-              {#each READ_TOOLS as tool}
-                <label class="flex items-center gap-2 rounded px-2 py-1 text-sm text-ink hover:bg-lane/40 cursor-pointer">
-                  <Checkbox checked={newKeyEnabledTools.includes(tool)} onclick={() => toggleTool(tool)} />
-                  <span>{TOOL_LABELS[tool] ?? tool}</span>
-                </label>
-              {/each}
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p class="ds-caption mb-1.5 text-mute">{tr('integrations.toolsRead')}</p>
+              <div class="space-y-1 rounded-lg border border-line bg-surface p-2">
+                {#each READ_TOOLS as tool}
+                  <label class="flex items-center gap-2 rounded px-2 py-1 text-sm text-ink hover:bg-lane/40 cursor-pointer">
+                    <Checkbox checked={newKeyEnabledTools.includes(tool)} onclick={() => toggleTool(tool)} />
+                    <span>{TOOL_LABELS[tool] ?? tool}</span>
+                  </label>
+                {/each}
+              </div>
             </div>
-          </div>
-          <div>
-            <p class="ds-caption mb-1 text-mute">{tr('integrations.toolsWrite')}</p>
-            <div class="space-y-1 rounded-lg border border-line bg-surface p-2">
-              {#each WRITE_TOOLS as tool}
-                <label class="flex items-center gap-2 rounded px-2 py-1 text-sm text-ink hover:bg-lane/40 cursor-pointer">
-                  <Checkbox checked={newKeyEnabledTools.includes(tool)} onclick={() => toggleTool(tool)} />
-                  <span>{TOOL_LABELS[tool] ?? tool}</span>
-                </label>
-              {/each}
+            <div>
+              <p class="ds-caption mb-1.5 text-mute">{tr('integrations.toolsWrite')}</p>
+              <div class="space-y-1 rounded-lg border border-line bg-surface p-2">
+                {#each WRITE_TOOLS as tool}
+                  <label class="flex items-center gap-2 rounded px-2 py-1 text-sm text-ink hover:bg-lane/40 cursor-pointer">
+                    <Checkbox checked={newKeyEnabledTools.includes(tool)} onclick={() => toggleTool(tool)} />
+                    <span>{TOOL_LABELS[tool] ?? tool}</span>
+                  </label>
+                {/each}
+              </div>
             </div>
           </div>
           <button type="button" class="text-xs text-primary hover:underline" onclick={resetRecommendedTools}>
