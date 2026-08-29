@@ -1,0 +1,18 @@
+{
+  "name": "flowboard-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Model Context Protocol server for Flowboard — exposes workflow tools (create card, move stage, notify assignee, stop follow-ups) over Streamable HTTP.",
+  "scripts": {
+    "dev": "bun --watch server.ts",
+    "start": "bun server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

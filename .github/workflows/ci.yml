@@ -22,6 +22,9 @@ jobs:
         
       - name: Svelte Check & Typecheck
         run: bun run check
+        
+      - name: MCP Typecheck
+        run: cd mcp && bun install && bunx tsc --noEmit
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -38,7 +41,7 @@ jobs:
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: 22
           script: |
-            cd ~/narko
+            cd ~/flowboard
             
             git pull origin master
             
@@ -50,4 +53,4 @@ jobs:
             bun run db:migrate
             bun run build
             
-            bunx --bun pm2 reload narko-app
+            bunx --bun pm2 reload flowboard

@@ -1,13 +1,24 @@
 # Deploy
 
-CI/CD pipeline: `.github/workflows/ci.yml`.
+CI/CD pipelines:
+- `.github/workflows/ci.yml` — Flowboard app (check + deploy)
+- `.github/workflows/mcp-deploy.yml` — MCP service (deploy only)
 
-## Alur deploy
+## Alur deploy Flowboard app
 
 1. Push ke `master` → trigger workflow `CI & CD`.
-2. Job `check` — `bun install` + `bun run check` (Svelte check & typecheck).
+2. Job `check` — `bun install` + `bun run check` (Svelte check & typecheck) + MCP typecheck.
 3. Job `deploy` — jalan hanya kalau `check` lulus **dan** event-nya push ke `master` (bukan PR).
 4. Deploy via SSH ke server: `git pull` → `bun install` → `bun run db:migrate` → `bun run build` → `pm2 reload flowboard`.
+
+## Alur deploy MCP service
+
+1. Push ke `master` yang menyentuh `mcp/**`, `app/services/**`, `app/db/**`, `app/config/**`, `app/core/**`, `app/types/**`, `app/validators/**`, atau `routes/**` → trigger workflow `MCP Deploy`.
+2. Deploy via SSH: `git pull` → `cd mcp && bun install` → `pm2 reload flowboard-mcp`.
+3. **Tidak** menjalankan `db:migrate` atau `bun run build` — MCP service langsung pakai `bun server.ts`.
+4. **Tidak** me-reload `flowboard` (app) — hanya `flowboard-mcp` process.
+
+> Kalau push menyentuh baik app maupun MCP files, kedua workflow jalan paralel. App deploy tetap tunggu `check` lulus; MCP deploy langsung jalan.
 
 ## GitHub Secrets (diambil dari repo Settings → Secrets and variables → Actions)
 
@@ -75,3 +86,37 @@ Variabel ini akan **throw** kalau kosong saat `NODE_ENV=production` (dilihat dar
 4. Pastikan `pm2` terinstall: `bunx --bun pm2 start "bun run start" --name flowboard`.
 5. Set GitHub Secrets (`SSH_HOST`, `SSH_USERNAME`, `SERVER_SSH_KEY`, `SSH_PASSPHRASE`).
 6. Push ke `master` → deploy otomatis.
+
+## MCP service di server
+
+MCP service jalan sebagai process pm2 terpisah (`flowboard-mcp`) di server yang sama.
+
+### Environment variables MCP (`~/flowboard/mcp/.env`)
+
+| Variabel | Sumber nilai | Catatan |
+|---|---|---|
+| `NODE_ENV` | `production` | |
+| `FLOWBOARD_MCP_MODE` | `1` | Tandai sebagai MCP standalone service |
+| `MCP_PORT` | `3100` | Port MCP HTTP listener |
+| `DATABASE_URL` | Sama dengan Flowboard app | Connection string Postgres yang sama |
+| `INTEGRATION_TOKEN_PEPPER` | Sama dengan Flowboard app | API key hash pakai pepper yang sama — kalau beda, key tidak bisa di-resolve |
+
+### Setup MCP process pertama kali
+
+```bash
+cd ~/flowboard/mcp
+bun install
+set -a; . ~/flowboard/mcp/.env; set +a
+bunx --bun pm2 start "bun run start" --name flowboard-mcp --cwd ~/flowboard/mcp
+bunx --bun pm2 save
+```
+
+### Reverse proxy MCP
+
+MCP service listen di port 3100. Expose via reverse proxy ke `https://mcp-flowboard.dripsender.id`:
+
+```caddyfile
+mcp-flowboard.dripsender.id {
+    reverse_proxy localhost:3100
+}
+```

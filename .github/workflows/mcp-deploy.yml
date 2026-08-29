@@ -1,0 +1,43 @@
+name: MCP Deploy
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'mcp/**'
+      - 'app/services/**'
+      - 'app/db/**'
+      - 'app/config/**'
+      - 'app/core/**'
+      - 'app/types/**'
+      - 'app/validators/**'
+      - 'routes/**'
+
+jobs:
+  deploy-mcp:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy MCP via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: 22
+          script: |
+            cd ~/flowboard
+
+            git pull origin master
+
+            # Export PATH untuk bun (SSH non-interactive tidak meload .bashrc)
+            export BUN_INSTALL="$HOME/.bun"
+            export PATH="$BUN_INSTALL/bin:$PATH"
+
+            # Install MCP dependencies
+            cd mcp
+            bun install
+
+            # Reload hanya MCP process — Flowboard app tidak tersentuh
+            bunx --bun pm2 reload flowboard-mcp

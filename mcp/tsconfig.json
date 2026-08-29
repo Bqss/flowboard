@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "types": ["bun-types"],
+    "paths": {
+      "@": ["../app"],
+      "@/*": ["../app/*"],
+      "@db": ["../app/db"],
+      "@db/*": ["../app/db/*"],
+      "@config": ["../app/config"],
+      "@config/*": ["../app/config/*"],
+      "@services": ["../app/services"],
+      "@services/*": ["../app/services/*"],
+      "@core": ["../app/core"],
+      "@core/*": ["../app/core/*"],
+      "@handlers": ["../app/handlers"],
+      "@handlers/*": ["../app/handlers/*"],
+      "@middlewares": ["../app/middlewares"],
+      "@middlewares/*": ["../app/middlewares/*"],
+      "@validators": ["../app/validators"],
+      "@validators/*": ["../app/validators/*"],
+      "@types": ["../app/types"],
+      "@types/*": ["../app/types/*"],
+      "@routes": ["../routes"],
+      "@routes/*": ["../routes/*"]
+    }
+  },
+  "include": ["server.ts"]
+}
