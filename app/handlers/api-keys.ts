@@ -235,7 +235,7 @@ export async function getApiKeyConfigHandler({
   body,
   membership,
   set
-}: Ctx<{ keyId: string }, WorkspaceParams>) {
+}: Ctx<{ keyId: string; apiKey?: string }, WorkspaceParams>) {
   if (!requireOwner(membership, set)) return { error: 'Owner access required' };
   const loaded = await loadApiKeyForContext(params.workspaceId, body.keyId);
   if (!loaded) {
@@ -244,7 +244,8 @@ export async function getApiKeyConfigHandler({
   }
   const config = getApiKeyMcpConfig({
     label: loaded.row.label,
-    mcpPublicUrl: env.mcpPublicUrl
+    mcpPublicUrl: env.mcpPublicUrl,
+    apiKey: body.apiKey
   });
   return { config };
 }

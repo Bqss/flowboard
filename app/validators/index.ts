@@ -433,6 +433,11 @@ export const RevokeApiKeySchema = t.Object({
   keyId: t.String({ format: 'uuid' })
 });
 
+export const ApiKeyConfigSchema = t.Object({
+  keyId: t.String({ format: 'uuid' }),
+  apiKey: t.Optional(t.String({ minLength: 1 }))
+});
+
 export const UpdateNotificationSettingsSchema = t.Object({
   waFailed: t.Optional(t.Boolean()),
   customerReplied: t.Optional(t.Boolean()),

@@ -159,21 +159,23 @@ export const getApiKeyPromptContext = async (input: PromptContextInput): Promise
 /**
  * Build the MCP client config JSON for an API key.
  *
- * The API key is always a placeholder (`<FLOWBOARD_MCP_API_KEY>`) so the user
- * fills in the actual key themselves. The URL is configurable via
- * `MCP_PUBLIC_URL` env or the `mcpPublicUrl` argument.
+ * If `apiKey` is provided, it is embedded directly in the Authorization
+ * header. Otherwise a placeholder (`<FLOWBOARD_MCP_API_KEY>`) is used.
+ * The URL is configurable via `MCP_PUBLIC_URL` env or `mcpPublicUrl`.
  */
 export const getApiKeyMcpConfig = (input: {
   label: string;
   mcpPublicUrl?: string;
+  apiKey?: string;
 }): Record<string, unknown> => {
   const baseUrl = (input.mcpPublicUrl ?? 'http://localhost:3100').replace(/\/$/, '');
+  const token = input.apiKey?.trim() || '<FLOWBOARD_MCP_API_KEY>';
   return {
     mcpServers: {
       flowboard: {
         url: `${baseUrl}/mcp`,
         headers: {
-          Authorization: 'Bearer <FLOWBOARD_MCP_API_KEY>'
+          Authorization: `Bearer ${token}`
         }
       }
     }

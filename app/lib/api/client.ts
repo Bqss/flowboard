@@ -962,10 +962,10 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ keyId }), fetch: fetchFn }
     ),
 
-  getApiKeyConfig: (workspaceId: string, keyId: string, fetchFn?: FetchLike) =>
+  getApiKeyConfig: (workspaceId: string, keyId: string, apiKey?: string, fetchFn?: FetchLike) =>
     request<{ config: ApiMcpConfig }>(
       `/workspaces/${workspaceId}/api-keys/config`,
-      { method: 'POST', body: JSON.stringify({ keyId }), fetch: fetchFn }
+      { method: 'POST', body: JSON.stringify({ keyId, ...(apiKey ? { apiKey } : {}) }), fetch: fetchFn }
     ),
 
   exportWajomActions: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>

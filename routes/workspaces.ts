@@ -13,7 +13,8 @@ import {
   CreateApiKeySchema,
   ApiKeyParam,
   UpdateApiKeySchema,
-  RevokeApiKeySchema
+  RevokeApiKeySchema,
+  ApiKeyConfigSchema
 } from '@validators';
 
 export const createWorkspacesRoutes = () => {
@@ -75,7 +76,7 @@ export const createWorkspacesRoutes = () => {
         })
         .post('/api-keys/config', apiKeys.getApiKeyConfigHandler, {
           params: WorkspaceIdParam,
-          body: RevokeApiKeySchema
+          body: ApiKeyConfigSchema
         })
     );
 };

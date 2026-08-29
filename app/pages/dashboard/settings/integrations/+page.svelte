@@ -50,8 +50,9 @@
   let apiKeyCreating = $state(false);
   let newKeyLabel = $state('');
   let newKeyError = $state<string | null>(null);
-  let createdKey = $state<{ key: string; label: string; keyPrefix: string } | null>(null);
+  let createdKey = $state<{ id: string; key: string; label: string; keyPrefix: string } | null>(null);
   let createdKeyCopied = $state(false);
+  let createdKeyConfigCopied = $state(false);
   let revokingKeyId = $state<string | null>(null);
   let rotatingKeyId = $state<string | null>(null);
   let confirmRevokeKeyId = $state<string | null>(null);
@@ -157,6 +158,7 @@
   function closeCreatedKeyDialog() {
     createdKey = null;
     createdKeyCopied = false;
+    createdKeyConfigCopied = false;
   }
 
   $effect(() => {
@@ -260,7 +262,7 @@
           enabledTools: newKeyEnabledTools,
           workflowIds: newKeyScopeMode === 'selected' ? newKeySelectedWorkflowIds : undefined
         });
-        createdKey = { key: response.key.key, label: response.key.label, keyPrefix: response.key.keyPrefix };
+        createdKey = { id: response.key.id, key: response.key.key, label: response.key.label, keyPrefix: response.key.keyPrefix };
       }
       newKeyLabel = '';
       apiKeyModalOpen = false;
@@ -320,7 +322,7 @@
     rotatingKeyId = keyId;
     try {
       const response = await api.rotateApiKey(workspaceId, keyId);
-      createdKey = { key: response.key.key, label: response.key.label, keyPrefix: response.key.keyPrefix };
+      createdKey = { id: response.key.id, key: response.key.key, label: response.key.label, keyPrefix: response.key.keyPrefix };
       await loadApiKeys();
     } catch {
       // silent — UI will reflect failure by keeping the row
@@ -344,12 +346,12 @@
     }
   }
 
-  async function handleCopyConfig(keyId: string) {
+  async function handleCopyConfig(keyId: string, apiKey?: string) {
     const workspaceId = data.workspace?.id;
     if (!workspaceId) return;
     exportingConfigKeyId = keyId;
     try {
-      const response = await api.getApiKeyConfig(workspaceId, keyId);
+      const response = await api.getApiKeyConfig(workspaceId, keyId, apiKey);
       await navigator.clipboard.writeText(JSON.stringify(response.config, null, 2));
       successMessage = tr('integrations.configCopied');
     } catch {
@@ -358,7 +360,6 @@
       exportingConfigKeyId = null;
     }
   }
-
   function scopeLabel(key: ApiMcpApiKey): string {
     if (key.scopeMode === 'all') return tr('integrations.scopeAll');
     const count = key.allowedWorkflowIds.length;
@@ -372,6 +373,20 @@
       await navigator.clipboard.writeText(createdKey.key);
       createdKeyCopied = true;
       setTimeout(() => (createdKeyCopied = false), 2000);
+    } catch {
+      // clipboard may be blocked — user can still select & copy manually
+    }
+  }
+
+  async function copyCreatedKeyConfig() {
+    if (!createdKey) return;
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    try {
+      const response = await api.getApiKeyConfig(workspaceId, createdKey.id, createdKey.key);
+      await navigator.clipboard.writeText(JSON.stringify(response.config, null, 2));
+      createdKeyConfigCopied = true;
+      setTimeout(() => (createdKeyConfigCopied = false), 2000);
     } catch {
       // clipboard may be blocked — user can still select & copy manually
     }
@@ -927,6 +942,13 @@
             {createdKeyCopied ? tr('common.copied') : tr('integrations.copyApiKey')}
           </Button>
         </div>
+      </div>
+      <div class="space-y-1">
+        <p class="ds-caption text-mute">{tr('integrations.copyConfig')}</p>
+        <Button variant="secondary" onclick={copyCreatedKeyConfig} class="w-full">
+          <HugeiconsIcon icon={Copy01Icon} size={15} strokeWidth={1.8} />
+          {createdKeyConfigCopied ? tr('integrations.configCopied') : tr('integrations.copyConfig')}
+        </Button>
       </div>
     </div>
   {/if}
