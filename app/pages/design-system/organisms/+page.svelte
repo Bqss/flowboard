@@ -144,7 +144,7 @@
   ];
 
   const testimonials = [
-    { quote: 'Flowboard cut our onboarding time in half.', author: 'Ahmad Rizki', role: 'Ops Lead' },
+    { quote: 'actjom cut our onboarding time in half.', author: 'Ahmad Rizki', role: 'Ops Lead' },
     { quote: 'The lane colors make status obvious at a glance.', author: 'Sarah Chen', role: 'CS Manager' }
   ];
 
@@ -213,7 +213,7 @@
     <div class="mt-6 grid gap-6 lg:grid-cols-3">
       <ChartCard title="Monthly revenue" value="Rp 24.8M" delta={12.4} status="On track" data={[4, 6, 5, 8, 7, 9, 5, 11, 10, 12]} />
       <GaugeCard title="Completion rate" value={72} label="This month" />
-      <ProfileCard name="Sarah Chen" email="sarah@flowboard.app" stats={[{ label: 'Cards', value: '847' }, { label: 'Teams', value: '12' }]} />
+      <ProfileCard name="Sarah Chen" email="sarah@actjom.app" stats={[{ label: 'Cards', value: '847' }, { label: 'Teams', value: '12' }]} />
     </div>
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
       <TreeView title="Project tree" nodes={treeNodes} />
@@ -287,7 +287,7 @@
     <div class="flex flex-col gap-6 lg:flex-row">
       <SidebarRail items={navItems} userName="Admin" workspaceName="Acme Corp" class="!relative !flex !h-[420px] shrink-0 !z-0 rounded-card overflow-hidden border border-hairline shadow-card" />
       <div class="min-w-0 flex-1 overflow-hidden rounded-card border border-hairline bg-canvas-sunken">
-        <Topbar title="Executive Dashboard" subtitle="Signed in as Admin" eyebrow="Flowboard" searchPlaceholder="Search board…" />
+        <Topbar title="Executive Dashboard" subtitle="Signed in as Admin" eyebrow="actjom" searchPlaceholder="Search board…" />
         <div class="border-t border-hairline p-6">
           <CardGrid columns={3}>
             <StatCard label="In progress" value="12" delta={8} />
@@ -404,14 +404,14 @@
 
   <ShowcaseSection id="marketing" title="Marketing organisms" description="Landing-page blocks (also used on marketing site).">
     <HeroSection
-      eyebrow="Flowboard"
+      eyebrow="actjom"
       title="Onboarding ops, visualized"
       description="Kanban lanes for customer onboarding teams."
       primaryLabel="Get started"
       secondaryLabel="See demo"
     />
     <div class="mt-8">
-      <FeatureGrid title="Why Flowboard" description="Composable kanban for onboarding teams." items={featureItems} columns={2} />
+      <FeatureGrid title="Why actjom" description="Composable kanban for onboarding teams." items={featureItems} columns={2} />
     </div>
     <div class="mt-8">
       <PricingTable plans={pricingPlans} />
@@ -426,10 +426,10 @@
       <CTASection title="Ready to streamline onboarding?" description="Start with a free board today." primaryLabel="Create board" />
     </div>
     <div class="mt-8">
-      <LogoCloud logos={[{ name: 'DripLab' }, { name: 'Flowboard' }, { name: 'Acme Corp' }]} />
+      <LogoCloud logos={[{ name: 'DripLab' }, { name: 'actjom' }, { name: 'Acme Corp' }]} />
     </div>
     <div class="mt-8 overflow-hidden rounded-card border border-hairline">
-      <AppFooter links={[{ label: 'Docs', href: '#' }, { label: 'Privacy', href: '#' }]} note="© Flowboard Design System" />
+      <AppFooter links={[{ label: 'Docs', href: '#' }, { label: 'Privacy', href: '#' }]} note="© actjom Design System" />
     </div>
   </ShowcaseSection>
 

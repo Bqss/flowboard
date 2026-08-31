@@ -13,7 +13,7 @@
       <div class="min-w-0">
         <a href="/" class="ds-caption text-mute transition hover:text-primary">← Home</a>
         <h1 class="ds-page-title text-ink">Design System</h1>
-        <p class="ds-body mt-0.5 text-mute">Flowboard · tokens from DESIGN.md</p>
+        <p class="ds-body mt-0.5 text-mute">actjom · tokens from DESIGN.md</p>
       </div>
       <a
         href="/dashboard"

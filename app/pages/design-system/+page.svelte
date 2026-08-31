@@ -13,7 +13,7 @@
   <div class="space-y-3">
     <Badge tone="queued">110 components</Badge>
     <p class="ds-body max-w-2xl text-mute">
-      Living catalog of the Flowboard UI kit — bright kanban workspace with indigo brand,
+      Living catalog of the actjom UI kit — bright kanban workspace with indigo brand,
       pill buttons, lane trays, and status-colored pills. Reference implementation for
       <code class="rounded-sm bg-lane px-1.5 py-0.5 text-[13px] text-primary-ink">DESIGN.md</code>.
     </p>

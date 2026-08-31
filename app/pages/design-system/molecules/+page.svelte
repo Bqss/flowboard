@@ -204,7 +204,7 @@
     <div>
       <p class="ds-label mb-2 text-ink-soft">MultiSelectCombobox · multiple team / PIC selection</p>
       <MultiSelectCombobox
-        options={staff.map(s => ({ value: s.id, label: s.full_name, description: `${s.full_name.toLowerCase().replace(/\s+/g, '.')}@flowboard.app` }))}
+        options={staff.map(s => ({ value: s.id, label: s.full_name, description: `${s.full_name.toLowerCase().replace(/\s+/g, '.')}@actjom.app` }))}
         bind:values={assignedStaff}
         bind:primary={primaryStaff}
         showPrimaryBadge
@@ -290,7 +290,7 @@
     <div class="mt-5 max-w-md space-y-2 rounded-card border border-hairline p-4">
       <KeyValuePair label="Status" value="In Progress" />
       <KeyValuePair label="Assignee" value="Sarah Chen" />
-      <CopyToClipboard value="https://flowboard.app/invite/abc123" label="Invite link" />
+      <CopyToClipboard value="https://actjom.app/invite/abc123" label="Invite link" />
     </div>
   </ShowcaseSection>
 
