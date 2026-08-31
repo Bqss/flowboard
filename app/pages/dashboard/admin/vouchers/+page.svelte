@@ -144,7 +144,7 @@
   ]);
 </script>
 
-<svelte:head><title>{tr('admin.vouchers.title')} — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('admin.vouchers.title')} — actjom</title></svelte:head>
 
 {#snippet totalIcon()}
   <HugeiconsIcon icon={Coupon01Icon} size={18} strokeWidth={1.8} />

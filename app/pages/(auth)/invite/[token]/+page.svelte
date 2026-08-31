@@ -32,7 +32,7 @@
   }
 </script>
 
-<svelte:head><title>Undangan workspace — Flowboard</title></svelte:head>
+<svelte:head><title>Undangan workspace — actjom</title></svelte:head>
 
 <div class={cn(cardShellClass, 'mx-auto w-full max-w-md border border-hairline p-6 md:p-8')}>
   <div class="mb-6 flex flex-col items-center text-center">

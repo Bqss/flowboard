@@ -113,7 +113,7 @@
   ]);
 </script>
 
-<svelte:head><title>{tr('admin.users.title')} — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('admin.users.title')} — actjom</title></svelte:head>
 
 {#snippet totalIcon()}
   <HugeiconsIcon icon={UserMultipleIcon} size={18} strokeWidth={1.8} />

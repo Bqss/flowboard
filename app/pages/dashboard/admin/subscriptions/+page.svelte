@@ -147,7 +147,7 @@
   }
 </script>
 
-<svelte:head><title>{tr('admin.subs.title')} — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('admin.subs.title')} — actjom</title></svelte:head>
 
 {#snippet activeIcon()}
   <HugeiconsIcon icon={CheckmarkCircle03Icon} size={18} strokeWidth={1.8} />

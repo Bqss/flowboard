@@ -67,7 +67,7 @@
 </script>
 
 <svelte:head>
-  <title>{tr('users.title')} — Flowboard</title>
+  <title>{tr('users.title')} — actjom</title>
 </svelte:head>
 
 <div class="mx-auto max-w-5xl space-y-8">

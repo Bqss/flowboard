@@ -102,7 +102,7 @@
   }
 </script>
 
-<svelte:head><title>{tr('ai.title')} — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('ai.title')} — actjom</title></svelte:head>
 
 <div class="space-y-6 sm:space-y-8">
   <header class="space-y-4 sm:space-y-6">

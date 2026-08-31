@@ -141,7 +141,7 @@
 </script>
 
 <svelte:head>
-  <title>{tr('common.dashboard')} — Flowboard</title>
+  <title>{tr('common.dashboard')} — actjom</title>
 </svelte:head>
 
 {#snippet customersIcon()}

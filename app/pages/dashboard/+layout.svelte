@@ -334,7 +334,7 @@
     userEmail={data.user?.email}
     userRole={data.user?.platformAdmin ? 'Platform Admin' : (data.workspace?.role === 'owner' ? 'Owner' : 'Member')}
     userSrc={data.user?.avatarUrl ?? undefined}
-    workspaceName={data.workspace?.name ?? 'Flowboard'}
+    workspaceName={data.workspace?.name ?? 'actjom'}
     workspaceRole={data.workspace?.role ? (data.workspace.role === 'owner' ? 'Owner' : 'Member') : undefined}
     workspaces={workspaces}
     currentWorkspaceId={data.workspace?.id}
@@ -361,7 +361,7 @@
 
   <div class="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
     <Topbar
-      title={data.workspace?.name ?? 'Flowboard'}
+      title={data.workspace?.name ?? 'actjom'}
       showSearch={false}
       searchPlaceholder={tr('shell.search')}
       themeLabels={themeLabels}
@@ -390,14 +390,14 @@
                   disabled={switchingWorkspace}
                 >
                   <span class="truncate text-base font-semibold text-ink sm:text-xl sm:font-semibold sm:tracking-[-0.015em]">
-                    {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'Flowboard')}
+                    {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'actjom')}
                   </span>
                   <HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8} class="shrink-0 text-mute" />
                 </button>
               {/snippet}
             </DropdownMenu>
           {:else}
-            <h2 class="truncate text-base font-semibold text-ink sm:text-xl sm:font-semibold sm:tracking-[-0.015em]">{data.workspace?.name ?? 'Flowboard'}</h2>
+            <h2 class="truncate text-base font-semibold text-ink sm:text-xl sm:font-semibold sm:tracking-[-0.015em]">{data.workspace?.name ?? 'actjom'}</h2>
           {/if}
         </div>
       {/snippet}

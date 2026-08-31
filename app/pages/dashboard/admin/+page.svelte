@@ -85,7 +85,7 @@
   ];
 </script>
 
-<svelte:head><title>{tr('admin.overview.title')} — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('admin.overview.title')} — actjom</title></svelte:head>
 
 {#snippet workspacesIcon()}
   <HugeiconsIcon icon={GridIcon} size={18} strokeWidth={1.8} />

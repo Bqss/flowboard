@@ -179,7 +179,7 @@
 </script>
 
 <svelte:head>
-  <title>{tr('members.title')} — Flowboard</title>
+  <title>{tr('members.title')} — actjom</title>
 </svelte:head>
 
 {#snippet totalMembersIcon()}

@@ -288,7 +288,7 @@
 
 </script>
 
-<svelte:head><title>{tr('common.workflows')} — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('common.workflows')} — actjom</title></svelte:head>
 
 
 <div class="space-y-5 sm:space-y-6">

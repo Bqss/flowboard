@@ -699,7 +699,7 @@
 </script>
 
 <svelte:head>
-  <title>{workflow?.name ?? tr('board.title')} — Flowboard</title>
+  <title>{workflow?.name ?? tr('board.title')} — actjom</title>
 </svelte:head>
 
 <div class="space-y-6 pb-12">

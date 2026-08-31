@@ -49,7 +49,7 @@
   ]);
 </script>
 
-<svelte:head><title>{tr('admin.workspaces.title')} — Flowboard</title></svelte:head>
+<svelte:head><title>{tr('admin.workspaces.title')} — actjom</title></svelte:head>
 
 <div class="space-y-6 sm:space-y-8">
   <header class="space-y-3">

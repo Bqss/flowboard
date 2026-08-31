@@ -492,7 +492,7 @@
 </script>
 
 <svelte:head>
-  <title>{tr('integrations.title')} — Flowboard</title>
+  <title>{tr('integrations.title')} — actjom</title>
 </svelte:head>
 
 <div class="space-y-6 sm:space-y-8">

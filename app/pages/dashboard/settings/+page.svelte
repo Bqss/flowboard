@@ -162,7 +162,7 @@
 </script>
 
 <svelte:head>
-  <title>{tr('settings.title')} — Flowboard</title>
+  <title>{tr('settings.title')} — actjom</title>
 </svelte:head>
 
 <div class="space-y-6 sm:space-y-8">
