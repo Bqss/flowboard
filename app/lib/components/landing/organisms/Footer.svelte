@@ -24,7 +24,7 @@
     </div>
 
     <div class="mt-16 flex flex-wrap items-center justify-between gap-4 pt-6 shadow-[inset_0_1px_0_var(--color-hairline)]">
-      <p class="text-xs font-medium text-faint">© {new Date().getFullYear()} Flowboard</p>
+      <p class="text-xs font-medium text-faint">© {new Date().getFullYear()} actjom</p>
       <p class="text-xs font-medium text-faint">{copy.footer.workflow}</p>
     </div>
   </div>

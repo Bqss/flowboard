@@ -81,7 +81,7 @@
 		userEmail,
 		userRole,
 		userSrc,
-		workspaceName = 'Flowboard',
+		workspaceName = 'actjom',
 		workspaceRole,
 		workspaces = [],
 		currentWorkspaceId,
@@ -449,7 +449,7 @@
 	{:else if collapsed}
 		<!-- Collapsed Rail Header -->
 		<div class="flex h-16 shrink-0 flex-col items-center justify-center border-b border-hairline px-2">
-			<a href="/dashboard" class="flex size-9 items-center justify-center rounded-xl transition-transform hover:scale-105" aria-label="Flowboard">
+			<a href="/dashboard" class="flex size-9 items-center justify-center rounded-xl transition-transform hover:scale-105" aria-label="actjom">
 				<Logo size={28} />
 			</a>
 		</div>
@@ -589,7 +589,7 @@
 							</div>
 							<div class="min-w-0 flex-1">
 								<p class="truncate text-[14px] font-semibold text-ink leading-tight">{userName}</p>
-								<p class="truncate text-[12px] text-mute">{userRole ?? userEmail ?? 'Flowboard Member'}</p>
+								<p class="truncate text-[12px] text-mute">{userRole ?? userEmail ?? 'actjom Member'}</p>
 							</div>
 						</button>
 					{/snippet}
