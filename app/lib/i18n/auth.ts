@@ -118,10 +118,10 @@ const errorCopy = (copy: Omit<AuthErrorCopy, 'tooManyAttempts'> & { tooManyAttem
 export const authCopy: Record<Locale, AuthCopy> = {
 	en: {
 		meta: {
-			loginTitle: 'Sign in — Flowboard',
-			loginDescription: 'Sign in to keep every customer journey moving in Flowboard.',
-			registerTitle: 'Create your workspace — Flowboard',
-			registerDescription: 'Create a Flowboard workspace for clear customer onboarding handovers.'
+			loginTitle: 'Sign in — actjom',
+			loginDescription: 'Sign in to keep every customer journey moving in actjom.',
+			registerTitle: 'Create your workspace — actjom',
+			registerDescription: 'Create an actjom workspace for clear customer onboarding handovers.'
 		},
 		shell: {
 			header: {
@@ -143,7 +143,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 		login: {
 			eyebrow: 'Workspace access',
 			signal: 'Continue the rhythm',
-			title: 'Welcome back to Flowboard',
+			title: 'Welcome back to actjom',
 			subtitle: 'Keep every customer journey moving with the next action in view.',
 			submitLabel: 'Sign in',
 			fields: {
@@ -156,7 +156,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 				}
 			},
 			remember: 'Keep me signed in on this device',
-			footer: { prompt: 'New to Flowboard?', action: 'Start free' },
+			footer: { prompt: 'New to actjom?', action: 'Start free' },
 			validation: { invalidEmail: 'Enter a valid email address.' },
 			google: {
 				button: 'Continue with Google',
@@ -177,7 +177,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 		register: {
 			eyebrow: 'Create workspace',
 			signal: 'Ready in minutes',
-			title: 'Start your Flowboard workspace',
+			title: 'Start your actjom workspace',
 			subtitle: 'Create the workspace where your team keeps onboarding visible.',
 			submitLabel: 'Create workspace',
 			fields: {
@@ -232,10 +232,10 @@ export const authCopy: Record<Locale, AuthCopy> = {
 	},
 	ms: {
 		meta: {
-			loginTitle: 'Log masuk — Flowboard',
-			loginDescription: 'Log masuk untuk memastikan setiap perjalanan pelanggan terus bergerak dalam Flowboard.',
-			registerTitle: 'Cipta ruang kerja — Flowboard',
-			registerDescription: 'Cipta ruang kerja Flowboard untuk serahan onboarding pelanggan yang jelas.'
+			loginTitle: 'Log masuk — actjom',
+			loginDescription: 'Log masuk untuk memastikan setiap perjalanan pelanggan terus bergerak dalam actjom.',
+			registerTitle: 'Cipta ruang kerja — actjom',
+			registerDescription: 'Cipta ruang kerja actjom untuk serahan onboarding pelanggan yang jelas.'
 		},
 		shell: {
 			header: {
@@ -257,7 +257,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 		login: {
 			eyebrow: 'Akses ruang kerja',
 			signal: 'Sambung rentak kerja',
-			title: 'Selamat kembali ke Flowboard',
+			title: 'Selamat kembali ke actjom',
 			subtitle: 'Pastikan setiap perjalanan pelanggan bergerak dengan tindakan seterusnya yang jelas.',
 			submitLabel: 'Log masuk',
 			fields: {
@@ -270,7 +270,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 				}
 			},
 			remember: 'Kekalkan saya log masuk pada peranti ini',
-			footer: { prompt: 'Belum menggunakan Flowboard?', action: 'Mula percuma' },
+			footer: { prompt: 'Belum menggunakan actjom?', action: 'Mula percuma' },
 			validation: { invalidEmail: 'Masukkan alamat e-mel yang sah.' },
 			google: {
 				button: 'Teruskan dengan Google',
@@ -291,7 +291,7 @@ export const authCopy: Record<Locale, AuthCopy> = {
 		register: {
 			eyebrow: 'Cipta ruang kerja',
 			signal: 'Sedia dalam beberapa minit',
-			title: 'Mulakan ruang kerja Flowboard',
+			title: 'Mulakan ruang kerja actjom',
 			subtitle: 'Cipta ruang kerja supaya pasukan anda boleh memastikan onboarding sentiasa jelas.',
 			submitLabel: 'Cipta ruang kerja',
 			fields: {

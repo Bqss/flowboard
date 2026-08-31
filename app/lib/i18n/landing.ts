@@ -119,9 +119,9 @@ export type LandingCopy = {
 export const landingCopy: Record<Locale, LandingCopy> = {
   en: {
     meta: {
-      title: 'Flowboard - Make the next handover obvious',
+      title: 'actjom - Make the next handover obvious',
       description:
-        'Flowboard gives customer-onboarding teams a visible path from intake to completion, with the next handover clear for everyone.'
+        'actjom gives customer-onboarding teams a visible path from intake to completion, with the next handover clear for everyone.'
     },
     language: {
       label: 'Language',
@@ -166,7 +166,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       traceHandover: 'Trace handover',
       traceMessage: 'Reply received at 09:42. Diana has the context and the next step.',
       replyMessage: 'A reply can become a visible handover instead of disappearing in a chat thread.',
-      ariaLabel: 'Illustrative Flowboard customer handover record',
+      ariaLabel: 'Illustrative actjom customer handover record',
       stages: [
         { label: 'Intake', detail: 'Customer added' },
         { label: 'Confirm', detail: 'Required checks' },
@@ -178,7 +178,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       title: 'One journey. One operational truth.',
       body: 'Context, required work, and attention stay together, so nobody has to reconstruct progress from private notes or chat.',
       link: 'See the operating rhythm',
-      eyebrow: 'Flowboard / customer operations',
+      eyebrow: 'actjom / customer operations',
       panelTitle: 'Signals your team can act on',
       signalsCount: '3 signals',
       signals: [
@@ -219,7 +219,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         {
           number: '03',
           title: 'Follow the signal',
-          body: 'Staff work the next card while Flowboard calls out reminders, replies, and handovers.'
+          body: 'Staff work the next card while actjom calls out reminders, replies, and handovers.'
         }
       ],
       ownerMode: 'Owner mode',
@@ -237,7 +237,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         stageCount: '6 stages',
         activeCards: '12 active cards'
       },
-      ariaLabel: 'Flowboard workflow spine for webinar registration',
+      ariaLabel: 'actjom workflow spine for webinar registration',
       activeWorkflow: 'Active workflow',
       workflowName: 'Webinar registration',
       live: 'Illustrative',
@@ -251,8 +251,8 @@ export const landingCopy: Record<Locale, LandingCopy> = {
     },
     pricing: {
       title: 'Start free. Scale by workspace.',
-      body: 'Flowboard is billed per workspace, not per login. Try the full system with your team, then keep operating without per-seat surprises.',
-      eyebrow: 'Flowboard / pricing',
+      body: 'actjom is billed per workspace, not per login. Try the full system with your team, then keep operating without per-seat surprises.',
+      eyebrow: 'actjom / pricing',
       note: 'Final quotas and pricing are being finalized. Start free today and we will migrate your workspace when paid plans launch.',
       perWorkspace: 'Billed per workspace',
       tiers: [
@@ -292,15 +292,15 @@ export const landingCopy: Record<Locale, LandingCopy> = {
     },
     faq: {
       title: 'Questions, answered.',
-      body: 'The specifics of how Flowboard fits a customer-onboarding operation, not a generic project board.',
-      eyebrow: 'Flowboard / FAQ',
+      body: 'The specifics of how actjom fits a customer-onboarding operation, not a generic project board.',
+      eyebrow: 'actjom / FAQ',
       items: [
         {
-          question: 'Is Flowboard a project management tool?',
-          answer: 'No. Flowboard is a customer-onboarding operations tracker. It is built around the journey a customer takes from intake to completion, with required work, replies, and handovers attached to that journey — not around generic tasks or cross-project boards.'
+          question: 'Is actjom a project management tool?',
+          answer: 'No. actjom is a customer-onboarding operations tracker. It is built around the journey a customer takes from intake to completion, with required work, replies, and handovers attached to that journey — not around generic tasks or cross-project boards.'
         },
         {
-          question: 'Do customers log into Flowboard?',
+          question: 'Do customers log into actjom?',
           answer: 'No. Customers never log into the board. Staff work the customer journey on their behalf. Customers interact through WhatsApp actions and replies; those signals come back to the card where the team already works.'
         },
         {
@@ -308,7 +308,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
           answer: 'WhatsApp actions are customer-facing: scheduled reminders, confirmations, and follow-up messages tied to a stage. Replies return to the customer card as a signal, so a reply can become a visible handover instead of disappearing in a chat thread.'
         },
         {
-          question: 'What is a handover in Flowboard?',
+          question: 'What is a handover in actjom?',
           answer: 'A handover is a lightweight, visible pass of context from one staff member to another. It carries the customer, the stage, the message context, and the next action — so the receiving staff member does not have to reconstruct the situation from private notes.'
         },
         {
@@ -325,7 +325,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         }
       ],
       contactTitle: 'Still have a question?',
-      contactBody: 'We answer questions about how Flowboard fits a specific onboarding operation — not generic sales pitches.',
+      contactBody: 'We answer questions about how actjom fits a specific onboarding operation — not generic sales pitches.',
       contactCta: 'Start free and ask us',
       contactHref: '/register'
     },
@@ -371,9 +371,9 @@ export const landingCopy: Record<Locale, LandingCopy> = {
   },
   ms: {
     meta: {
-      title: 'Flowboard - Jadikan serahan seterusnya jelas',
+      title: 'actjom - Jadikan serahan seterusnya jelas',
       description:
-        'Flowboard memberikan pasukan penerimaan pelanggan laluan yang jelas daripada penerimaan hingga selesai, dengan serahan seterusnya yang mudah difahami semua orang.'
+        'actjom memberikan pasukan penerimaan pelanggan laluan yang jelas daripada penerimaan hingga selesai, dengan serahan seterusnya yang mudah difahami semua orang.'
     },
     language: {
       label: 'Bahasa',
@@ -418,7 +418,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       traceHandover: 'Jejak serahan',
       traceMessage: 'Balasan diterima pada 09:42. Diana mempunyai konteks dan langkah seterusnya.',
       replyMessage: 'Balasan boleh menjadi serahan yang jelas, bukan hilang dalam perbualan.',
-      ariaLabel: 'Rekod serahan pelanggan Flowboard sebagai ilustrasi',
+      ariaLabel: 'Rekod serahan pelanggan actjom sebagai ilustrasi',
       stages: [
         { label: 'Penerimaan', detail: 'Pelanggan ditambah' },
         { label: 'Sahkan', detail: 'Semakan diperlukan' },
@@ -430,7 +430,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
       title: 'Satu perjalanan. Satu kebenaran operasi.',
       body: 'Konteks, kerja wajib dan perhatian kekal bersama supaya tiada siapa perlu membina semula kemajuan daripada nota atau perbualan.',
       link: 'Lihat rentak operasi',
-      eyebrow: 'Flowboard / operasi pelanggan',
+      eyebrow: 'actjom / operasi pelanggan',
       panelTitle: 'Isyarat yang boleh diambil tindakan oleh pasukan',
       signalsCount: '3 isyarat',
       signals: [
@@ -471,7 +471,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         {
           number: '03',
           title: 'Ikut isyarat',
-          body: 'Staf mengurus kad seterusnya sementara Flowboard menonjolkan peringatan, balasan dan serahan.'
+          body: 'Staf mengurus kad seterusnya sementara actjom menonjolkan peringatan, balasan dan serahan.'
         }
       ],
       ownerMode: 'Mod pemilik',
@@ -489,7 +489,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         stageCount: '6 peringkat',
         activeCards: '12 kad aktif'
       },
-      ariaLabel: 'Tulang belakang aliran kerja Flowboard untuk pendaftaran webinar',
+      ariaLabel: 'Tulang belakang aliran kerja actjom untuk pendaftaran webinar',
       activeWorkflow: 'Aliran kerja aktif',
       workflowName: 'Pendaftaran webinar',
       live: 'Rekod contoh',
@@ -503,8 +503,8 @@ export const landingCopy: Record<Locale, LandingCopy> = {
     },
     pricing: {
       title: 'Mula percuma. Skala mengikut ruang kerja.',
-      body: 'Flowboard ditambah bil mengikut ruang kerja, bukan setiap log masuk. Cuba sistem penuh dengan pasukan anda, kemudian teruskan beroperasi tanpa kos setiap kerusi.',
-      eyebrow: 'Flowboard / harga',
+      body: 'actjom ditambah bil mengikut ruang kerja, bukan setiap log masuk. Cuba sistem penuh dengan pasukan anda, kemudian teruskan beroperasi tanpa kos setiap kerusi.',
+      eyebrow: 'actjom / harga',
       note: 'Kuota dan harga akhir sedang dimuktamadkan. Mula percuma hari ini dan kami akan memindahkan ruang kerja anda apabila pelan berbayar dilancarkan.',
       perWorkspace: 'Dibil mengikut ruang kerja',
       tiers: [
@@ -544,15 +544,15 @@ export const landingCopy: Record<Locale, LandingCopy> = {
     },
     faq: {
       title: 'Soalan, dijawab.',
-      body: 'Butiran bagaimana Flowboard sesuai dengan operasi penerimaan pelanggan, bukan papan projek generik.',
-      eyebrow: 'Flowboard / FAQ',
+      body: 'Butiran bagaimana actjom sesuai dengan operasi penerimaan pelanggan, bukan papan projek generik.',
+      eyebrow: 'actjom / FAQ',
       items: [
         {
-          question: 'Adakah Flowboard alat pengurusan projek?',
-          answer: 'Tidak. Flowboard ialah penjejak operasi penerimaan pelanggan. Ia dibina berdasarkan perjalanan pelanggan dari penerimaan hingga selesai, dengan kerja wajib, balasan dan serahan terikat pada perjalanan itu — bukan tugas generik atau papan lintas projek.'
+          question: 'Adakah actjom alat pengurusan projek?',
+          answer: 'Tidak. actjom ialah penjejak operasi penerimaan pelanggan. Ia dibina berdasarkan perjalanan pelanggan dari penerimaan hingga selesai, dengan kerja wajib, balasan dan serahan terikat pada perjalanan itu — bukan tugas generik atau papan lintas projek.'
         },
         {
-          question: 'Adakah pelanggan log masuk ke Flowboard?',
+          question: 'Adakah pelanggan log masuk ke actjom?',
           answer: 'Tidak. Pelanggan tidak pernah log masuk ke papan. Staf menguruskan perjalanan pelanggan bagi pihak mereka. Pelanggan berinteraksi melalui tindakan dan balasan WhatsApp; isyarat itu kembali ke kad di mana pasukan sudah bekerja.'
         },
         {
@@ -560,7 +560,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
           answer: 'Tindakan WhatsApp berhadapan pelanggan: peringatan dijadualkan, pengesahan dan mesej susulan terikat pada peringkat. Balasan kembali ke kad pelanggan sebagai isyarat, jadi balasan boleh menjadi serahan yang jelas, bukan hilang dalam perbualan.'
         },
         {
-          question: 'Apakah serahan dalam Flowboard?',
+          question: 'Apakah serahan dalam actjom?',
           answer: 'Serahan ialah penghantaran konteks yang ringan dan jelas dari seorang staf ke staf lain. Ia membawa pelanggan, peringkat, konteks mesej dan tindakan seterusnya — jadi staf penerima tidak perlu membina semula situasi daripada nota peribadi.'
         },
         {
@@ -577,7 +577,7 @@ export const landingCopy: Record<Locale, LandingCopy> = {
         }
       ],
       contactTitle: 'Masih ada soalan?',
-      contactBody: 'Kami menjawab soalan tentang bagaimana Flowboard sesuai dengan operasi penerimaan tertentu — bukan jualan generik.',
+      contactBody: 'Kami menjawab soalan tentang bagaimana actjom sesuai dengan operasi penerimaan tertentu — bukan jualan generik.',
       contactCta: 'Mula percuma dan tanya kami',
       contactHref: '/register'
     },
