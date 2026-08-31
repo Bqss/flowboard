@@ -75,7 +75,7 @@ export const processDigestEmails = async (): Promise<number> => {
     try {
       await sendEmail({
         to: user.email,
-        subject: `Flowboard digest — ${items.length} notifikasi di ${workspace?.name ?? 'workspace'}`,
+        subject: `actjom digest — ${items.length} notifikasi di ${workspace?.name ?? 'workspace'}`,
         html,
         text
       });
@@ -112,7 +112,7 @@ function buildDigestHtml(
 
   return `
     <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-      <h1 style="font-size:18px;color:#111818;margin:0 0 4px;">Flowboard Digest</h1>
+      <h1 style="font-size:18px;color:#111818;margin:0 0 4px;">actjom Digest</h1>
       <p style="color:#6b7280;font-size:14px;margin:0 0 20px;">
         Halo ${escapeHtml(userName)}, berikut ${items.length} notifikasi terbaru di ${escapeHtml(workspaceName)} dalam 24 jam terakhir.
       </p>
@@ -129,7 +129,7 @@ function buildDigestText(
   const lines = items.map(
     (item) => `- ${item.title}\n  ${item.body}\n  ${item.createdAt.toLocaleString()}`
   );
-  return `Flowboard Digest\n\n${lines.join('\n\n')}\n\nNonaktifkan digest di Settings → Notifications.`;
+  return `actjom Digest\n\n${lines.join('\n\n')}\n\nNonaktifkan digest di Settings → Notifications.`;
 }
 
 function escapeHtml(text: string): string {

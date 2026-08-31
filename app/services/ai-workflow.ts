@@ -140,7 +140,7 @@ const generateWithRouter = async (prompt: string, userPhone?: string | null): Pr
   const model = process.env.AI_MODEL ?? 'gemini-3-flash-preview';
   const phoneContext = userPhone ? `\nThe user's WhatsApp phone number is ${userPhone}. Use {{phone}} in templates where the customer should contact them back.` : '';
 
-  const system = `You generate onboarding workflow drafts for Flowboard (Kanban for customer onboarding).
+  const system = `You generate onboarding workflow drafts for actjom (Kanban for customer onboarding).
 Return ONLY valid JSON with shape:
 {
   "name": string,

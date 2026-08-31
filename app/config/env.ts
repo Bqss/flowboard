@@ -42,7 +42,7 @@ export const env = {
   openAiApiKey: process.env.OPENAI_API_KEY ?? '',
   openAiModel: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
   // Email transport (Resend API). When empty, email sending is skipped (dev).
-  emailFrom: process.env.EMAIL_FROM ?? 'Flowboard <no-reply@flowboard.app>',
+  emailFrom: process.env.EMAIL_FROM ?? 'actjom <no-reply@flowboard.app>',
   emailResendApiKey: process.env.RESEND_API_KEY ?? '',
   // Days of read-only grace after a subscription becomes past_due / canceled before hard block.
   billingGraceDays: Number(process.env.BILLING_GRACE_DAYS ?? 7)
