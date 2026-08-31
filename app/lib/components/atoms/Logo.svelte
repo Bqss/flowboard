@@ -17,8 +17,8 @@
 		className
 	)}
 	style={`width:${size}px;height:${size}px;font-size:${Math.max(14, size * 0.44)}px;`}
-	aria-label="Flowboard"
+	aria-label="actjom"
 	{...rest}
 >
-	F
+	A
 </span>

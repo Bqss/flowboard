@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Landing wordmark matching the dashboard/auth brand mark.
-   * The indigo F block is the shared Flowboard anchor.
+   * The indigo A block is the shared actjom anchor.
    */
   let {
     size = 'md',
@@ -29,14 +29,14 @@
       style={`width: ${dims.box}px; height: ${dims.box}px; font-size: ${Math.max(14, dims.box * 0.42)}px`}
       aria-hidden="true"
     >
-      <span class="relative z-10">F</span>
+      <span class="relative z-10">A</span>
     </span>
-    <span>Flowboard</span>
+    <span>actjom</span>
   </span>
 {/snippet}
 
 {#if href}
-  <a {href} class="inline-flex rounded-xl" aria-label="Flowboard home">{@render mark()}</a>
+  <a {href} class="inline-flex rounded-xl" aria-label="actjom home">{@render mark()}</a>
 {:else}
   {@render mark()}
 {/if}
