@@ -4,7 +4,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { api, ApiError } from '$lib/api/client';
   import type { LayoutData } from '../$types';
-  import { SidebarRail, Topbar, Toaster, NotificationCenter } from '$lib/components/organisms/index.js';
+  import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider } from '$lib/components/organisms/index.js';
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
   import { Avatar } from '$lib/components/atoms/index.js';
   import { DropdownMenu, toast, type MenuItem } from '$lib/components/molecules/index.js';
@@ -26,6 +26,7 @@
     CreditCardIcon,
     GiftIcon,
     Plug02Icon,
+    InformationCircleIcon,
     Menu01Icon
   } from '@hugeicons/core-free-icons';
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
@@ -402,6 +403,15 @@
         </div>
       {/snippet}
       {#snippet actions()}
+        <button
+          type="button"
+          onclick={() => (window as any).__onboardingReplayTour?.()}
+          class="flex size-9 shrink-0 items-center justify-center rounded-full border border-hairline bg-card text-mute shadow-control transition-colors hover:border-hairline-strong hover:text-ink"
+          aria-label={tr('onboarding.tourReplay')}
+          title={tr('onboarding.tourReplay')}
+        >
+          <HugeiconsIcon icon={InformationCircleIcon} size={16} strokeWidth={1.8} />
+        </button>
         {#if data.user?.platformAdmin}
           <button
             type="button"
@@ -465,7 +475,9 @@
 
     <main class="flex-1 bg-canvas px-4 pt-6 pb-8 sm:px-6 md:px-8 md:pt-16 md:pb-10">
       <div class="mx-auto w-full max-w-[1280px]">
-        {@render children()}
+        <OnboardingProvider>
+          {@render children()}
+        </OnboardingProvider>
       </div>
     </main>
   </div>

@@ -103,6 +103,9 @@
       console.error('Failed to load members data:', err);
     } finally {
       loadingData = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
 
@@ -123,6 +126,7 @@
       const { invite: newInvite } = await api.createWorkspaceInvite(data.workspace.id, {
         email: email.trim()
       });
+      window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'invite_member' }));
       const link = `${window.location.origin}/invite/${newInvite.token}`;
       lastInviteLink = link;
       success = tr('members.inviteSuccess', { email: newInvite.email });
@@ -258,6 +262,7 @@
             error = null;
             success = null;
           }}
+          data-onboarding="invite-member"
         >
           <HugeiconsIcon icon={UserAdd01Icon} size={16} strokeWidth={1.8} />
           <span>{tr('members.invite')}</span>
@@ -267,7 +272,7 @@
   </header>
 
   <!-- Metric Overview Cards -->
-  <section>
+  <section data-onboarding="members-stats">
     {#if loadingData}
       <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {#each [1, 2, 3] as _i}
@@ -310,6 +315,7 @@
         variant="pills"
         size="sm"
         bind:value={roleFilter}
+        data-onboarding="member-role-filter"
         items={[
           { label: tr('common.all'), value: 'all', badge: members.length },
           { label: tr('common.owner'), value: 'owner', badge: ownersCount },
@@ -350,7 +356,7 @@
         description={searchQuery ? tr('members.emptySearch', { query: searchQuery }) : tr('members.emptyFilter')}
       />
     {:else}
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto" data-onboarding="members-table">
         <table class="w-full text-left text-sm">
           <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
             <tr>

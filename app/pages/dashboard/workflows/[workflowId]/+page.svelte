@@ -113,6 +113,12 @@
     } else if (urlTab === 'stats') {
       activeTab = 'stats';
     }
+    // Notify onboarding that tab content is ready
+    if (!loadingData) {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
+    }
   });
   let searchQuery = $state('');
   let selectedMemberFilter = $state<string>('all');
@@ -183,6 +189,9 @@
       console.error('Failed to load workflow board data:', err);
     } finally {
       loadingData = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
 
@@ -538,6 +547,7 @@
         tag: tag.trim() || undefined,
         assigneeId: createAssigneeId || undefined
       });
+      window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'add_customer' }));
       createOpen = false;
       customerName = '';
       customerWa = '';
@@ -702,12 +712,12 @@
 
       <!-- Action Buttons Cluster -->
       <div class="flex flex-wrap items-center gap-2.5">
-        <Button variant="secondary" size="sm" onclick={() => (importOpen = true)}>
+        <Button variant="secondary" size="sm" onclick={() => (importOpen = true)} data-onboarding="import-csv-btn">
           <HugeiconsIcon icon={Upload04Icon} size={16} strokeWidth={1.8} />
           <span>{tr('board.importCsv')}</span>
         </Button>
 
-        <Button variant="primary" size="md" onclick={openCreateModal} class="shadow-primary font-bold ring-2 ring-primary/20">
+        <Button variant="primary" size="md" onclick={openCreateModal} class="shadow-primary font-bold ring-2 ring-primary/20" data-onboarding="add-customer-btn">
           <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2.2} />
           <span>{tr('board.addCustomer')}</span>
         </Button>
@@ -716,7 +726,7 @@
   </header>
 
   <div class="flex items-center justify-between">
-    <div class="flex items-center gap-1 -mb-px overflow-x-auto">
+    <div class="flex items-center gap-1 -mb-px overflow-x-auto" data-onboarding="workflow-tabs">
       <!-- Tab 1: Statistik (Default) -->
       <button
         type="button"
@@ -837,7 +847,7 @@
       })}
       {@const labelStep = Math.max(1, Math.ceil(dateLabels.length / 8))}
       {@const donutResult = buildDonutSegments(donutData, donutSize, donutStroke)}
-      <section class="space-y-6 pt-2">
+      <section class="space-y-6 pt-2" data-onboarding="stats-content">
         <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
             <div class="flex items-center justify-between">
@@ -1118,7 +1128,7 @@
     {/if}
   {:else}
     <!-- TAB 2 (KANBAN) OR TAB 3 (TABLE): FILTER BAR -->
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3" data-onboarding="board-filter-bar">
       <!-- Search & Filters -->
       <div class="flex flex-wrap items-center gap-2">
         <div class="w-full sm:w-72">
@@ -1204,7 +1214,7 @@
           </Button>
         </div>
       {:else}
-        <div class="w-full">
+        <div class="w-full" data-onboarding="kanban-board">
           <KanbanBoard
             columns={filteredColumns}
             oncardmove={handleCardMove}
@@ -1220,8 +1230,7 @@
         </div>
       {/if}
     {:else if activeTab === 'table'}
-      <!-- Data Table View -->
-      <div class="rounded-2xl bg-card shadow-card border border-hairline overflow-hidden">
+      <div class="rounded-2xl bg-card shadow-card border border-hairline overflow-hidden" data-onboarding="table-view">
         {#if tableRows.length === 0}
           <div class="p-12 text-center">
             <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
@@ -1242,9 +1251,9 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-hairline">
-                {#each tableRows as row (row.id)}
+                {#each tableRows as row, ri (row.id)}
                   {@const isDone = row.checklistTotal > 0 && row.checklistDone === row.checklistTotal}
-                  <tr class="transition-colors hover:bg-canvas-sunken/60">
+                  <tr class="transition-colors hover:bg-canvas-sunken/60" {...ri === 0 ? { 'data-onboarding': 'table-row' } : {}}>
                     <td class="px-5 py-3.5 font-medium text-ink">
                       {row.customerName}
                       {#if row.product}
@@ -1288,6 +1297,7 @@
                         variant="secondary"
                         size="sm"
                         onclick={() => openCard(row.stageId, row.id)}
+                        {...ri === 0 ? { 'data-onboarding': 'table-detail-btn' } : {}}
                       >
                         {tr('board.detail')}
                       </Button>

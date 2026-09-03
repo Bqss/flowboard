@@ -132,6 +132,9 @@
       console.error('Failed to load dashboard data:', err);
     } finally {
       loadingData = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
 
@@ -152,6 +155,7 @@
     error = null;
     try {
       const { workflow } = await api.createWorkflow(data.workspace.id, { name: name.trim() });
+      window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'create_workflow' }));
       createOpen = false;
       name = '';
       await goto(`/dashboard/workflows/${workflow.id}/setup`);
@@ -226,7 +230,7 @@
         <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
         <span>{tr('home.teamButton')}</span>
       </Button>
-      <Button variant="primary" size="sm" onclick={() => (createOpen = true)}>
+      <Button variant="primary" size="sm" data-onboarding="quick-create-workflow" onclick={() => (createOpen = true)}>
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
         <span>{tr('home.createWorkflow')}</span>
       </Button>
@@ -234,7 +238,7 @@
   </header>
 
   <!-- Workspace Stats Grid (Clean & Direct) -->
-  <section>
+  <section data-onboarding="stats-overview">
     {#if loadingData}
       <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {#each [1, 2, 3, 4] as _i}
@@ -274,6 +278,7 @@
       </div>
     {/if}
   </section>
+
 
   <!-- Waiting Action Section -->
   {#if !loadingData && waitingCards.length > 0}
@@ -391,7 +396,7 @@
     </section>
   {/if}
 
-  <section class="space-y-4">
+  <section class="space-y-4" data-onboarding="workspaces-section">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="ds-section-title text-ink">{tr('home.workspaces')}</h2>
@@ -452,7 +457,7 @@
     {/if}
   </section>
   <!-- Workflows Section (Subtle description added) -->
-  <section class="space-y-4">
+  <section class="space-y-4" data-onboarding="workflows-section">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="ds-section-title text-ink">{tr('common.workflows')}</h2>
@@ -518,7 +523,7 @@
 
   <!-- Team & Shortcuts (Subtle descriptions added) -->
   <div class="grid gap-5 lg:grid-cols-2">
-    <section class="flex flex-col rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4">
+    <section class="flex flex-col rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4" data-onboarding="team-section">
       <div class="space-y-3">
         <div class="space-y-1">
           <div class="flex items-center justify-between">
@@ -578,7 +583,7 @@
     </section>
 
     <!-- Operational Shortcuts -->
-    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4">
+    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4" data-onboarding="shortcuts-section">
       <div class="space-y-1">
         <div class="flex items-center gap-2">
           <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} class="text-primary" />

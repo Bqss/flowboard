@@ -152,6 +152,9 @@
       console.error('Failed to load workflows:', err);
     } finally {
       loadingData = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
 
@@ -206,6 +209,7 @@
     error = null;
     try {
       const { workflow } = await api.createWorkflow(data.workspace.id, { name: name.trim() });
+      window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'create_workflow' }));
       manualOpen = false;
       name = '';
       await goto(`/dashboard/workflows/${workflow.id}/setup`);
@@ -306,7 +310,7 @@
         <h1 class="ds-page-title text-ink">{tr('common.workflows')}</h1>
         <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('workflows.description')}</p>
       </div>
-      <Button variant="primary" onclick={openChooser} class="shadow-xs">
+      <Button variant="primary" onclick={openChooser} class="shadow-xs" data-onboarding="create-workflow">
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={2} />
         <span>{tr('workflows.create')}</span>
       </Button>
@@ -316,7 +320,7 @@
   <!-- TOOLBAR: SEARCH & COUNT -->
   {#if !loadingData && workflows.length > 0}
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
-      <div class="relative w-full max-w-sm">
+      <div class="relative w-full max-w-sm" data-onboarding="workflow-search">
         <HugeiconsIcon
           icon={Search01Icon}
           size={17}
@@ -383,14 +387,14 @@
       </Button>
     </div>
   {:else}
-    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      {#each filteredWorkflows as workflow (workflow.id)}
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-onboarding="workflows-grid">
+      {#each filteredWorkflows as workflow, i (workflow.id)}
         {@const assigned = (workflow.defaultAssigneeIds ?? [])
           .map((id) => members.find((m) => m.id === id))
           .filter((m): m is ApiWorkspaceMember => Boolean(m))}
         {@const canManage = canManageWorkflow(workflow)}
 
-        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover">
+        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
           <!-- TOP SECTION -->
           <div class="space-y-3.5">
             <div class="flex items-start justify-between gap-3">
@@ -417,7 +421,7 @@
 
               <!-- DIRECT MANAGEMENT ICON ACTIONS (EDIT & DELETE) -->
               {#if canManage}
-                <div class="flex items-center gap-1 shrink-0">
+                <div class="flex items-center gap-1 shrink-0" {...i === 0 ? { 'data-onboarding': 'workflow-edit' } : {}}>
                   <Tooltip text={tr('common.edit')} side="top">
                     <button
                       type="button"
@@ -495,6 +499,7 @@
               variant="secondary"
               size="sm"
               class="gap-1.5 text-xs text-mute hover:text-ink"
+              {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
             >
               <HugeiconsIcon icon={Settings01Icon} size={14} strokeWidth={1.8} />
               <span>{tr('workflows.setup')}</span>
@@ -505,6 +510,7 @@
               variant="primary"
               size="sm"
               class="gap-1.5 shadow-xs"
+              {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
             >
               <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} />
               <span>{tr('workflows.openBoard')}</span>

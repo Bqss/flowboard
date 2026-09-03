@@ -149,6 +149,7 @@
 		<section
 			role="group"
 			aria-label={`${columnLabel} ${column.title}`}
+			data-onboarding={i === 0 ? 'kanban-stage' : undefined}
 			class={cn(
 			'flex w-lane shrink-0 flex-col rounded-2xl bg-canvas-sunken p-3.5 select-none shadow-xs border border-hairline transition-all duration-150',
 				dropTargetColumnId === column.id &&
@@ -174,6 +175,7 @@
 			<!-- Add Customer Button -->
 	<button
 		type="button"
+		data-onboarding={i === 0 ? 'kanban-add-card' : undefined}
 		class="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-hairline bg-card py-2.5 px-3 text-xs font-bold text-ink-soft shadow-control hover:border-primary hover:bg-primary-soft hover:text-primary transition-all cursor-pointer group active:scale-[0.99]"
 		onclick={() => {
 			onadd?.(column.id);
@@ -194,7 +196,7 @@
 						{/if}
 					</div>
 				{:else}
-					{#each column.items as card (card.id)}
+					{#each column.items as card, ci (card.id)}
 						{@const badgeTone = card.badgeTone ?? resolveTone(card.badge)}
 						{@const barTone = card.labelBarTone ?? (badgeTone === 'neutral' ? tone : badgeTone)}
 						{@const accentHex = labelBarColor[barTone as keyof typeof labelBarColor] ?? '#4f46e5'}
@@ -205,6 +207,7 @@
 							ondragstart={(event) => onDragStart(event, column.id, card.id)}
 							ondragend={onDragEnd}
 							onclick={() => handleCardClick(column.id, card.id)}
+							data-onboarding={i === 0 && ci === 0 ? 'kanban-card' : undefined}
 							class={cn(
 						'group relative cursor-grab rounded-xl bg-card pl-4.5 p-3.5 text-left border border-hairline shadow-card hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing space-y-2.5 overflow-hidden',
 								card.selected && 'ring-2 ring-primary border-transparent shadow-card-hover',

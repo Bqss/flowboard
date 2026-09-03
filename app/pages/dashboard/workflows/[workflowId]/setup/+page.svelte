@@ -83,6 +83,16 @@
       activeSetupTab = 'settings';
     }
   });
+
+  // Notify onboarding when internal tab changes (after data loaded)
+  $effect(() => {
+    activeSetupTab;
+    if (!loadingData) {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
+    }
+  });
   let workflowName = $state('');
   let workflowDescription = $state('');
   let defaultAssigneeIds = $state<string[]>([]);
@@ -335,6 +345,9 @@
       showAlert(err instanceof ApiError ? err.message : tr('setup.loadError'), 'error');
     } finally {
       loadingData = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
   async function saveSetupChanges(showSuccess = true): Promise<boolean> {
@@ -460,6 +473,7 @@
         name: newStageName.trim(),
         color: newStageColor
       });
+      window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'add_stage' }));
       newStageName = '';
       newStageColor = 'indigo';
       newStageCustomColor = null;
@@ -474,6 +488,8 @@
   }
 
   function startEditStage(stage: ApiWorkflowSetupStage) {
+    stageToEdit = stage;
+    editStageName = stage.name;
     const draft = stageAutomationDraft[stage.id];
     editStageColor = stage.color || 'indigo';
     editStageCustomColor = isCustomColor(editStageColor) ? editStageColor : null;
@@ -613,6 +629,7 @@
             required: checklistModalRequired
           }
         );
+        window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'add_checklist' }));
         const templateId = res.template?.id;
         if (templateId && checklistModalActionKind !== 'none') {
           await api.updateChecklistAction(
@@ -746,6 +763,7 @@
             size="sm"
             onclick={() => (createStageOpen = true)}
             class="shadow-xs"
+            data-onboarding="add-stage-btn"
           >
             <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
             <span>{tr('setup.addStage')}</span>
@@ -799,6 +817,7 @@
       <button
         type="button"
         onclick={() => (activeSetupTab = 'stages')}
+        data-onboarding="setup-tab"
         class={cn(
           'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeSetupTab === 'stages'
@@ -814,6 +833,7 @@
       <button
         type="button"
         onclick={() => (activeSetupTab = 'settings')}
+        data-onboarding="settings-tab"
         class={cn(
           'flex items-center gap-2 px-4 py-2.5 text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
           activeSetupTab === 'settings'
@@ -871,10 +891,10 @@
         {@const requiredCount = (stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0)}
         {@const totalItems = stage.templates?.length ?? 0}
 
-        <!-- 330px Lane Tray -->
         <section
           id={`stage-lane-${stage.id}`}
           class="w-[330px] shrink-0 rounded-2xl bg-canvas-sunken p-3 flex flex-col space-y-3 shadow-xs border border-hairline"
+          data-onboarding={index === 0 ? 'stage-lane' : undefined}
         >
           <!-- Lane Header Card -->
           <div class="relative rounded-xl bg-card p-3.5 shadow-card space-y-2.5 overflow-hidden border border-hairline">
@@ -894,7 +914,7 @@
               </div>
 
               {#if canManage}
-                <div class="flex items-center gap-0.5 shrink-0 text-mute">
+                <div class="flex items-center gap-0.5 shrink-0 text-mute" {...index === 0 ? { 'data-onboarding': 'stage-controls' } : {}}>
                   <IconButton
                     label={tr('setup.moveLeft')}
                     variant="ghost"
@@ -999,12 +1019,13 @@
                 <p class="text-[13px] text-faint mt-0.5">{tr('setup.typeToAdd')}</p>
               </div>
             {:else}
-              {#each stage.templates as template (template.id)}
+              {#each stage.templates as template, tIndex (template.id)}
                 {@const isRequired = checklistIsRequired(template)}
                 {@const hasAction = template.action?.kind && template.action.kind !== 'none'}
 
                 <div
                   class="group relative rounded-xl bg-card p-3 shadow-card border border-hairline hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 space-y-1.5"
+                  data-onboarding={index === 0 && tIndex === 0 ? 'checklist-item' : undefined}
                 >
 
                   <!-- Checklist Card Content -->
@@ -1112,6 +1133,7 @@
               type="button"
               onclick={() => openCreateChecklistModal(stage.id)}
               class="w-full flex items-center justify-center gap-1.5 rounded-xl bg-card py-2.5 px-3 text-[13px] font-bold text-ink-soft shadow-control hover:border-primary hover:bg-primary-soft hover:text-primary transition-all cursor-pointer group active:scale-[0.99]"
+              data-onboarding={index === 0 ? 'add-checklist-btn' : undefined}
             >
               <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={2.2} class="text-mute group-hover:text-primary transition-colors" />
               <span>{tr('setup.addChecklistItem')}</span>
@@ -1125,6 +1147,7 @@
         <button
           type="button"
           onclick={() => (createStageOpen = true)}
+          data-onboarding="add-stage-ghost"
           class="w-[280px] shrink-0 min-h-[160px] rounded-2xl border-2 border-dashed border-hairline-strong hover:border-primary hover:bg-primary-soft/30 flex flex-col items-center justify-center p-6 text-center transition-all cursor-pointer group"
         >
           <div class="flex h-10 w-10 items-center justify-center rounded-full bg-lane group-hover:bg-primary-soft group-hover:text-primary transition-colors text-mute mb-2">
@@ -1149,7 +1172,7 @@
         <p class="ds-caption text-mute">{tr('setup.workflowSettingsDescription')}</p>
       </div>
 
-        <div class="rounded-2xl border border-hairline bg-card shadow-card p-6 space-y-4">
+        <div class="rounded-2xl border border-hairline bg-card shadow-card p-6 space-y-4" data-onboarding="workflow-settings-form">
         <form
           onsubmit={(e) => {
             e.preventDefault();

@@ -224,6 +224,9 @@
     } finally {
       loading = false;
       apiKeysLoading = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
 
@@ -421,6 +424,7 @@
           instanceId: form.instanceId,
           sendApiKey: form.sendApiKey || null
         });
+        window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'connect_wa' }));
         issuedToken = response.connectorToken;
         issuedTokenConnectionId = response.connection.id;
         successMessage = tr('integrations.created');
@@ -545,7 +549,7 @@
     </section>
   {/if}
 
-  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card">
+  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="wa-section">
     <div class="mb-4 sm:mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Link01Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
@@ -553,7 +557,7 @@
         <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('integrations.rotateDescription')}</p>
       </div>
       {#if canManage && !loading}
-        <Button variant="primary" size="sm" onclick={() => resetForm()}>
+        <Button variant="primary" size="sm" onclick={() => resetForm()} data-onboarding="connect-wa">
           <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={1.8} />
           {tr('integrations.add')}
         </Button>
@@ -575,7 +579,7 @@
       <div class="space-y-3">
         {#each connections as connection (connection.id)}
           {@const recentJobs = jobs.filter((job) => job.connectionId === connection.id).slice(0, 3)}
-          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
+          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4" data-onboarding="wa-connection-card">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
@@ -592,7 +596,7 @@
                 </p>
               </div>
               {#if canManage}
-                <div class="flex shrink-0 flex-wrap items-center gap-1">
+                <div class="flex shrink-0 flex-wrap items-center gap-1" data-onboarding="wa-test-buttons">
                   <Button variant="ghost" size="sm" onclick={() => resetForm(connection)}>
                     {tr('common.edit')}
                   </Button>
@@ -658,7 +662,7 @@
   </section>
 
   <!-- MCP API keys -->
-  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card">
+  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="api-keys-section">
     <div class="mb-4 sm:mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Key02Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
@@ -666,7 +670,7 @@
         <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('integrations.apiKeysDescription')}</p>
       </div>
       {#if canManage && !apiKeysLoading}
-        <Button variant="primary" size="sm" onclick={openApiKeyModal}>
+        <Button variant="primary" size="sm" onclick={openApiKeyModal} data-onboarding="generate-api-key">
           <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={1.8} />
           {tr('integrations.apiKeyCreate')}
         </Button>

@@ -84,6 +84,9 @@
       notifError = err instanceof ApiError ? err.message : tr('settings.notificationsLoadError');
     } finally {
       notifLoading = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
 
@@ -181,7 +184,7 @@
   </header>
 
   <div class="grid gap-6 lg:grid-cols-2">
-    <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
+    <section data-onboarding="profile-settings-section" class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={UserCircleIcon} size={20} strokeWidth={1.8} class="text-primary" />
         <h2 class="ds-section-title text-ink">{tr('settings.profile')}</h2>
@@ -255,7 +258,7 @@
       </form>
     </section>
 
-    <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
+    <section data-onboarding="security-settings-section" class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={LockPasswordIcon} size={20} strokeWidth={1.8} class="text-primary" />
         <h2 class="ds-section-title text-ink">{tr('settings.security')}</h2>
@@ -321,7 +324,7 @@
     </section>
   </div>
 
-  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
+  <section data-onboarding="notifications-settings-section" class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
     <div class="flex items-center gap-2">
       <HugeiconsIcon icon={BellRingIcon} size={20} strokeWidth={1.8} class="text-primary" />
       <div>
