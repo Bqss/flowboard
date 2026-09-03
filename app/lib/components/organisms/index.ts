@@ -27,7 +27,11 @@ import Sheet from './Sheet.svelte';
 import ConfirmDialog from './ConfirmDialog.svelte';
 import Popover from './Popover.svelte';
 import AlertBanner from './AlertBanner.svelte';
+import Spotlight from './Spotlight.svelte';
+import WelcomeModal from './WelcomeModal.svelte';
 import Toaster from './Toaster.svelte';
+import ChallengeWidget from './ChallengeWidget.svelte';
+import OnboardingProvider from './OnboardingProvider.svelte';
 
 // Form
 import FormSection from './FormSection.svelte';
@@ -89,7 +93,10 @@ export {
 	ConfirmDialog,
 	Popover,
 	AlertBanner,
+	Spotlight,
 	Toaster,
+	ChallengeWidget,
+	OnboardingProvider,
 	FormSection,
 	MultiStepForm,
 	FilterBar,
