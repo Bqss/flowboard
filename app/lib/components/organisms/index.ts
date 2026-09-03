@@ -28,7 +28,6 @@ import ConfirmDialog from './ConfirmDialog.svelte';
 import Popover from './Popover.svelte';
 import AlertBanner from './AlertBanner.svelte';
 import Spotlight from './Spotlight.svelte';
-import WelcomeModal from './WelcomeModal.svelte';
 import Toaster from './Toaster.svelte';
 import ChallengeWidget from './ChallengeWidget.svelte';
 import OnboardingProvider from './OnboardingProvider.svelte';
