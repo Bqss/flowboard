@@ -9,7 +9,7 @@ export type Locale = (typeof locales)[number]['code'];
 
 const STORAGE_KEY = 'flowboard-locale';
 
-export const locale = writable<Locale>('en');
+export const locale = writable<Locale>('ms');
 
 let initialized = false;
 
