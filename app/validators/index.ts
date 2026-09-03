@@ -454,3 +454,12 @@ export const UpdateNotificationSettingsSchema = t.Object({
   emailHandover: t.Optional(t.Boolean()),
   emailDigest: t.Optional(t.Boolean())
 });
+
+/* --------------------------------------------------------------- onboarding */
+
+export const UpdateOnboardingSchema = t.Object({
+  completedChallenges: t.Optional(t.Array(t.String())),
+  seenTours: t.Optional(t.Array(t.String())),
+  completeChallenge: t.Optional(t.String()),
+  markTourSeen: t.Optional(t.String())
+});

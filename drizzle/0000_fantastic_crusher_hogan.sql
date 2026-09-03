@@ -174,6 +174,15 @@ CREATE TABLE IF NOT EXISTS "notifications" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "onboarding_state" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"completed_challenges" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"seen_tours" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "plans" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"slug" text NOT NULL,
@@ -536,6 +545,12 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
+ ALTER TABLE "onboarding_state" ADD CONSTRAINT "onboarding_state_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -703,6 +718,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "mcp_api_key_workflows_key_workflow_idx" ON "m
 CREATE INDEX IF NOT EXISTS "mcp_api_key_workflows_workflow_idx" ON "mcp_api_key_workflows" USING btree ("workflow_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "mcp_api_keys_workspace_idx" ON "mcp_api_keys" USING btree ("workspace_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "notification_settings_workspace_user_idx" ON "notification_settings" USING btree ("workspace_id","user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "onboarding_state_user_idx" ON "onboarding_state" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "plans_active_sort_idx" ON "plans" USING btree ("active","sort_order");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "stages_workflow_position_idx" ON "stages" USING btree ("workflow_id","position");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "subscriptions_status_idx" ON "subscriptions" USING btree ("status");--> statement-breakpoint

@@ -629,3 +629,23 @@ export const mcpApiKeyWorkflows = pgTable(
 );
 
 export type McpApiKeyWorkflow = typeof mcpApiKeyWorkflows.$inferSelect;
+
+export const onboardingState = pgTable(
+  'onboarding_state',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Which challenges the user has completed (array of challenge keys)
+    completedChallenges: jsonb('completed_challenges').notNull().default([]),
+    // Which page tours the user has seen (array of route keys)
+    seenTours: jsonb('seen_tours').notNull().default([]),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [uniqueIndex('onboarding_state_user_idx').on(table.userId)]
+);
+
+export type OnboardingState = typeof onboardingState.$inferSelect;
+export type NewOnboardingState = typeof onboardingState.$inferInsert;
