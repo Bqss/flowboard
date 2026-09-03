@@ -58,10 +58,10 @@
       <div class="space-y-3 text-center ds-body text-mute">
         <p>Masuk atau daftar dengan email di atas untuk menerima undangan.</p>
         <div class="flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Button href="/login?redirect={encodeURIComponent(invitePath)}" variant="primary">
+          <Button href="/login?redirect={encodeURIComponent(invitePath)}&email={encodeURIComponent(data.invite.email)}" variant="primary">
             Masuk
           </Button>
-          <Button href="/register?redirect={encodeURIComponent(invitePath)}" variant="secondary">
+          <Button href="/register?redirect={encodeURIComponent(invitePath)}&email={encodeURIComponent(data.invite.email)}" variant="secondary">
             Daftar
           </Button>
         </div>
@@ -71,7 +71,7 @@
         Kamu masuk sebagai {data.user.email}. Gunakan {data.invite.email} untuk menerima undangan.
       </p>
       <p class="mt-4 text-center">
-        <Link href="/login?redirect={encodeURIComponent(invitePath)}">Ganti akun</Link>
+        <Link href="/login?redirect={encodeURIComponent(invitePath)}&email={encodeURIComponent(data.invite.email)}">Ganti akun</Link>
       </p>
     {:else}
       {#if error}

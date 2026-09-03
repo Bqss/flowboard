@@ -9,8 +9,7 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-
-  let email = $state('');
+  let email = $state(data.email ?? '');
   let password = $state('');
   let remember = $state(false);
   let error = $state<string | undefined>(undefined);
@@ -50,6 +49,7 @@
   bind:password
   bind:remember
   {copy}
+  googleHref={`/api/auth/google?redirect=${encodeURIComponent(data.redirectTo)}`}
   error={error ?? oauthError}
   {loading}
   title={copy.title}

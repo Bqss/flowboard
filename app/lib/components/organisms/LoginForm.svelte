@@ -20,7 +20,7 @@
 		subtitle?: string;
 		submitLabel?: string;
 		onSubmit?: (payload: { email: string; password: string; remember: boolean }) => void;
-		class?: string;
+		googleHref?: string;
 		footer?: import('svelte').Snippet;
 	};
 
@@ -36,6 +36,7 @@
 		subtitle,
 		submitLabel,
 		onSubmit,
+		googleHref = '/api/auth/google',
 		class: className,
 		footer,
 		...rest
@@ -78,7 +79,7 @@
 	</div>
 
 <div class="mb-6 space-y-4">
-	<GoogleButton href="/api/auth/google" label={copy.google.button} />
+	<GoogleButton href={googleHref} label={copy.google.button} />
 	<div class="flex items-center gap-3">
 		<div class="h-px flex-1 bg-hairline"></div>
 		<span class="text-xs font-medium text-faint">{copy.google.divider}</span>

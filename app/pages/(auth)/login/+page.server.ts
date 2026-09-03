@@ -5,6 +5,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ parent, url }) => {
   const { user } = await parent();
   const redirectTo = url.searchParams.get('redirect') || '/dashboard';
+  const email = url.searchParams.get('email') || '';
   if (user) throw redirect(302, redirectTo);
-  return { redirectTo };
+  return { redirectTo, email };
 };
