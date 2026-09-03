@@ -83,10 +83,14 @@
 			aria-labelledby={title ? 'dialog-title' : undefined}
 		>
 			<div
-				class={cn(modalPanelClass, sizes[size], 'pointer-events-auto')}
+				class={cn(
+					modalPanelClass,
+					sizes[size],
+					'pointer-events-auto flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden'
+				)}
 				transition:modalPanel={{ duration: 300, y: 8, startScale: 0.97 }}
 			>
-				<div class="mb-4 flex items-start justify-between gap-3">
+				<div class="mb-4 flex shrink-0 items-start justify-between gap-3">
 					<div class="min-w-0">
 						{#if title}
 							<h2 id="dialog-title" class="ds-section-title text-ink">{title}</h2>
@@ -105,10 +109,10 @@
 					</button>
 				</div>
 
-				<div class="min-w-0">{@render children?.()}</div>
+				<div class="min-w-0 flex-1 overflow-y-auto overscroll-contain">{@render children?.()}</div>
 
 				{#if footer}
-					<div class="mt-6 flex justify-end gap-2 border-t border-hairline pt-4">
+					<div class="mt-6 flex shrink-0 justify-end gap-2 border-t border-hairline pt-4">
 						{@render footer()}
 					</div>
 				{/if}
