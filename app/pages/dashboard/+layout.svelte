@@ -389,7 +389,7 @@
                   aria-label={tr('shell.switchWorkspace')}
                   disabled={switchingWorkspace}
                 >
-                  <span class="truncate text-base font-semibold text-ink sm:text-xl sm:font-semibold sm:tracking-[-0.015em]">
+                  <span class="truncate text-sm font-semibold text-ink sm:text-base sm:font-semibold">
                     {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'actjom')}
                   </span>
                   <HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8} class="shrink-0 text-mute" />
@@ -397,7 +397,7 @@
               {/snippet}
             </DropdownMenu>
           {:else}
-            <h2 class="truncate text-base font-semibold text-ink sm:text-xl sm:font-semibold sm:tracking-[-0.015em]">{data.workspace?.name ?? 'actjom'}</h2>
+            <h2 class="truncate text-sm font-semibold text-ink sm:text-base sm:font-semibold">{data.workspace?.name ?? 'actjom'}</h2>
           {/if}
         </div>
       {/snippet}

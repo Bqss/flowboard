@@ -64,7 +64,7 @@ export const panelClass =
 
 /** Shared row inside a floating panel: 10px radius per DESIGN.md dropdown items. */
 export const panelItemClass =
-	'ds-body flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-ink transition-colors duration-150 ease-out outline-none hover:bg-primary-soft focus-visible:bg-primary-soft data-[disabled=true]:pointer-events-none data-[disabled=true]:text-faint';
+	'text-[14px] flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-ink transition-colors duration-150 ease-out outline-none hover:bg-primary-soft focus-visible:bg-primary-soft data-[disabled=true]:pointer-events-none data-[disabled=true]:text-faint';
 
 /** Matches Input atom surface — use on div/button triggers with focus-within. */
 export const fieldTriggerClass =

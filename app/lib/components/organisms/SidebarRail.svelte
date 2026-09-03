@@ -469,8 +469,8 @@
 								<Logo size={22} />
 							</div>
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-[14px] font-bold text-ink leading-tight">{workspaceName}</p>
-								<p class="truncate text-[12px] text-mute">{workspaceRole ?? subtitle}</p>
+							<p class="truncate text-[13px] font-semibold text-ink leading-tight">{workspaceName}</p>
+							<p class="truncate text-[11px] text-mute">{workspaceRole ?? subtitle}</p>
 							</div>
 							<HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={2} class="shrink-0 text-mute transition-transform group-hover:text-ink" />
 						</button>
@@ -482,8 +482,8 @@
 						<Logo size={22} />
 					</div>
 					<div class="min-w-0">
-						<p class="truncate text-[14px] font-bold text-ink leading-tight">{workspaceName}</p>
-						<p class="truncate text-[12px] text-mute">{subtitle}</p>
+					<p class="truncate text-[13px] font-semibold text-ink leading-tight">{workspaceName}</p>
+					<p class="truncate text-[11px] text-mute">{subtitle}</p>
 					</div>
 				</a>
 			{/if}
