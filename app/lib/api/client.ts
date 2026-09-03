@@ -1195,5 +1195,44 @@ export const api = {
         role: 'owner' | 'member';
         joinedAt: string;
       }>;
-    }>(`/admin/workspaces/${workspaceId}/members`, { fetch: fetchFn })
+    }>(`/admin/workspaces/${workspaceId}/members`, { fetch: fetchFn }),
+
+  getOnboardingState: (fetchFn?: FetchLike) =>
+    request<{
+      state: {
+        completedChallenges: string[];
+        seenTours: string[];
+      };
+    }>('/onboarding/state', { fetch: fetchFn }),
+
+  updateOnboardingState: (
+    body: {
+      completedChallenges?: string[];
+      seenTours?: string[];
+      completeChallenge?: string;
+      markTourSeen?: string;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{
+      state: {
+        completedChallenges: string[];
+        seenTours: string[];
+      };
+    }>('/onboarding/state', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  resetOnboardingState: (fetchFn?: FetchLike) =>
+    request<{
+      state: {
+        completedChallenges: string[];
+        seenTours: string[];
+      };
+    }>('/onboarding/reset', {
+      method: 'POST',
+      fetch: fetchFn
+    })
 };
