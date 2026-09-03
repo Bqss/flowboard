@@ -11,6 +11,7 @@
     "start": "bun ./server.ts",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run app/db/migrate.ts",
     "db:push": "drizzle-kit push",
