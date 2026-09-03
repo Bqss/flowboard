@@ -537,6 +537,18 @@ export const api = {
       }>;
     }>('/workspaces', { fetch: fetchFn }),
 
+  myInvites: (fetchFn?: FetchLike) =>
+    request<{
+      invites: Array<{
+        id: string;
+        token: string;
+        email: string;
+        role: string;
+        expiresAt: string;
+        workspaceName: string;
+      }>;
+    }>('/workspaces/my-invites', { fetch: fetchFn }),
+
   switchWorkspace: (workspaceId: string, fetchFn?: FetchLike) =>
     request<{ ok: true; workspace: ApiWorkspace }>(`/workspaces/${workspaceId}/switch`, {
       method: 'POST',
@@ -557,6 +569,21 @@ export const api = {
     request<{
       invites: Array<{ id: string; email: string; role: string; expiresAt: string; createdAt: string }>;
     }>(`/workspaces/${workspaceId}/invites`, { fetch: fetchFn }),
+
+  deleteWorkspaceInvite: (workspaceId: string, inviteId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/invites/${inviteId}`, {
+      method: 'DELETE',
+      fetch: fetchFn
+    }),
+
+  resendWorkspaceInvite: (workspaceId: string, inviteId: string, fetchFn?: FetchLike) =>
+    request<{
+      ok: true;
+      invite: { id: string; email: string; role: string; token: string; expiresAt: string };
+    }>(`/workspaces/${workspaceId}/invites/${inviteId}/resend`, {
+      method: 'POST',
+      fetch: fetchFn
+    }),
 
   removeWorkspaceMember: (workspaceId: string, userId: string, fetchFn?: FetchLike) =>
     request<{ ok: true }>(`/workspaces/${workspaceId}/members/${userId}`, {

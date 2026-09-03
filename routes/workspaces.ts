@@ -10,6 +10,7 @@ import {
   CreateInviteSchema,
   AcceptInviteSchema,
   InviteTokenParam,
+  InviteIdParam,
   CreateApiKeySchema,
   ApiKeyParam,
   UpdateApiKeySchema,
@@ -38,6 +39,7 @@ export const createWorkspacesRoutes = () => {
     .get('/invites/:token', workspaces.showInvite, { params: InviteTokenParam })
     .use(createRequireAuth())
     .get('/', workspaces.list)
+    .get('/my-invites', workspaces.myInvites)
     .post('/invites/accept', workspaces.acceptInvite, { body: AcceptInviteSchema })
     .group('/:workspaceId', (app) =>
       app
@@ -52,6 +54,8 @@ export const createWorkspacesRoutes = () => {
           params: WorkspaceIdParam,
           body: CreateInviteSchema
         })
+        .delete('/invites/:inviteId', workspaces.deleteInviteHandler, { params: InviteIdParam })
+        .post('/invites/:inviteId/resend', workspaces.resendInviteHandler, { params: InviteIdParam })
         // MCP API keys — owner only (guard inside handlers).
         .get('/api-keys', apiKeys.listApiKeys, { params: WorkspaceIdParam })
         .post('/api-keys', apiKeys.createApiKeyHandler, {

@@ -264,3 +264,69 @@ export const listPendingInvites = async (workspaceId: string) => {
       )
     );
 };
+
+export const listPendingInvitesForEmail = async (email: string) => {
+  return db
+    .select({
+      id: workspaceInvites.id,
+      token: workspaceInvites.token,
+      email: workspaceInvites.email,
+      role: workspaceInvites.role,
+      expiresAt: workspaceInvites.expiresAt,
+      workspaceName: workspaces.name
+    })
+    .from(workspaceInvites)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceInvites.workspaceId))
+    .where(
+      and(
+        eq(workspaceInvites.email, email.toLowerCase()),
+        isNull(workspaceInvites.acceptedAt),
+        gt(workspaceInvites.expiresAt, new Date())
+      )
+    );
+};
+
+export const deleteInvite = async (workspaceId: string, inviteId: string) => {
+  const [deleted] = await db
+    .delete(workspaceInvites)
+    .where(
+      and(
+        eq(workspaceInvites.id, inviteId),
+        eq(workspaceInvites.workspaceId, workspaceId),
+        isNull(workspaceInvites.acceptedAt)
+      )
+    )
+    .returning({ id: workspaceInvites.id });
+
+  return deleted !== undefined;
+};
+
+export const getInviteById = async (workspaceId: string, inviteId: string) => {
+  const [row] = await db
+    .select({
+      invite: workspaceInvites,
+      workspaceName: workspaces.name
+    })
+    .from(workspaceInvites)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceInvites.workspaceId))
+    .where(
+      and(
+        eq(workspaceInvites.id, inviteId),
+        eq(workspaceInvites.workspaceId, workspaceId)
+      )
+    )
+    .limit(1);
+
+  return row ?? null;
+};
+
+export const extendInviteExpiry = async (inviteId: string) => {
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+  const [updated] = await db
+    .update(workspaceInvites)
+    .set({ expiresAt })
+    .where(eq(workspaceInvites.id, inviteId))
+    .returning();
+
+  return updated;
+};

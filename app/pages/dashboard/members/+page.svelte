@@ -24,6 +24,7 @@
     MailSend01Icon,
     Copy01Icon,
     Delete02Icon,
+    SentIcon,
     CheckmarkCircle02Icon,
     Alert02Icon
   } from '@hugeicons/core-free-icons';
@@ -62,6 +63,9 @@
   let removing = $state(false);
 
   let copiedKey = $state<string | null>(null);
+  let inviteActionId = $state<string | null>(null);
+  let deleteInviteDialogOpen = $state(false);
+  let inviteToDelete = $state<InviteItem | null>(null);
 
   const isOwner = $derived(data.workspace?.role === 'owner');
   const currentUserId = $derived(data.user?.id);
@@ -160,6 +164,40 @@
       }, 2000);
     } catch (err) {
       console.error('Failed to copy', err);
+    }
+  }
+
+  async function resendInvite(invite: InviteItem) {
+    if (!data.workspace?.id || inviteActionId) return;
+    inviteActionId = invite.id;
+    try {
+      await api.resendWorkspaceInvite(data.workspace.id, invite.id);
+      success = tr('members.resendSuccess', { email: invite.email });
+      await loadMembersData();
+    } catch (err) {
+      error = err instanceof ApiError ? err.message : tr('members.resendError');
+    } finally {
+      inviteActionId = null;
+    }
+  }
+
+  function triggerDeleteInvite(invite: InviteItem) {
+    inviteToDelete = invite;
+    deleteInviteDialogOpen = true;
+  }
+
+  async function confirmDeleteInvite() {
+    if (!data.workspace?.id || !inviteToDelete) return;
+    inviteActionId = inviteToDelete.id;
+    try {
+      await api.deleteWorkspaceInvite(data.workspace.id, inviteToDelete.id);
+      deleteInviteDialogOpen = false;
+      inviteToDelete = null;
+      await loadMembersData();
+    } catch (err) {
+      error = err instanceof ApiError ? err.message : tr('members.deleteInviteError');
+    } finally {
+      inviteActionId = null;
     }
   }
 
@@ -426,21 +464,42 @@
                   {formatDate(invite.expiresAt)}
                 </td>
                 <td class="px-4 py-3 sm:px-6 sm:py-4 text-right">
-                  {#if invite.token}
+                  <div class="flex items-center justify-end gap-2">
+                    {#if invite.token}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onclick={() => copyToClipboard(`${window.location.origin}/invite/${invite.token}`, `inv-${invite.id}`)}
+                      >
+                        <HugeiconsIcon
+                          icon={copiedKey === `inv-${invite.id}` ? CheckmarkCircle02Icon : Copy01Icon}
+                          size={14}
+                          strokeWidth={1.8}
+                          class={copiedKey === `inv-${invite.id}` ? 'text-status-done' : ''}
+                        />
+                        <span>{copiedKey === `inv-${invite.id}` ? tr('common.copied') : tr('members.copyLink')}</span>
+                      </Button>
+                    {/if}
                     <Button
                       variant="secondary"
                       size="sm"
-                      onclick={() => copyToClipboard(`${window.location.origin}/invite/${invite.token}`, `inv-${invite.id}`)}
+                      loading={inviteActionId === invite.id}
+                      disabled={inviteActionId !== null && inviteActionId !== invite.id}
+                      onclick={() => resendInvite(invite)}
                     >
-                      <HugeiconsIcon
-                        icon={copiedKey === `inv-${invite.id}` ? CheckmarkCircle02Icon : Copy01Icon}
-                        size={14}
-                        strokeWidth={1.8}
-                        class={copiedKey === `inv-${invite.id}` ? 'text-status-done' : ''}
-                      />
-                      <span>{copiedKey === `inv-${invite.id}` ? tr('common.copied') : tr('members.copyLink')}</span>
+                      <HugeiconsIcon icon={SentIcon} size={14} strokeWidth={1.8} />
+                      <span>{tr('members.resend')}</span>
                     </Button>
-                  {/if}
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={inviteActionId !== null && inviteActionId !== invite.id}
+                      onclick={() => triggerDeleteInvite(invite)}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
+                      <span>{tr('members.deleteInvite')}</span>
+                    </Button>
+                  </div>
                 </td>
               </tr>
             {/each}
@@ -538,5 +597,21 @@
   oncancel={() => {
     removeDialogOpen = false;
     memberToRemove = null;
+  }}
+/>
+
+<!-- Confirm Dialog: Hapus Undangan -->
+<ConfirmDialog
+  bind:open={deleteInviteDialogOpen}
+  title={tr('members.deleteInviteTitle')}
+  description={inviteToDelete ? tr('members.deleteInviteDescription', { email: inviteToDelete.email }) : tr('members.deleteInviteFallback')}
+  confirmLabel={tr('members.deleteInvite')}
+  cancelLabel={tr('common.cancel')}
+  destructive
+  loading={inviteActionId !== null}
+  onconfirm={confirmDeleteInvite}
+  oncancel={() => {
+    deleteInviteDialogOpen = false;
+    inviteToDelete = null;
   }}
 />

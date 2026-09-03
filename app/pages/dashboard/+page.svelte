@@ -34,7 +34,9 @@
     Layers01Icon,
     ArrowRight01Icon,
     KanbanIcon,
-    UserCheck01Icon
+    UserCheck01Icon,
+    Building06Icon,
+    Tick02Icon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from './$types';
 
@@ -52,6 +54,58 @@
   let bulkAssigneeId = $state('');
   let bulkLoading = $state(false);
   let bulkError = $state<string | null>(null);
+
+  let pendingInvites = $state<
+    Array<{ id: string; token: string; workspaceName: string; role: string; expiresAt: string }>
+  >([]);
+  let acceptingInvite = $state(false);
+  let workspacesLoading = $state(true);
+
+  let workspaces = $state<
+    Array<{ id: string; name: string; slug: string; role: 'owner' | 'member'; joinedAt: string }>
+  >([]);
+  let switchingWorkspace = $state(false);
+
+  async function switchWorkspace(workspaceId: string) {
+    if (workspaceId === data.workspace?.id || switchingWorkspace) return;
+    switchingWorkspace = true;
+    try {
+      await api.switchWorkspace(workspaceId);
+      await goto('/dashboard');
+    } catch (err) {
+      console.error('Failed to switch workspace:', err);
+    } finally {
+      switchingWorkspace = false;
+    }
+  }
+  async function acceptPendingInvite(token: string) {
+    acceptingInvite = true;
+    try {
+      await api.acceptInvite(token);
+      await goto('/dashboard');
+    } catch (err) {
+      console.error('Failed to accept invite:', err);
+    } finally {
+      acceptingInvite = false;
+    }
+  }
+
+  $effect(() => {
+    if (!data.user) return;
+    Promise.all([
+      api.listWorkspaces(),
+      api.myInvites().catch(() => ({ invites: [] }))
+    ]).then(([wsRes, invRes]) => {
+      workspaces = wsRes.workspaces ?? [];
+      pendingInvites = invRes.invites ?? [];
+      workspacesLoading = false;
+    }).catch(() => {
+      workspaces = [];
+      pendingInvites = [];
+      workspacesLoading = false;
+    });
+  });
+
 
   const totalCards = $derived(
     (stats.pending ?? 0) + (stats.progress ?? 0) + (stats.waiting ?? 0) + (stats.done ?? 0)
@@ -303,6 +357,100 @@
     </section>
   {/if}
 
+  {#if pendingInvites.length > 0}
+    <section class="space-y-4">
+      <div class="flex items-center gap-2">
+        <HugeiconsIcon icon={UserCheck01Icon} size={18} strokeWidth={1.8} class="text-primary" />
+        <div>
+          <h2 class="ds-section-title text-ink">{tr('home.pendingInvites')}</h2>
+          <p class="ds-caption text-mute">{tr('home.pendingInvitesDescription')}</p>
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each pendingInvites as inv (inv.id)}
+          <article class="flex flex-col justify-between rounded-2xl border border-primary/30 bg-primary-soft p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
+            <div>
+              <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
+              <h3 class="text-sm font-bold text-ink">{inv.workspaceName}</h3>
+              <p class="ds-caption mt-1 text-mute">{tr('home.invitedAs', { role: inv.role })}</p>
+            </div>
+            <div class="mt-4 border-t border-primary/20 pt-3.5">
+              <Button
+                variant="primary"
+                size="sm"
+                class="w-full"
+                loading={acceptingInvite}
+                onclick={() => acceptPendingInvite(inv.token)}
+              >
+                {tr('home.acceptInvite')}
+              </Button>
+            </div>
+          </article>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="ds-section-title text-ink">{tr('home.workspaces')}</h2>
+        <p class="ds-caption text-mute">{tr('home.workspacesDescription')}</p>
+      </div>
+      <span class="ds-caption text-mute">{tr('home.workspaceCount', { count: workspaces.length })}</span>
+    </div>
+    {#if workspacesLoading}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each [1, 2, 3] as _i}
+          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
+            <Skeleton shape="rect" class="h-1 w-7 rounded-full" />
+            <Skeleton shape="rect" class="h-4 w-32 rounded-md" />
+            <Skeleton shape="rect" class="h-3 w-20 rounded-md" />
+            <div class="pt-2">
+              <Skeleton shape="rect" class="h-3 w-24 rounded-md" />
+            </div>
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each workspaces as ws (ws.id)}
+          {@const isActive = ws.id === data.workspace?.id}
+          <article
+            class="flex flex-col justify-between rounded-2xl border p-5 shadow-card transition-all duration-200 {isActive ? 'border-primary bg-primary-soft' : 'border-hairline bg-card hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover'}"
+          >
+            <div>
+              <div class="mb-3 h-1 w-7 rounded-full {isActive ? 'bg-primary' : 'bg-hairline-strong'}"></div>
+              <h3 class="truncate text-sm font-bold text-ink">{ws.name}</h3>
+              <div class="mt-2 flex items-center gap-2">
+                <HugeiconsIcon icon={Building06Icon} size={14} strokeWidth={1.8} class="text-mute" />
+                <span class="ds-caption text-mute">{ws.role === 'owner' ? tr('common.owner') : tr('common.member')}</span>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-hairline pt-3.5">
+              {#if isActive}
+                <span class="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                  <HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} />
+                  {tr('home.activeWorkspace')}
+                </span>
+              {:else}
+                <button
+                  type="button"
+                  disabled={switchingWorkspace}
+                  onclick={() => switchWorkspace(ws.id)}
+                  class="flex items-center gap-1.5 text-xs font-semibold text-primary transition-colors hover:text-primary-ink"
+                  aria-label={tr('home.switchTo', { name: ws.name })}
+                >
+                  {tr('home.switchTo', { name: ws.name })}
+                  <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={1.8} />
+                </button>
+              {/if}
+            </div>
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </section>
   <!-- Workflows Section (Subtle description added) -->
   <section class="space-y-4">
     <div class="flex items-center justify-between">

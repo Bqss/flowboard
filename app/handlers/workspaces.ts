@@ -1,12 +1,18 @@
 import { type Ctx, toPublicWorkspace } from '@core';
+import { env } from '@config/env';
+import { sendEmail } from '@services/email';
 import {
   acceptWorkspaceInvite,
   countWorkspaceOwners,
   createWorkspaceInvite,
+  deleteInvite,
+  extendInviteExpiry,
   getActiveWorkspaceContext,
+  getInviteById,
   getInviteByToken,
   getMembership,
   listPendingInvites,
+  listPendingInvitesForEmail,
   listWorkspaceMembers,
   listWorkspacesForUser,
   removeWorkspaceMember,
@@ -16,6 +22,7 @@ import {
 
 type WorkspaceIdParams = { workspaceId: string };
 type MemberParams = WorkspaceIdParams & { userId: string };
+type InviteParams = WorkspaceIdParams & { inviteId: string };
 type InviteBody = { email: string; role?: 'member' };
 type AcceptInviteBody = { token: string };
 type UpdateWorkspaceBody = { name: string };
@@ -37,6 +44,16 @@ export async function list({ user, set }: Ctx) {
       joinedAt: row.joinedAt
     }))
   };
+}
+
+export async function myInvites({ user, set }: Ctx) {
+  if (!user) {
+    set.status = 401;
+    return { error: 'Unauthorized' };
+  }
+
+  const invites = await listPendingInvitesForEmail(user.email);
+  return { invites };
 }
 
 export function show({ workspace, membership, set }: Ctx<unknown, WorkspaceIdParams>) {
@@ -123,6 +140,27 @@ export async function createInvite({
     invitedById: user.id
   });
 
+  // Send invitation email — fire-and-forget; failure is logged but does not
+  // block the API response (the invite link is still returned to the caller).
+  const inviteLink = `${env.appUrl}/invite/${invite.token}`;
+  sendEmail({
+    to: invite.email,
+    subject: `${user.name} mengundang Anda ke "${workspace.name}"`,
+    html: [
+      `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px">`,
+      `<h2 style="margin:0 0 8px">Anda diundang ke "${workspace.name}"</h2>`,
+      `<p style="margin:0 0 16px;color:#555">${user.name} mengundang Anda sebagai <strong>${role}</strong> di workspace Flowboard.</p>`,
+      `<p style="margin:0 0 24px">Klik tombol di bawah untuk menerima undangan:</p>`,
+      `<a href="${inviteLink}" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Terima Undangan</a>`,
+      `<p style="margin:24px 0 0;color:#999;font-size:13px">Atau salin link ini: ${inviteLink}</p>`,
+      `<p style="margin:16px 0 0;color:#999;font-size:13px">Undangan berlaku 7 hari.</p>`,
+      `</div>`
+    ].join(''),
+    text: `${user.name} mengundang Anda sebagai ${role} di workspace "${workspace.name}".\n\nBuka link ini untuk menerima undangan:\n${inviteLink}\n\nUndangan berlaku 7 hari.`
+  }).catch((error) => {
+    console.error('[invite] email send failed:', error);
+  });
+
   return {
     invite: {
       id: invite.id,
@@ -130,6 +168,95 @@ export async function createInvite({
       role: invite.role,
       token: invite.token,
       expiresAt: invite.expiresAt
+    }
+  };
+}
+
+export async function deleteInviteHandler({
+  user,
+  workspace,
+  membership,
+  params,
+  set
+}: Ctx<unknown, InviteParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+
+  if (membership.role !== 'owner') {
+    set.status = 403;
+    return { error: 'Owner access required' };
+  }
+
+  const deleted = await deleteInvite(workspace.id, params.inviteId);
+  if (!deleted) {
+    set.status = 404;
+    return { error: 'Invite not found or already accepted' };
+  }
+
+  return { ok: true };
+}
+
+export async function resendInviteHandler({
+  user,
+  workspace,
+  membership,
+  params,
+  set
+}: Ctx<unknown, InviteParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+
+  if (membership.role !== 'owner') {
+    set.status = 403;
+    return { error: 'Owner access required' };
+  }
+
+  const row = await getInviteById(workspace.id, params.inviteId);
+  if (!row) {
+    set.status = 404;
+    return { error: 'Invite not found' };
+  }
+
+  const { invite, workspaceName } = row;
+  if (invite.acceptedAt) {
+    set.status = 400;
+    return { error: 'Invite already accepted' };
+  }
+
+  // Extend expiry and re-send email
+  const updated = await extendInviteExpiry(invite.id);
+  const inviteLink = `${env.appUrl}/invite/${updated.token}`;
+
+  sendEmail({
+    to: invite.email,
+    subject: `${user.name} mengundang Anda ke "${workspaceName}"`,
+    html: [
+      `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px">`,
+      `<h2 style="margin:0 0 8px">Anda diundang ke "${workspaceName}"</h2>`,
+      `<p style="margin:0 0 16px;color:#555">${user.name} mengundang Anda sebagai <strong>${invite.role}</strong> di workspace Flowboard.</p>`,
+      `<p style="margin:0 0 24px">Klik tombol di bawah untuk menerima undangan:</p>`,
+      `<a href="${inviteLink}" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Terima Undangan</a>`,
+      `<p style="margin:24px 0 0;color:#999;font-size:13px">Atau salin link ini: ${inviteLink}</p>`,
+      `<p style="margin:16px 0 0;color:#999;font-size:13px">Undangan berlaku 7 hari.</p>`,
+      `</div>`
+    ].join(''),
+    text: `${user.name} mengundang Anda sebagai ${invite.role} di workspace "${workspaceName}".\n\nBuka link ini untuk menerima undangan:\n${inviteLink}\n\nUndangan berlaku 7 hari.`
+  }).catch((error) => {
+    console.error('[invite:resend] email send failed:', error);
+  });
+
+  return {
+    ok: true,
+    invite: {
+      id: updated.id,
+      email: updated.email,
+      role: updated.role,
+      token: updated.token,
+      expiresAt: updated.expiresAt
     }
   };
 }

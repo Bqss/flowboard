@@ -61,6 +61,11 @@ export const InviteTokenParam = t.Object({
   token: t.String({ minLength: 1 })
 });
 
+export const InviteIdParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  inviteId: t.String({ format: 'uuid' })
+});
+
 export const WorkflowIdParam = t.Object({
   workspaceId: t.String({ format: 'uuid' }),
   workflowId: t.String({ format: 'uuid' })
