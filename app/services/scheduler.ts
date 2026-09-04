@@ -1,5 +1,10 @@
 import { processDueWhatsappJobs, processOverdueCardReminders } from './whatsapp';
 import { processDigestEmails } from './notification-digest';
+import {
+  processDueSoonNotifications,
+  processOverdueNotifications,
+  processRecurringWorkflows
+} from './workflow';
 
 let interval: ReturnType<typeof setInterval> | null = null;
 let digestInterval: ReturnType<typeof setInterval> | null = null;
@@ -12,6 +17,9 @@ export const schedulerTick = async () => {
   try {
     await processDueWhatsappJobs();
     await processOverdueCardReminders();
+    await processDueSoonNotifications();
+    await processOverdueNotifications();
+    await processRecurringWorkflows();
   } catch (error) {
     console.error('[scheduler] tick failed:', error);
   } finally {

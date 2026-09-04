@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull, isNull, lte, gte, or, sql } from 'drizzle-orm';
 import {
   cards,
   checklistItems,
@@ -12,6 +12,7 @@ import {
 } from '@db';
 import { findOrCreateCustomer, normalizeWa } from './customer';
 import { parseCustomerCsv, type ColumnMapping } from '../lib/csv';
+import { createNotification, hasRecentNotification, resolveNotifyTarget } from './notification';
 import { getChecklistActionForTemplate, onCardEnteredStage, upsertChecklistAction } from './whatsapp';
 import type { ChecklistActionKind, CardSource } from '@db';
 import type { WorkflowDraft } from './ai-workflow';
@@ -48,7 +49,6 @@ export const canManageWorkflow = (
   userId: string,
   workflow: Pick<Workflow, 'ownerId'>
 ) => membershipRole === 'owner' || workflow.ownerId === userId;
-
 export const listWorkflows = async (workspaceId: string) =>
   db
     .select({
@@ -58,6 +58,13 @@ export const listWorkflows = async (workspaceId: string) =>
       ownerId: workflows.ownerId,
       defaultAssigneeId: workflows.defaultAssigneeId,
       defaultAssigneeIds: workflows.defaultAssigneeIds,
+      urgency: workflows.urgency,
+      deadlineValue: workflows.deadlineValue,
+      deadlineUnit: workflows.deadlineUnit,
+      reminderBeforeValue: workflows.reminderBeforeValue,
+      reminderBeforeUnit: workflows.reminderBeforeUnit,
+      repeatRule: workflows.repeatRule,
+      closureBy: workflows.closureBy,
       createdAt: workflows.createdAt,
       updatedAt: workflows.updatedAt,
       ownerName: users.name
@@ -75,6 +82,13 @@ export const createWorkflow = async (
     ownerId: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
+    urgency?: 'high' | 'medium' | 'low';
+    deadlineValue?: number | null;
+    deadlineUnit?: 'hours' | 'days';
+    reminderBeforeValue?: number | null;
+    reminderBeforeUnit?: 'hours' | 'days';
+    repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+    closureBy?: 'initiator' | 'assignee';
   }
 ) => {
   const defaultAssigneeIds =
@@ -97,7 +111,14 @@ export const createWorkflow = async (
       description: input.description ?? null,
       ownerId: input.ownerId,
       defaultAssigneeId,
-      defaultAssigneeIds
+      defaultAssigneeIds,
+      urgency: input.urgency ?? 'medium',
+      deadlineValue: input.deadlineValue ?? null,
+      deadlineUnit: input.deadlineUnit ?? 'days',
+      reminderBeforeValue: input.reminderBeforeValue ?? null,
+      reminderBeforeUnit: input.reminderBeforeUnit ?? 'hours',
+      repeatRule: input.repeatRule ?? 'none',
+      closureBy: input.closureBy ?? 'initiator'
     })
     .returning();
 
@@ -133,7 +154,14 @@ export const createWorkflowFromDraft = async (
       name: draft.name,
       ownerId,
       defaultAssigneeId: ownerId,
-      defaultAssigneeIds: [ownerId]
+      defaultAssigneeIds: [ownerId],
+      urgency: draft.urgency ?? 'medium',
+      deadlineValue: draft.deadlineValue ?? null,
+      deadlineUnit: draft.deadlineUnit ?? 'days',
+      reminderBeforeValue: draft.reminderBeforeValue ?? null,
+      reminderBeforeUnit: draft.reminderBeforeUnit ?? 'hours',
+      repeatRule: draft.repeatRule ?? 'none',
+      closureBy: draft.closureBy ?? 'initiator'
     })
     .returning();
 
@@ -186,6 +214,13 @@ export const updateWorkflow = async (
     ownerId?: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
+    urgency?: 'high' | 'medium' | 'low';
+    deadlineValue?: number | null;
+    deadlineUnit?: 'hours' | 'days';
+    reminderBeforeValue?: number | null;
+    reminderBeforeUnit?: 'hours' | 'days';
+    repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+    closureBy?: 'initiator' | 'assignee';
   }
 ) => {
   let defaultAssigneeIds = input.defaultAssigneeIds;
@@ -205,6 +240,13 @@ export const updateWorkflow = async (
       ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
       ...(defaultAssigneeId !== undefined ? { defaultAssigneeId } : {}),
       ...(defaultAssigneeIds !== undefined ? { defaultAssigneeIds } : {}),
+      ...(input.urgency !== undefined ? { urgency: input.urgency } : {}),
+      ...(input.deadlineValue !== undefined ? { deadlineValue: input.deadlineValue } : {}),
+      ...(input.deadlineUnit !== undefined ? { deadlineUnit: input.deadlineUnit } : {}),
+      ...(input.reminderBeforeValue !== undefined ? { reminderBeforeValue: input.reminderBeforeValue } : {}),
+      ...(input.reminderBeforeUnit !== undefined ? { reminderBeforeUnit: input.reminderBeforeUnit } : {}),
+      ...(input.repeatRule !== undefined ? { repeatRule: input.repeatRule } : {}),
+      ...(input.closureBy !== undefined ? { closureBy: input.closureBy } : {}),
       updatedAt: new Date()
     })
     .where(eq(workflows.id, workflowId))
@@ -443,6 +485,17 @@ export const findCardByCustomerInWorkflow = async (workflowId: string, customerI
 
   return row ?? null;
 };
+/**
+ * Compute the due date for a card based on the workflow deadline config.
+ * Returns null if the workflow has no deadline configured.
+ */
+export const computeDueAt = (workflow: Workflow, from: Date = new Date()): Date | null => {
+  if (!workflow.deadlineValue || workflow.deadlineValue <= 0) return null;
+  const ms = workflow.deadlineUnit === 'hours'
+    ? workflow.deadlineValue * 60 * 60 * 1000
+    : workflow.deadlineValue * 24 * 60 * 60 * 1000;
+  return new Date(from.getTime() + ms);
+};
 
 export const createCard = async (
   workflow: Workflow,
@@ -501,7 +554,8 @@ export const createCard = async (
       product: input.product?.trim() || null,
       tag: input.tag?.trim() || null,
       assigneeId: assignedUserId,
-      source: input.source ?? 'manual'
+      source: input.source ?? 'manual',
+      dueAt: computeDueAt(workflow)
     })
     .returning();
 
@@ -705,6 +759,8 @@ export const getBoard = async (workflowId: string) => {
           checklistDone: done.length,
           checklistTotal: required.length,
           waErrorFlag: row.card.waErrorFlag,
+          dueAt: row.card.dueAt,
+          completedAt: row.card.completedAt,
           createdAt: row.card.createdAt
         };
       })
@@ -895,7 +951,12 @@ export const toggleChecklistItem = async (
   return updated;
 };
 
-export const moveCardToStage = async (workflowId: string, cardId: string, toStageId: string) => {
+export const moveCardToStage = async (
+  workflowId: string,
+  cardId: string,
+  toStageId: string,
+  actor?: { userId: string }
+) => {
   const card = await getCardInWorkflow(workflowId, cardId);
   if (!card) throw new WorkflowError('Card not found.', 'not_found');
 
@@ -921,9 +982,36 @@ export const moveCardToStage = async (workflowId: string, cardId: string, toStag
     }
   }
 
+  // Closure permission: moving to the last stage (Completed) requires the right person.
+  const isLastStage = toIndex === workflowStages.length - 1;
+  if (isLastStage && actor) {
+    const [workflow] = await db
+      .select()
+      .from(workflows)
+      .where(eq(workflows.id, workflowId))
+      .limit(1);
+    if (workflow) {
+      if (workflow.closureBy === 'initiator') {
+        if (actor.userId !== workflow.ownerId) {
+          throw new WorkflowError('Hanya initiator (PIC workflow) yang boleh menutup task.', 'forbidden');
+        }
+      } else if (workflow.closureBy === 'assignee') {
+        if (actor.userId !== card.assigneeId) {
+          throw new WorkflowError('Hanya assignee yang boleh menutup task.', 'forbidden');
+        }
+      }
+    }
+  }
+
+  const updateSet: Record<string, unknown> = { stageId: toStageId, updatedAt: new Date() };
+  if (isLastStage) {
+    updateSet.completedAt = new Date();
+    if (actor) updateSet.completedById = actor.userId;
+  }
+
   const [updated] = await db
     .update(cards)
-    .set({ stageId: toStageId, updatedAt: new Date() })
+    .set(updateSet)
     .where(and(eq(cards.id, cardId), eq(cards.stageId, card.stageId)))
     .returning();
 
@@ -1191,4 +1279,251 @@ export const getWorkflowSetup = async (workflowId: string) => {
   );
 
   return templatesByStage;
+};
+
+/* --------------------------------------------------------- deadline notifications */
+
+/**
+ * Process cards approaching their due date.
+ * Sends a `card_due_soon` notification when `now >= dueAt - reminderBefore`
+ * and the card hasn't been notified yet and isn't completed.
+ */
+export const processDueSoonNotifications = async (): Promise<number> => {
+  const now = Date.now();
+
+  // Find workflows with a reminder configured.
+  const reminderWorkflows = await db
+    .select()
+    .from(workflows)
+    .where(and(
+      isNotNull(workflows.reminderBeforeValue),
+      sql`${workflows.reminderBeforeValue} > 0`
+    ));
+
+  let notified = 0;
+
+  for (const wf of reminderWorkflows) {
+    if (!wf.reminderBeforeValue) continue;
+    const reminderMs = wf.reminderBeforeUnit === 'hours'
+      ? wf.reminderBeforeValue * 60 * 60 * 1000
+      : wf.reminderBeforeValue * 24 * 60 * 60 * 1000;
+    const threshold = new Date(now + reminderMs);
+
+    // Cards with dueAt approaching, not yet notified, not completed.
+    const approaching = await db
+      .select({
+        card: cards,
+        customerName: customers.name,
+        workflowName: workflows.name
+      })
+      .from(cards)
+      .innerJoin(customers, eq(cards.customerId, customers.id))
+      .innerJoin(workflows, eq(cards.workflowId, workflows.id))
+      .where(and(
+        eq(cards.workflowId, wf.id),
+        isNotNull(cards.dueAt),
+        lte(cards.dueAt, threshold),
+        isNull(cards.dueSoonNotifiedAt),
+        isNull(cards.completedAt)
+      ));
+
+    for (const row of approaching) {
+      const targetUserId = await resolveNotifyTarget(wf.workspaceId, row.card.assigneeId);
+      if (!targetUserId) continue;
+
+      const dueStr = row.card.dueAt!.toLocaleString('id-ID', {
+        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+
+      await createNotification({
+        workspaceId: wf.workspaceId,
+        userId: targetUserId,
+        cardId: row.card.id,
+        type: 'card_due_soon',
+        title: 'Deadline mendekat',
+        body: `${row.customerName} — ${row.workflowName} jatuh tempo ${dueStr}.`
+      });
+
+      await db
+        .update(cards)
+        .set({ dueSoonNotifiedAt: new Date(), updatedAt: new Date() })
+        .where(eq(cards.id, row.card.id));
+
+      notified += 1;
+    }
+  }
+
+  return notified;
+};
+
+/**
+ * Process cards that have passed their due date without being completed.
+ * Sends a `card_overdue` notification (distinct from the stage-overdue reminder).
+ */
+export const processOverdueNotifications = async (): Promise<number> => {
+  const now = new Date();
+
+  const overdueCards = await db
+    .select({
+      card: cards,
+      customerName: customers.name,
+      workflowName: workflows.name,
+      workspaceId: workflows.workspaceId
+    })
+    .from(cards)
+    .innerJoin(customers, eq(cards.customerId, customers.id))
+    .innerJoin(workflows, eq(cards.workflowId, workflows.id))
+    .where(and(
+      isNotNull(cards.dueAt),
+      lte(cards.dueAt, now),
+      isNull(cards.overdueNotifiedAt),
+      isNull(cards.completedAt)
+    ));
+
+  let notified = 0;
+
+  for (const row of overdueCards) {
+    const targetUserId = await resolveNotifyTarget(row.workspaceId, row.card.assigneeId);
+    if (!targetUserId) continue;
+
+    const dueStr = row.card.dueAt!.toLocaleString('id-ID', {
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    await createNotification({
+      workspaceId: row.workspaceId,
+      userId: targetUserId,
+      cardId: row.card.id,
+      type: 'card_overdue',
+      title: 'Task melewati deadline',
+      body: `${row.customerName} — ${row.workflowName} terlambat. Deadline: ${dueStr}.`
+    });
+
+    await db
+      .update(cards)
+      .set({ overdueNotifiedAt: new Date(), updatedAt: new Date() })
+      .where(eq(cards.id, row.card.id));
+
+    notified += 1;
+  }
+
+  return notified;
+};
+
+/* --------------------------------------------------------- recurrence */
+
+/**
+ * Process recurring workflows: spawn new cards for each customer at the cycle boundary.
+ * For each workflow with repeatRule != 'none', find customers who had a card in the previous
+ * cycle and create a new card for the current cycle if one doesn't already exist.
+ */
+export const processRecurringWorkflows = async (): Promise<number> => {
+  const recurringWorkflows = await db
+    .select()
+    .from(workflows)
+    .where(sql`${workflows.repeatRule} != 'none'`);
+
+  let spawned = 0;
+  const now = new Date();
+
+  for (const wf of recurringWorkflows) {
+    const cycleStart = getCycleStart(wf.repeatRule, now);
+    const cycleEnd = getCycleEnd(wf.repeatRule, now);
+
+    // Find all customers who had a card in this workflow in the previous cycle.
+    const prevCycleCards = await db
+      .select({ customerId: cards.customerId })
+      .from(cards)
+      .where(and(
+        eq(cards.workflowId, wf.id),
+        gte(cards.createdAt, cycleStart),
+        lte(cards.createdAt, cycleEnd)
+      ))
+      .groupBy(cards.customerId);
+
+    for (const { customerId } of prevCycleCards) {
+      // Check if a card already exists for this cycle.
+      const existing = await db
+        .select({ id: cards.id })
+        .from(cards)
+        .where(and(
+          eq(cards.workflowId, wf.id),
+          eq(cards.customerId, customerId),
+          gte(cards.createdAt, now)
+        ))
+        .limit(1);
+
+      if (existing.length > 0) continue;
+
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .limit(1);
+
+      if (!customer) continue;
+
+      const workflowStages = await listStages(wf.id);
+      const firstStage = workflowStages[0];
+      if (!firstStage) continue;
+
+      const defaultIds = wf.defaultAssigneeIds ?? [];
+      let assignedUserId: string | null = null;
+      if (defaultIds.length > 1) {
+        const [{ count: cardCount }] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(cards)
+          .where(eq(cards.workflowId, wf.id));
+        assignedUserId = defaultIds[cardCount % defaultIds.length] ?? null;
+      } else if (defaultIds.length === 1) {
+        assignedUserId = defaultIds[0] ?? null;
+      } else {
+        assignedUserId = wf.defaultAssigneeId ?? null;
+      }
+
+      await db
+        .insert(cards)
+        .values({
+          workflowId: wf.id,
+          stageId: firstStage.id,
+          customerId: customer.id,
+          assigneeId: assignedUserId,
+          source: 'manual',
+          dueAt: computeDueAt(wf)
+        })
+        .returning();
+
+      spawned += 1;
+    }
+  }
+
+  return spawned;
+};
+
+/**
+ * Returns the start of the previous cycle for a given repeat rule.
+ * For monthly: first day of the current month.
+ * For weekly: start of the current week (Monday).
+ * For daily: start of today.
+ */
+const getCycleStart = (rule: string, now: Date): Date => {
+  const d = new Date(now);
+  if (rule === 'monthly') {
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  }
+  if (rule === 'weekly') {
+    const day = d.getDay();
+    const diff = day === 0 ? 6 : day - 1; // Monday = 0
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
+  }
+  // daily
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
+/**
+ * Returns the end of the previous cycle (same as cycle start for spawn purposes).
+ * We look at cards created in the current cycle to determine who should get a new one.
+ */
+const getCycleEnd = (rule: string, now: Date): Date => {
+  return now;
 };

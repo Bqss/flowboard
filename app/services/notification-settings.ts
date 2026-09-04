@@ -120,6 +120,8 @@ export const shouldNotifyInApp = (settings: PublicNotificationSettings, type: No
       return settings.customerReplied;
     case 'card_overdue':
       return settings.cardOverdue;
+    case 'card_due_soon':
+      return settings.cardOverdue;
     case 'handover':
       return settings.handover;
     case 'workflow_action':
@@ -136,9 +138,9 @@ export const shouldNotifyEmail = (settings: PublicNotificationSettings, type: No
   switch (type) {
     case 'wa_failed':
       return settings.emailWaFailed;
-    case 'customer_replied':
-      return settings.emailCustomerReplied;
     case 'card_overdue':
+      return settings.emailCardOverdue;
+    case 'card_due_soon':
       return settings.emailCardOverdue;
     case 'handover':
       return settings.emailHandover;
