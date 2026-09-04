@@ -223,14 +223,16 @@
 
 	{#if open}
 		<Portal>
+		<div
+			data-floating
+			class="fixed inset-0 z-[105]"
+			onclick={close}
+			role="button"
+			tabindex="-1"
+			onkeydown={() => close()}
+		></div>
 			<div
-				class="fixed inset-0 z-[105]"
-				onclick={close}
-				role="button"
-				tabindex="-1"
-				onkeydown={() => close()}
-			></div>
-			<div
+				data-floating
 				id="portal-user-list"
 				class={cn(panelClass, 'fixed z-[110] overflow-y-auto p-2 space-y-1')}
 				style={panelStyle}

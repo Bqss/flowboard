@@ -306,6 +306,7 @@
     <Portal>
       <!-- Backdrop dismiss layer -->
       <div
+        data-floating
         class="fixed inset-0 z-[105]"
         onclick={close}
         role="button"
@@ -315,6 +316,7 @@
       ></div>
 
       <div
+        data-floating
         id={`${id ?? 'multi-select'}-listbox`}
         role="listbox"
         aria-multiselectable="true"

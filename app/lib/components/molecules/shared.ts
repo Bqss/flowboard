@@ -6,8 +6,8 @@ export function dismissable(node: HTMLElement, onDismiss: () => void) {
 	let dismiss = onDismiss;
 
 	function onPointerDown(event: PointerEvent) {
-		const target = event.target as Node | null;
-		if (target && !node.contains(target)) dismiss();
+		const target = event.target as Element | null;
+		if (target && !node.contains(target) && !target.closest?.('[data-floating]')) dismiss();
 	}
 
 	function onKeyDown(event: KeyboardEvent) {
