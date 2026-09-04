@@ -24,10 +24,16 @@ export type WorkflowDraftStage = {
 export type WorkflowDraft = {
   name: string;
   stages: WorkflowDraftStage[];
+  urgency?: 'high' | 'medium' | 'low';
+  deadlineValue?: number | null;
+  deadlineUnit?: 'hours' | 'days';
+  reminderBeforeValue?: number | null;
+  reminderBeforeUnit?: 'hours' | 'days';
+  repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+  closureBy?: 'initiator' | 'assignee';
 };
 
 const STAGE_COLORS = ['indigo', 'amber', 'rose', 'emerald', 'violet', 'cyan'] as const;
-
 const webinarDraft = (prompt: string): WorkflowDraft => {
   const nameMatch = prompt.match(/webinar\s+([^.,\n]+)/i);
   const name = nameMatch?.[1]?.trim()
@@ -36,6 +42,13 @@ const webinarDraft = (prompt: string): WorkflowDraft => {
 
   return {
     name,
+    urgency: 'high',
+    deadlineValue: 7,
+    deadlineUnit: 'days',
+    reminderBeforeValue: 24,
+    reminderBeforeUnit: 'hours',
+    repeatRule: 'none',
+    closureBy: 'initiator',
     stages: [
       {
         name: 'Pending Users',
@@ -95,6 +108,11 @@ const genericOnboardingDraft = (prompt: string): WorkflowDraft => {
 
   return {
     name,
+    urgency: 'medium',
+    deadlineValue: null,
+    deadlineUnit: 'days',
+    repeatRule: 'none',
+    closureBy: 'initiator',
     stages: [
       {
         name: 'Pending',
@@ -140,10 +158,17 @@ const generateWithRouter = async (prompt: string, userPhone?: string | null): Pr
   const model = process.env.AI_MODEL ?? 'gemini-3-flash-preview';
   const phoneContext = userPhone ? `\nThe user's WhatsApp phone number is ${userPhone}. Use {{phone}} in templates where the customer should contact them back.` : '';
 
-  const system = `You generate onboarding workflow drafts for actjom (Kanban for customer onboarding).
+  const system = `You generate workflow drafts for actjom (Kanban task management).
 Return ONLY valid JSON with shape:
 {
   "name": string,
+  "urgency": "high"|"medium"|"low" (default: "medium" — set "high" for time-critical tasks like payments, "low" for non-urgent follow-ups),
+  "deadlineValue": number|null (default: null — deadline duration for the whole workflow, e.g. 5 means 5 days/hours to complete),
+  "deadlineUnit": "hours"|"days" (default: "days"),
+  "reminderBeforeValue": number|null (default: null — send reminder N hours/days before deadline, e.g. 24 means remind 24 hours before),
+  "reminderBeforeUnit": "hours"|"days" (default: "hours"),
+  "repeatRule": "none"|"daily"|"weekly"|"monthly" (default: "none" — set to "monthly" for recurring tasks like salary processing, "weekly" for weekly reports),
+  "closureBy": "initiator"|"assignee" (default: "initiator" — who can mark the task complete: "initiator" means the workflow owner/PIC must verify, "assignee" means the person doing the work can self-close),
   "stages": [
     {
       "name": string,
@@ -170,7 +195,12 @@ Return ONLY valid JSON with shape:
 Use Indonesian labels. WA templates must use {{nama}}, {{wa}}, {{product}}, {{tag}}, {{link}}.${phoneContext}
 Set autoMoveOnComplete=true for stages where the customer should advance automatically once all required checklists are done (e.g. after payment confirmation, after attendance marking).
 Set deadlineHours on time-sensitive checklist items (e.g. "Kirim reminder H-1" → deadlineHours: 24).
-Include WA actions where the user mentions reminders or follow-up.`;
+Include WA actions where the user mentions reminders or follow-up.
+Set urgency="high" for payment/finance tasks, "medium" for standard onboarding, "low" for informational follow-ups.
+Set repeatRule based on user's description: "gaji bulanan" or "monthly" → "monthly", "laporan mingguan" → "weekly", "harian" → "daily".
+Set closureBy="initiator" when the task needs verification (e.g. payments need approval), "assignee" for self-managed tasks.
+Set deadlineValue when the user mentions a time frame (e.g. "selesai dalam 5 hari" → deadlineValue: 5, deadlineUnit: "days").
+Set reminderBeforeValue when the user wants advance notification (e.g. "ingatkan H-1" → reminderBeforeValue: 24, reminderBeforeUnit: "hours").`;
 
   const res = await fetch(`${baseURL}/chat/completions`, {
     method: 'POST',
@@ -239,5 +269,12 @@ export const normalizeWorkflowDraft = (draft: WorkflowDraft): WorkflowDraft => (
           }
         : { kind: 'none' as const }
     })).filter((item) => item.label.length > 0)
-  })).filter((stage) => stage.name.length > 0)
+  })).filter((stage) => stage.name.length > 0),
+  urgency: draft.urgency ?? 'medium',
+  deadlineValue: draft.deadlineValue ?? null,
+  deadlineUnit: draft.deadlineUnit ?? 'days',
+  reminderBeforeValue: draft.reminderBeforeValue ?? null,
+  reminderBeforeUnit: draft.reminderBeforeUnit ?? 'hours',
+  repeatRule: draft.repeatRule ?? 'none',
+  closureBy: draft.closureBy ?? 'initiator'
 });
