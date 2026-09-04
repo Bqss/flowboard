@@ -27,9 +27,14 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'wa_failed',
   'customer_replied',
   'card_overdue',
+  'card_due_soon',
   'handover',
   'workflow_action'
 ]);
+export const urgencyEnum = pgEnum('urgency', ['high', 'medium', 'low']);
+export const deadlineUnitEnum = pgEnum('deadline_unit', ['hours', 'days']);
+export const repeatRuleEnum = pgEnum('repeat_rule', ['none', 'daily', 'weekly', 'monthly']);
+export const closureByEnum = pgEnum('closure_by', ['initiator', 'assignee']);
 export const cardSourceEnum = pgEnum('card_source', ['manual', 'csv', 'mcp', 'estafet']);
 export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'trial',
@@ -120,6 +125,13 @@ export const workflows = pgTable('workflows', {
     .references(() => users.id, { onDelete: 'restrict' }),
   defaultAssigneeId: uuid('default_assignee_id').references(() => users.id, { onDelete: 'set null' }),
   defaultAssigneeIds: text('default_assignee_ids').array().notNull().default(sql`'{}'::text[]`),
+  urgency: urgencyEnum('urgency').notNull().default('medium'),
+  deadlineValue: integer('deadline_value'),
+  deadlineUnit: deadlineUnitEnum('deadline_unit').notNull().default('days'),
+  reminderBeforeValue: integer('reminder_before_value'),
+  reminderBeforeUnit: deadlineUnitEnum('reminder_before_unit').notNull().default('hours'),
+  repeatRule: repeatRuleEnum('repeat_rule').notNull().default('none'),
+  closureBy: closureByEnum('closure_by').notNull().default('initiator'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
@@ -284,6 +296,11 @@ export const cards = pgTable('cards', {
   handedOverAt: timestamp('handed_over_at', { withTimezone: true }),
   waErrorFlag: boolean('wa_error_flag').notNull().default(false),
   source: cardSourceEnum('source').notNull().default('manual'),
+  dueAt: timestamp('due_at', { withTimezone: true }),
+  dueSoonNotifiedAt: timestamp('due_soon_notified_at', { withTimezone: true }),
+  overdueNotifiedAt: timestamp('overdue_notified_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  completedById: uuid('completed_by_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
@@ -588,6 +605,10 @@ export type WhatsappJobStatus = (typeof whatsappJobStatusEnum.enumValues)[number
 export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 export type NotificationSettings = typeof notificationSettings.$inferSelect;
 export type CardSource = (typeof cardSourceEnum.enumValues)[number];
+export type Urgency = (typeof urgencyEnum.enumValues)[number];
+export type DeadlineUnit = (typeof deadlineUnitEnum.enumValues)[number];
+export type RepeatRule = (typeof repeatRuleEnum.enumValues)[number];
+export type ClosureBy = (typeof closureByEnum.enumValues)[number];
 
 export const mcpApiKeys = pgTable(
   'mcp_api_keys',
