@@ -97,6 +97,13 @@
   let workflowDescription = $state('');
   let defaultAssigneeIds = $state<string[]>([]);
   let defaultAssigneeId = $state<string | null>(null);
+  let urgency = $state<'high' | 'medium' | 'low'>('medium');
+  let deadlineValue = $state('');
+  let deadlineUnit = $state<'hours' | 'days'>('days');
+  let reminderBeforeValue = $state('');
+  let reminderBeforeUnit = $state<'hours' | 'days'>('hours');
+  let repeatRule = $state<'none' | 'daily' | 'weekly' | 'monthly'>('none');
+  let closureBy = $state<'initiator' | 'assignee'>('initiator');
   let savingWorkflow = $state(false);
 
   let stageAutomationDraft = $state<Record<string, StageAutomationDraft>>({});
@@ -339,6 +346,14 @@
               ? [workflow.defaultAssigneeId]
               : [];
         defaultAssigneeId = workflow.defaultAssigneeId ?? (defaultAssigneeIds[0] ?? null);
+
+        urgency = workflow.urgency ?? 'medium';
+        deadlineValue = workflow.deadlineValue != null ? String(workflow.deadlineValue) : '';
+        deadlineUnit = workflow.deadlineUnit ?? 'days';
+        reminderBeforeValue = workflow.reminderBeforeValue != null ? String(workflow.reminderBeforeValue) : '';
+        reminderBeforeUnit = workflow.reminderBeforeUnit ?? 'hours';
+        repeatRule = workflow.repeatRule ?? 'none';
+        closureBy = workflow.closureBy ?? 'initiator';
       }
     } catch (err) {
       console.error('Failed to load setup data:', err);
@@ -443,7 +458,14 @@
         name: workflowName.trim(),
         description: workflowDescription.trim() || null,
         defaultAssigneeIds,
-        defaultAssigneeId: defaultAssigneeId ?? (defaultAssigneeIds[0] ?? null)
+        defaultAssigneeId: defaultAssigneeId ?? (defaultAssigneeIds[0] ?? null),
+        urgency,
+        deadlineValue: deadlineValue.trim() ? Number(deadlineValue) : null,
+        deadlineUnit,
+        reminderBeforeValue: reminderBeforeValue.trim() ? Number(reminderBeforeValue) : null,
+        reminderBeforeUnit,
+        repeatRule,
+        closureBy
       });
       if (res.workflow) {
         workflow = {
@@ -1225,6 +1247,103 @@
             {/snippet}
           </FormField>
 
+          <FormField label={tr('setup.urgency')} helper={tr('setup.urgencyHelper')}>
+            {#snippet control(args)}
+              <SelectMenu
+                {...args}
+                bind:value={urgency}
+                disabled={!canManage}
+                options={[
+                  { value: 'high', label: tr('setup.urgencyHigh') },
+                  { value: 'medium', label: tr('setup.urgencyMedium') },
+                  { value: 'low', label: tr('setup.urgencyLow') }
+                ]}
+              />
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.deadline')} helper={tr('setup.deadlineHelper')}>
+            {#snippet control()}
+              <div class="flex gap-3">
+                <Input
+                  type="number"
+                  bind:value={deadlineValue}
+                  disabled={!canManage}
+                  placeholder={tr('setup.deadlineValue')}
+                  min={1}
+                  max={365}
+                  class="h-10 text-base w-28"
+                />
+                <div class="flex-1">
+                  <SelectMenu
+                    bind:value={deadlineUnit}
+                    disabled={!canManage}
+                    options={[
+                      { value: 'hours', label: tr('setup.deadlineUnitHours') },
+                      { value: 'days', label: tr('setup.deadlineUnitDays') }
+                    ]}
+                  />
+                </div>
+              </div>
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.reminderBefore')} helper={tr('setup.reminderHelper')}>
+            {#snippet control()}
+              <div class="flex gap-3">
+                <Input
+                  type="number"
+                  bind:value={reminderBeforeValue}
+                  disabled={!canManage}
+                  placeholder={tr('setup.reminderValue')}
+                  min={1}
+                  max={720}
+                  class="h-10 text-base w-28"
+                />
+                <div class="flex-1">
+                  <SelectMenu
+                    bind:value={reminderBeforeUnit}
+                    disabled={!canManage}
+                    options={[
+                      { value: 'hours', label: tr('setup.reminderUnitHours') },
+                      { value: 'days', label: tr('setup.reminderUnitDays') }
+                    ]}
+                  />
+                </div>
+              </div>
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.repeat')} helper={tr('setup.repeatHelper')}>
+            {#snippet control(args)}
+              <SelectMenu
+                {...args}
+                bind:value={repeatRule}
+                disabled={!canManage}
+                options={[
+                  { value: 'none', label: tr('setup.repeatNone') },
+                  { value: 'daily', label: tr('setup.repeatDaily') },
+                  { value: 'weekly', label: tr('setup.repeatWeekly') },
+                  { value: 'monthly', label: tr('setup.repeatMonthly') }
+                ]}
+              />
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.closureBy')} helper={tr('setup.closureByHelper')}>
+            {#snippet control(args)}
+              <SelectMenu
+                {...args}
+                bind:value={closureBy}
+                disabled={!canManage}
+                options={[
+                  { value: 'initiator', label: tr('setup.closureInitiator') },
+                  { value: 'assignee', label: tr('setup.closureAssignee') }
+                ]}
+              />
+            {/snippet}
+          </FormField>
+
           {#if canManage}
             <div class="flex justify-end gap-2 pt-2 border-t border-hairline">
               <Button
@@ -1336,14 +1455,15 @@
         </div>
       </div>
     </div>
-
-    <div class="flex justify-end gap-2 pt-2">
+  </form>
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
       <Button variant="secondary" onclick={() => (createStageOpen = false)}>
         {tr('setup.cancel')}
       </Button>
       <Button
         variant="primary"
-        type="submit"
+        onclick={createStage}
         loading={creatingStage}
         disabled={!newStageName.trim()}
       >
@@ -1351,7 +1471,7 @@
         <span>{tr('setup.addStage')}</span>
       </Button>
     </div>
-  </form>
+  {/snippet}
 </Dialog>
 <Dialog
   bind:open={editStageOpen}
@@ -1484,14 +1604,15 @@
         {/snippet}
       </FormField>
     </div>
-
-    <div class="flex justify-end gap-2 pt-2">
+  </form>
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
       <Button variant="secondary" onclick={closeEditStage}>
         {tr('setup.cancel')}
       </Button>
       <Button
         variant="primary"
-        type="submit"
+        onclick={saveEditStage}
         loading={updatingStage}
         disabled={!editStageName.trim()}
       >
@@ -1499,7 +1620,7 @@
         <span>{tr('setup.saveChanges')}</span>
       </Button>
     </div>
-  </form>
+  {/snippet}
 </Dialog>
 
 <!-- Modal: Confirm Delete Stage -->
@@ -1641,15 +1762,15 @@
         </div>
       {/if}
     </div>
-
-    <!-- Dialog Footer Actions -->
-    <div class="flex justify-end gap-2 pt-2">
+  </form>
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
       <Button variant="secondary" onclick={() => (checklistModalOpen = false)}>
         {tr('setup.cancel')}
       </Button>
       <Button
         variant="primary"
-        type="submit"
+        onclick={saveChecklistModal}
         loading={savingChecklistModal}
         disabled={!checklistModalLabel.trim() || (checklistModalActionKind !== 'none' && !checklistModalMessage.trim())}
       >
@@ -1657,5 +1778,5 @@
         <span>{checklistModalMode === 'create' ? tr('setup.createChecklistItem') : tr('setup.saveChecklistItem')}</span>
       </Button>
     </div>
-  </form>
+  {/snippet}
 </Dialog>

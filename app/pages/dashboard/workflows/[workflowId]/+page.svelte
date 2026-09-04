@@ -12,7 +12,7 @@
     type ApiWorkflowStats
   } from '$lib/api/client';
   import { parseCsvHeader, autoDetectColumns } from '$lib/csv.js';
-  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { dashboardText, dashboardIntlLocale } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import {
     Badge,
@@ -245,6 +245,38 @@
     return 'neutral';
   }
 
+  // --- Due date helpers ---
+  const isOverdue = (dueAt: string | null | undefined, completedAt: string | null | undefined) => {
+    if (!dueAt || completedAt) return false;
+    return new Date(dueAt).getTime() < Date.now();
+  };
+
+  const isDueSoon = (dueAt: string | null | undefined, completedAt: string | null | undefined) => {
+    if (!dueAt || completedAt) return false;
+    const due = new Date(dueAt).getTime();
+    const now = Date.now();
+    return due >= now && due - now <= 24 * 60 * 60 * 1000;
+  };
+
+  const formatDueDate = (dueAt: string) => {
+    return new Date(dueAt).toLocaleDateString(dashboardIntlLocale($locale), {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatDueDateShort = (dueAt: string) => {
+    return new Date(dueAt).toLocaleDateString(dashboardIntlLocale($locale), {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   // All cards flat array
   const allCards = $derived(
     board.flatMap((column) =>
@@ -306,6 +338,15 @@
         title: column.name,
         items: filtered.map((card) => {
           const isDone = card.checklistTotal > 0 && card.checklistDone === card.checklistTotal;
+          const dueBadge = isOverdue(card.dueAt, card.completedAt)
+            ? { label: tr('board.overdue'), tone: 'urgent' as const }
+            : isDueSoon(card.dueAt, card.completedAt)
+              ? { label: tr('board.dueSoon'), tone: 'progress' as const }
+              : undefined;
+          const dueDateText =
+            card.dueAt && !card.completedAt && !dueBadge
+              ? formatDueDateShort(card.dueAt)
+              : undefined;
           return {
             id: card.id,
             title: card.customerName,
@@ -317,7 +358,10 @@
               card.checklistTotal > 0 ? `${card.checklistDone}/${card.checklistTotal} ${tr('board.progressDone')}` : undefined,
             progressDone: isDone,
             selected: selectedCardId === card.id,
-            waError: card.waErrorFlag === true
+            waError: card.waErrorFlag === true,
+            dueBadge,
+            dueDateText,
+            completed: Boolean(card.completedAt)
           };
         })
       };
@@ -1432,6 +1476,33 @@
             </select>
           </div>
         </div>
+
+        {#if cardDetail.card.completedAt}
+          <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
+            <span class="text-mute font-medium inline-flex items-center gap-1.5">
+              <HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} strokeWidth={1.8} class="text-status-done-ink" />
+              {tr('board.completedOn')}
+            </span>
+            <span class="font-semibold text-status-done-ink">{formatDueDate(cardDetail.card.completedAt)}</span>
+          </div>
+        {:else if cardDetail.card.dueAt}
+          <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
+            <span class="text-mute font-medium inline-flex items-center gap-1.5">
+              <HugeiconsIcon icon={Clock01Icon} size={14} strokeWidth={1.8} class="text-mute" />
+              {tr('board.dueDate')}
+            </span>
+            <div class="flex items-center gap-2">
+              {#if isOverdue(cardDetail.card.dueAt, cardDetail.card.completedAt)}
+                <Badge tone="urgent" variant="soft" class="text-[12px] font-semibold px-2 py-0.2">{tr('board.overdue')}</Badge>
+              {:else if isDueSoon(cardDetail.card.dueAt, cardDetail.card.completedAt)}
+                <Badge tone="progress" variant="soft" class="text-[12px] font-semibold px-2 py-0.2">{tr('board.dueSoon')}</Badge>
+              {/if}
+              <span class="font-semibold {isOverdue(cardDetail.card.dueAt, cardDetail.card.completedAt) ? 'text-status-urgent-ink' : 'text-ink'}">
+                {formatDueDate(cardDetail.card.dueAt)}
+              </span>
+            </div>
+          </div>
+        {/if}
       </section>
 
       <!-- Interactive Stage Checklist Section -->

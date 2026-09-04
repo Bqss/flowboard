@@ -91,6 +91,9 @@ export type KanbanCard = {
 	labelBarTone?: 'urgent' | 'progress' | 'done' | 'queued' | 'idle';
 	selected?: boolean;
 	waError?: boolean;
+	dueBadge?: { label: string; tone: 'urgent' | 'progress' };
+	dueDateText?: string;
+	completed?: boolean;
 };
 
 export type FeatureItem = {

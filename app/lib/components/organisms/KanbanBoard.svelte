@@ -9,7 +9,8 @@
 		CheckListIcon,
 		UserCircleIcon,
 		WhatsappIcon,
-		Alert02Icon
+		Alert02Icon,
+		Clock01Icon
 	} from '@hugeicons/core-free-icons';
 	import type { KanbanColumn, KanbanCard } from './shared.js';
 
@@ -228,11 +229,17 @@
 											{waErrorLabel}
 										</Badge>
 									{/if}
-									{#if card.badge}
-										<Badge tone={badgeTone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
-											{card.badge}
-										</Badge>
-									{/if}
+								{#if card.badge}
+									<Badge tone={badgeTone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
+										{card.badge}
+									</Badge>
+								{/if}
+								{#if card.dueBadge}
+									<Badge tone={card.dueBadge.tone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2 inline-flex items-center gap-0.5">
+										<HugeiconsIcon icon={Clock01Icon} size={10} strokeWidth={2} />
+										{card.dueBadge.label}
+									</Badge>
+								{/if}
 								</div>
 
 								{#if card.assignee}
@@ -255,6 +262,12 @@
 								{#if card.subtitle}
 									<p class="text-xs text-mute mt-1 truncate">
 										{card.subtitle}
+									</p>
+								{/if}
+								{#if card.dueDateText}
+									<p class="text-[11px] text-mute mt-1 flex items-center gap-1 truncate">
+										<HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={1.8} class="shrink-0 text-mute" />
+										<span class="truncate">{card.dueDateText}</span>
 									</p>
 								{/if}
 							</div>
