@@ -102,7 +102,14 @@ export const CreateWorkflowSchema = t.Object({
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
-  defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
+  defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  urgency: t.Optional(t.Union([t.Literal('high'), t.Literal('medium'), t.Literal('low')])),
+  deadlineValue: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 365 }), t.Null()])),
+  deadlineUnit: t.Optional(t.Union([t.Literal('hours'), t.Literal('days')])),
+  reminderBeforeValue: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
+  reminderBeforeUnit: t.Optional(t.Union([t.Literal('hours'), t.Literal('days')])),
+  repeatRule: t.Optional(t.Union([t.Literal('none'), t.Literal('daily'), t.Literal('weekly'), t.Literal('monthly')])),
+  closureBy: t.Optional(t.Union([t.Literal('initiator'), t.Literal('assignee')]))
 });
 
 export const UpdateWorkflowSchema = t.Object({
@@ -110,7 +117,14 @@ export const UpdateWorkflowSchema = t.Object({
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
-  defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
+  defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  urgency: t.Optional(t.Union([t.Literal('high'), t.Literal('medium'), t.Literal('low')])),
+  deadlineValue: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 365 }), t.Null()])),
+  deadlineUnit: t.Optional(t.Union([t.Literal('hours'), t.Literal('days')])),
+  reminderBeforeValue: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
+  reminderBeforeUnit: t.Optional(t.Union([t.Literal('hours'), t.Literal('days')])),
+  repeatRule: t.Optional(t.Union([t.Literal('none'), t.Literal('daily'), t.Literal('weekly'), t.Literal('monthly')])),
+  closureBy: t.Optional(t.Union([t.Literal('initiator'), t.Literal('assignee')]))
 });
 
 export const CreateStageSchema = t.Object({
@@ -174,7 +188,14 @@ export const WorkflowDraftSchema = t.Object({
       )
     }),
     { minItems: 1 }
-  )
+  ),
+  urgency: t.Optional(t.Union([t.Literal('high'), t.Literal('medium'), t.Literal('low')])),
+  deadlineValue: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 365 }), t.Null()])),
+  deadlineUnit: t.Optional(t.Union([t.Literal('hours'), t.Literal('days')])),
+  reminderBeforeValue: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
+  reminderBeforeUnit: t.Optional(t.Union([t.Literal('hours'), t.Literal('days')])),
+  repeatRule: t.Optional(t.Union([t.Literal('none'), t.Literal('daily'), t.Literal('weekly'), t.Literal('monthly')])),
+  closureBy: t.Optional(t.Union([t.Literal('initiator'), t.Literal('assignee')]))
 });
 
 export const GenerateWorkflowDraftSchema = t.Object({

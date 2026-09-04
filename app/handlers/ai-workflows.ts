@@ -26,6 +26,13 @@ type SaveDraftBody = {
       };
     }>;
   }>;
+  urgency?: 'high' | 'medium' | 'low';
+  deadlineValue?: number | null;
+  deadlineUnit?: 'hours' | 'days';
+  reminderBeforeValue?: number | null;
+  reminderBeforeUnit?: 'hours' | 'days';
+  repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+  closureBy?: 'initiator' | 'assignee';
 };
 
 export async function generateDraft({
@@ -74,7 +81,14 @@ export async function saveDraft({
         id: workflow.id,
         name: workflow.name,
         ownerId: workflow.ownerId,
-        defaultAssigneeId: workflow.defaultAssigneeId
+        defaultAssigneeId: workflow.defaultAssigneeId,
+        urgency: workflow.urgency,
+        deadlineValue: workflow.deadlineValue,
+        deadlineUnit: workflow.deadlineUnit,
+        reminderBeforeValue: workflow.reminderBeforeValue,
+        reminderBeforeUnit: workflow.reminderBeforeUnit,
+        repeatRule: workflow.repeatRule,
+        closureBy: workflow.closureBy
       },
       stages: stages.map((stage) => ({
         id: stage.id,

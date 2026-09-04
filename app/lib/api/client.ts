@@ -31,6 +31,13 @@ export type ApiWorkflow = {
   ownerName?: string;
   defaultAssigneeId: string | null;
   defaultAssigneeIds?: string[];
+  urgency?: 'high' | 'medium' | 'low';
+  deadlineValue?: number | null;
+  deadlineUnit?: 'hours' | 'days';
+  reminderBeforeValue?: number | null;
+  reminderBeforeUnit?: 'hours' | 'days';
+  repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+  closureBy?: 'initiator' | 'assignee';
   createdAt?: string;
   updatedAt?: string;
 };
@@ -134,6 +141,8 @@ export type ApiBoardColumn = {
     checklistDone: number;
     checklistTotal: number;
     waErrorFlag?: boolean;
+    dueAt: string | null;
+    completedAt: string | null;
     createdAt: string;
   }>;
 };
@@ -148,6 +157,11 @@ export type ApiCardDetail = {
     assigneeId: string | null;
     stageId: string;
     customerId: string;
+    dueAt: string | null;
+    dueSoonNotifiedAt: string | null;
+    overdueNotifiedAt: string | null;
+    completedAt: string | null;
+    completedById: string | null;
     createdAt: string;
     updatedAt: string;
   };
@@ -191,6 +205,13 @@ export type ApiWorkflowDraft = {
       action?: ApiChecklistAction;
     }>;
   }>;
+  urgency?: 'high' | 'medium' | 'low';
+  deadlineValue?: number | null;
+  deadlineUnit?: 'hours' | 'days';
+  reminderBeforeValue?: number | null;
+  reminderBeforeUnit?: 'hours' | 'days';
+  repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+  closureBy?: 'initiator' | 'assignee';
 };
 
 export type ApiChecklistAction = {
@@ -620,6 +641,13 @@ export const api = {
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
+      urgency?: 'high' | 'medium' | 'low';
+      deadlineValue?: number | null;
+      deadlineUnit?: 'hours' | 'days';
+      reminderBeforeValue?: number | null;
+      reminderBeforeUnit?: 'hours' | 'days';
+      repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+      closureBy?: 'initiator' | 'assignee';
     },
     fetchFn?: FetchLike
   ) =>
@@ -794,6 +822,13 @@ export const api = {
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
+      urgency?: 'high' | 'medium' | 'low';
+      deadlineValue?: number | null;
+      deadlineUnit?: 'hours' | 'days';
+      reminderBeforeValue?: number | null;
+      reminderBeforeUnit?: 'hours' | 'days';
+      repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+      closureBy?: 'initiator' | 'assignee';
     },
     fetchFn?: FetchLike
   ) =>

@@ -49,6 +49,13 @@ type CreateWorkflowBody = {
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
+  urgency?: 'high' | 'medium' | 'low';
+  deadlineValue?: number | null;
+  deadlineUnit?: 'hours' | 'days';
+  reminderBeforeValue?: number | null;
+  reminderBeforeUnit?: 'hours' | 'days';
+  repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+  closureBy?: 'initiator' | 'assignee';
 };
 
 type UpdateWorkflowBody = {
@@ -57,6 +64,13 @@ type UpdateWorkflowBody = {
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
+  urgency?: 'high' | 'medium' | 'low';
+  deadlineValue?: number | null;
+  deadlineUnit?: 'hours' | 'days';
+  reminderBeforeValue?: number | null;
+  reminderBeforeUnit?: 'hours' | 'days';
+  repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
+  closureBy?: 'initiator' | 'assignee';
 };
 
 type CreateStageBody = {
@@ -159,10 +173,18 @@ export async function list({ workspace, membership, set }: Ctx<unknown, Workspac
     workflows: rows.map((row) => ({
       id: row.id,
       name: row.name,
+      description: row.description ?? null,
       ownerId: row.ownerId,
       ownerName: row.ownerName,
       defaultAssigneeId: row.defaultAssigneeId,
       defaultAssigneeIds: row.defaultAssigneeIds ?? (row.defaultAssigneeId ? [row.defaultAssigneeId] : []),
+      urgency: row.urgency,
+      deadlineValue: row.deadlineValue,
+      deadlineUnit: row.deadlineUnit,
+      reminderBeforeValue: row.reminderBeforeValue,
+      reminderBeforeUnit: row.reminderBeforeUnit,
+      repeatRule: row.repeatRule,
+      closureBy: row.closureBy,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     }))
@@ -186,7 +208,14 @@ export async function create({
     description: body.description,
     ownerId: body.ownerId ?? user.id,
     defaultAssigneeId: body.defaultAssigneeId,
-    defaultAssigneeIds: body.defaultAssigneeIds
+    defaultAssigneeIds: body.defaultAssigneeIds,
+    urgency: body.urgency,
+    deadlineValue: body.deadlineValue,
+    deadlineUnit: body.deadlineUnit,
+    reminderBeforeValue: body.reminderBeforeValue,
+    reminderBeforeUnit: body.reminderBeforeUnit,
+    repeatRule: body.repeatRule,
+    closureBy: body.closureBy
   });
 
   return {
@@ -196,7 +225,14 @@ export async function create({
       description: workflow.description ?? null,
       ownerId: workflow.ownerId,
       defaultAssigneeId: workflow.defaultAssigneeId,
-      defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : [])
+      defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : []),
+      urgency: workflow.urgency,
+      deadlineValue: workflow.deadlineValue,
+      deadlineUnit: workflow.deadlineUnit,
+      reminderBeforeValue: workflow.reminderBeforeValue,
+      reminderBeforeUnit: workflow.reminderBeforeUnit,
+      repeatRule: workflow.repeatRule,
+      closureBy: workflow.closureBy
     },
     stages: createdStages
   };
@@ -242,6 +278,13 @@ export function show({ workflow, membership, set }: Ctx<unknown, WorkflowParams>
       ownerId: workflow.ownerId,
       defaultAssigneeId: workflow.defaultAssigneeId,
       defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : []),
+      urgency: workflow.urgency,
+      deadlineValue: workflow.deadlineValue,
+      deadlineUnit: workflow.deadlineUnit,
+      reminderBeforeValue: workflow.reminderBeforeValue,
+      reminderBeforeUnit: workflow.reminderBeforeUnit,
+      repeatRule: workflow.repeatRule,
+      closureBy: workflow.closureBy,
       createdAt: workflow.createdAt,
       updatedAt: workflow.updatedAt
     }
@@ -726,6 +769,7 @@ export async function bulkReassign({
 }
 
 export async function moveCard({
+  user,
   workflow,
   membership,
   params,
@@ -738,7 +782,7 @@ export async function moveCard({
   }
 
   try {
-    const card = await moveCardToStage(workflow.id, params.cardId, body.stageId);
+    const card = await moveCardToStage(workflow.id, params.cardId, body.stageId, user ? { userId: user.id } : undefined);
     return { card };
   } catch (error) {
     return handleWorkflowError(error, set);
