@@ -9,6 +9,7 @@
     EmptyStateBlock,
     Breadcrumb,
     MultiSelectCombobox,
+    SelectMenu,
     toast,
     type MultiSelectOption
   } from '$lib/components/molecules/index.js';
@@ -167,6 +168,12 @@
   let chooseOpen = $state(false);
   let manualOpen = $state(false);
   let name = $state('');
+  let manualUrgency = $state<'high' | 'medium' | 'low'>('medium');
+  let manualAssigneeIds = $state<string[]>([]);
+  let manualDeadlineValue = $state<string | number>('');
+  let manualDeadlineUnit = $state<'hours' | 'days'>('days');
+  let manualRepeatRule = $state<'none' | 'daily' | 'weekly' | 'monthly'>('none');
+  let manualClosureBy = $state<'initiator' | 'assignee'>('initiator');
   let loading = $state(false);
   let error = $state<string | null>(null);
 
@@ -174,10 +181,15 @@
     error = null;
     chooseOpen = true;
   }
-
   function startManual() {
     chooseOpen = false;
     name = '';
+    manualUrgency = 'medium';
+    manualAssigneeIds = [];
+    manualDeadlineValue = '';
+    manualDeadlineUnit = 'days';
+    manualRepeatRule = 'none';
+    manualClosureBy = 'initiator';
     error = null;
     manualOpen = true;
   }
@@ -208,7 +220,17 @@
     loading = true;
     error = null;
     try {
-      const { workflow } = await api.createWorkflow(data.workspace.id, { name: name.trim() });
+      const rawDeadline = String(manualDeadlineValue ?? '').trim();
+      const deadlineVal = rawDeadline ? Number(rawDeadline) : null;
+      const { workflow } = await api.createWorkflow(data.workspace.id, {
+        name: name.trim(),
+        defaultAssigneeIds: manualAssigneeIds,
+        urgency: manualUrgency,
+        deadlineValue: deadlineVal && deadlineVal > 0 ? deadlineVal : null,
+        deadlineUnit: manualDeadlineUnit,
+        repeatRule: manualRepeatRule,
+        closureBy: manualClosureBy
+      });
       window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'create_workflow' }));
       manualOpen = false;
       name = '';
@@ -563,13 +585,96 @@
   </div>
 </Dialog>
 
-<Dialog bind:open={manualOpen} title={tr('workflows.manualTitle')} description={tr('workflows.manualDescriptionShort')}>
+<Dialog bind:open={manualOpen} title={tr('workflows.manualTitle')} description={tr('workflows.manualDescriptionShort')} size="lg">
   <div class="space-y-4">
     <FormField label={tr('workflows.name')} required>
       {#snippet control(args)}
         <Input {...args} bind:value={name} placeholder={tr('workflows.namePlaceholder')} />
       {/snippet}
     </FormField>
+
+    <FormField label={tr('setup.assignees')} helper={tr('setup.assigneesHelper')}>
+      {#snippet control()}
+        <MultiSelectCombobox
+          options={memberOptions}
+          bind:values={manualAssigneeIds}
+          placeholder={tr('setup.assigneesPlaceholder')}
+          emptyText={tr('setup.noMembers')}
+        />
+      {/snippet}
+    </FormField>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <FormField label={tr('setup.urgency')}>
+        {#snippet control(args)}
+          <SelectMenu
+            {...args}
+            bind:value={manualUrgency}
+            options={[
+              { value: 'high', label: tr('setup.urgencyHigh') },
+              { value: 'medium', label: tr('setup.urgencyMedium') },
+              { value: 'low', label: tr('setup.urgencyLow') }
+            ]}
+          />
+        {/snippet}
+      </FormField>
+
+      <FormField label={tr('setup.repeat')} helper={tr('setup.repeatHelper')}>
+        {#snippet control(args)}
+          <SelectMenu
+            {...args}
+            bind:value={manualRepeatRule}
+            options={[
+              { value: 'none', label: tr('setup.repeatNone') },
+              { value: 'daily', label: tr('setup.repeatDaily') },
+              { value: 'weekly', label: tr('setup.repeatWeekly') },
+              { value: 'monthly', label: tr('setup.repeatMonthly') }
+            ]}
+          />
+        {/snippet}
+      </FormField>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <FormField label={tr('setup.deadlineValue')} helper={tr('setup.deadlineHelper')}>
+        {#snippet control(args)}
+          <Input
+            {...args}
+            type="number"
+            bind:value={manualDeadlineValue}
+            placeholder="e.g. 5"
+            class="h-10"
+          />
+        {/snippet}
+      </FormField>
+
+      <FormField label={tr('setup.deadlineUnitHours').split(' ')[0]}>
+        {#snippet control(args)}
+          <SelectMenu
+            {...args}
+            bind:value={manualDeadlineUnit}
+            options={[
+              { value: 'hours', label: tr('setup.deadlineUnitHours') },
+              { value: 'days', label: tr('setup.deadlineUnitDays') }
+            ]}
+          />
+        {/snippet}
+      </FormField>
+    </div>
+
+    <FormField label={tr('setup.closureBy')} helper={tr('setup.closureByHelper')}>
+      {#snippet control(args)}
+        <SelectMenu
+          {...args}
+          bind:value={manualClosureBy}
+          options={[
+            { value: 'initiator', label: tr('setup.closureInitiator') },
+            { value: 'assignee', label: tr('setup.closureAssignee') }
+          ]}
+        />
+      {/snippet}
+    </FormField>
+
     {#if error}
       <p class="text-sm font-normal leading-relaxed text-status-urgent">{error}</p>
     {/if}
@@ -623,21 +728,22 @@
         />
       {/snippet}
     </FormField>
-
-    <div class="flex justify-end gap-2 pt-2">
+  </form>
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
       <Button variant="secondary" type="button" onclick={() => (editWorkflowOpen = false)}>
         {tr('setup.cancel')}
       </Button>
       <Button
         variant="primary"
-        type="submit"
+        onclick={saveWorkflowEdit}
         loading={savingWorkflow}
         disabled={!editWorkflowName.trim()}
       >
         {tr('setup.saveSettings')}
       </Button>
     </div>
-  </form>
+  {/snippet}
 </Dialog>
 
 <ConfirmDialog

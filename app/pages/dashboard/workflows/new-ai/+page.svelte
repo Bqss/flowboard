@@ -3,8 +3,8 @@
   import { api, ApiError, type ApiWorkflowDraft } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Badge, Button, Skeleton, Textarea } from '$lib/components/atoms/index.js';
-  import { Breadcrumb, FormField, Stepper, toast } from '$lib/components/molecules/index.js';
+  import { Badge, Button, Input, Skeleton, Textarea } from '$lib/components/atoms/index.js';
+  import { Breadcrumb, FormField, SelectMenu, Stepper, toast } from '$lib/components/molecules/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     AiMagicIcon,
@@ -20,7 +20,10 @@
     Message01Icon,
     SmartPhone01Icon,
     Forward02Icon,
-    Clock02Icon
+    Clock02Icon,
+    AlertCircleIcon,
+    Calendar03Icon,
+    RepeatIcon,
   } from '@hugeicons/core-free-icons';
 
   let { data }: { data: import('../../$types').LayoutData } = $props();
@@ -70,6 +73,10 @@
 
   function useExample(text: string) {
     prompt = text;
+  }
+
+  function updateDraft(patch: Partial<ApiWorkflowDraft>) {
+    if (draft) draft = { ...draft, ...patch };
   }
 
   async function generateDraft() {
@@ -278,6 +285,110 @@
               <p class="ds-caption text-mute">{tr('ai.summaryActions')}</p>
             </div>
           </div>
+        </div>
+
+        <!-- Config fields -->
+        <div class="mt-5 grid gap-4 border-t border-hairline pt-5 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField label={tr('setup.urgency')} helper={tr('setup.urgencyHelper')}>
+            {#snippet control(args)}
+              <SelectMenu
+                {...args}
+                value={draft!.urgency ?? 'medium'}
+                options={[
+                  { value: 'high', label: tr('setup.urgencyHigh') },
+                  { value: 'medium', label: tr('setup.urgencyMedium') },
+                  { value: 'low', label: tr('setup.urgencyLow') }
+                ]}
+                onchange={(v) => updateDraft({ urgency: v as 'high' | 'medium' | 'low' })}
+              />
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.deadline')} helper={tr('setup.deadlineHelper')}>
+            {#snippet control()}
+              <div class="flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  max="365"
+                  placeholder={tr('setup.deadlineValue')}
+                  value={draft!.deadlineValue ?? ''}
+                  oninput={(e) => {
+                    const v = (e.target as HTMLInputElement).value;
+                    updateDraft({ deadlineValue: v ? Number(v) : null });
+                  }}
+                />
+                <div class="w-28 shrink-0">
+                  <SelectMenu
+                    value={draft!.deadlineUnit ?? 'days'}
+                    options={[
+                      { value: 'hours', label: tr('setup.deadlineUnitHours') },
+                      { value: 'days', label: tr('setup.deadlineUnitDays') }
+                    ]}
+                    onchange={(v) => updateDraft({ deadlineUnit: v as 'hours' | 'days' })}
+                  />
+                </div>
+              </div>
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.reminderBefore')} helper={tr('setup.reminderHelper')}>
+            {#snippet control()}
+              <div class="flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  max="720"
+                  placeholder={tr('setup.reminderValue')}
+                  value={draft!.reminderBeforeValue ?? ''}
+                  oninput={(e) => {
+                    const v = (e.target as HTMLInputElement).value;
+                    updateDraft({ reminderBeforeValue: v ? Number(v) : null });
+                  }}
+                />
+                <div class="w-28 shrink-0">
+                  <SelectMenu
+                    value={draft!.reminderBeforeUnit ?? 'hours'}
+                    options={[
+                      { value: 'hours', label: tr('setup.reminderUnitHours') },
+                      { value: 'days', label: tr('setup.reminderUnitDays') }
+                    ]}
+                    onchange={(v) => updateDraft({ reminderBeforeUnit: v as 'hours' | 'days' })}
+                  />
+                </div>
+              </div>
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.repeat')} helper={tr('setup.repeatHelper')}>
+            {#snippet control(args)}
+              <SelectMenu
+                {...args}
+                value={draft!.repeatRule ?? 'none'}
+                options={[
+                  { value: 'none', label: tr('setup.repeatNone') },
+                  { value: 'daily', label: tr('setup.repeatDaily') },
+                  { value: 'weekly', label: tr('setup.repeatWeekly') },
+                  { value: 'monthly', label: tr('setup.repeatMonthly') }
+                ]}
+                onchange={(v) => updateDraft({ repeatRule: v as 'none' | 'daily' | 'weekly' | 'monthly' })}
+              />
+            {/snippet}
+          </FormField>
+
+          <FormField label={tr('setup.closureBy')} helper={tr('setup.closureByHelper')}>
+            {#snippet control(args)}
+              <SelectMenu
+                {...args}
+                value={draft!.closureBy ?? 'initiator'}
+                options={[
+                  { value: 'initiator', label: tr('setup.closureInitiator') },
+                  { value: 'assignee', label: tr('setup.closureAssignee') }
+                ]}
+                onchange={(v) => updateDraft({ closureBy: v as 'initiator' | 'assignee' })}
+              />
+            {/snippet}
+          </FormField>
         </div>
       </div>
 
