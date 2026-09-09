@@ -459,8 +459,8 @@ export const createGroupRoom = async (
   name: string,
   memberIds: string[]
 ): Promise<GroupRoomResult | null> => {
-  // Validate at least 2 other members
-  if (memberIds.length < 2) return null;
+  // Validate at least 1 other member
+  if (memberIds.length < 1) return null;
 
   // Verify all members are in the workspace
   for (const memberId of memberIds) {

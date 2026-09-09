@@ -615,7 +615,7 @@
   }
 
   async function createGroup() {
-    if (!groupName.trim() || selectedMemberIds.length < 2 || creatingGroup) return;
+    if (!groupName.trim() || selectedMemberIds.length < 1 || creatingGroup) return;
     creatingGroup = true;
     try {
       const res = await api.createGroupRoom(workspaceId, groupName.trim(), selectedMemberIds);
@@ -1256,7 +1256,7 @@
             </div>
             <div class="flex items-center justify-between gap-2 border-t border-hairline bg-card p-3">
               <Button variant="secondary" size="sm" onclick={() => (dockMode = 'newDirect')}>{tr('chat.cancel')}</Button>
-              <Button variant="primary" size="sm" onclick={() => (groupStep = 2)} disabled={selectedMemberIds.length < 2}>{tr('chat.next')}</Button>
+              <Button variant="primary" size="sm" onclick={() => (groupStep = 2)} disabled={selectedMemberIds.length < 1}>{tr('chat.next')}</Button>
             </div>
           {:else}
             <div class="flex min-h-0 flex-1 flex-col p-4">
@@ -1694,7 +1694,7 @@
         </div>
         <div class="flex items-center justify-between gap-2 border-t border-hairline bg-card p-3">
           <Button variant="secondary" size="sm" onclick={() => (dockMode = 'newDirect')}>{tr('chat.cancel')}</Button>
-          <Button variant="primary" size="sm" onclick={() => (groupStep = 2)} disabled={selectedMemberIds.length < 2}>{tr('chat.next')}</Button>
+          <Button variant="primary" size="sm" onclick={() => (groupStep = 2)} disabled={selectedMemberIds.length < 1}>{tr('chat.next')}</Button>
         </div>
       {:else}
         <div class="flex min-h-0 flex-1 flex-col p-4">

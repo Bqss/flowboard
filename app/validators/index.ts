@@ -74,7 +74,7 @@ export const CreateDirectSchema = t.Object({
 
 export const CreateGroupSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
-  memberIds: t.Array(t.String({ format: 'uuid' }), { minItems: 2, maxItems: 100 })
+  memberIds: t.Array(t.String({ format: 'uuid' }), { minItems: 1, maxItems: 100 })
 });
 
 export const SendChatMessageSchema = t.Object({

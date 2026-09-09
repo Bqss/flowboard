@@ -100,9 +100,9 @@ export async function createGroupHandler(ctx: Ctx<CreateGroupBody, WorkspacePara
     ctx.set.status = 400;
     return { error: 'Room name is required' };
   }
-  if (!ctx.body.memberIds || ctx.body.memberIds.length < 2) {
+  if (!ctx.body.memberIds || ctx.body.memberIds.length < 1) {
     ctx.set.status = 400;
-    return { error: 'At least 2 other members are required' };
+    return { error: 'At least 1 member is required' };
   }
   const result = await createGroupRoom(ctx.workspace.id, ctx.user.id, name, ctx.body.memberIds);
   if (!result) {
