@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS "chat_conversations_workspace_direct_key_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "chat_conversations_workspace_direct_key_idx" ON "chat_conversations" USING btree ("workspace_id","direct_key");

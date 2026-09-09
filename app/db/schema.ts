@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -44,6 +45,8 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
 ]);
 export const planIntervalEnum = pgEnum('plan_interval', ['monthly', 'yearly']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['percent', 'fixed', 'trial_days']);
+export const chatConversationKindEnum = pgEnum('chat_conversation_kind', ['direct', 'group']);
+export const chatParticipantRoleEnum = pgEnum('chat_participant_role', ['admin', 'member']);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -95,6 +98,200 @@ export const workspaceMembers = pgTable(
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [uniqueIndex('workspace_members_workspace_user_idx').on(table.workspaceId, table.userId)]
+);
+
+export const directConversations = pgTable(
+  'direct_conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    memberOneId: uuid('member_one_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    memberTwoId: uuid('member_two_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('direct_conversations_workspace_members_idx').on(
+      table.workspaceId,
+      table.memberOneId,
+      table.memberTwoId
+    ),
+    index('direct_conversations_workspace_member_one_idx').on(table.workspaceId, table.memberOneId),
+    index('direct_conversations_workspace_member_two_idx').on(table.workspaceId, table.memberTwoId),
+    check('direct_conversations_member_order_check', sql`${table.memberOneId} < ${table.memberTwoId}`)
+  ]
+);
+
+export const directMessages = pgTable(
+  'direct_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => directConversations.id, { onDelete: 'cascade' }),
+    senderId: uuid('sender_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt),
+    index('direct_messages_conversation_sender_read_idx').on(
+      table.conversationId,
+      table.senderId,
+      table.readAt
+    )
+  ]
+);
+
+export const chatConversations = pgTable(
+  'chat_conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    kind: chatConversationKindEnum('kind').notNull(),
+    name: text('name'),
+    directKey: text('direct_key'),
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('chat_conversations_workspace_direct_key_idx').on(
+      table.workspaceId,
+      table.directKey
+    ),
+    index('chat_conversations_workspace_updated_idx').on(table.workspaceId, table.updatedAt),
+    check(
+      'chat_conversations_kind_check',
+      sql`(kind = 'direct' AND direct_key IS NOT NULL AND name IS NULL) OR (kind = 'group' AND name IS NOT NULL AND direct_key IS NULL)`
+    )
+  ]
+);
+
+export const chatParticipants = pgTable(
+  'chat_participants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => chatConversations.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: chatParticipantRoleEnum('role').notNull().default('member'),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+    lastReadAt: timestamp('last_read_at', { withTimezone: true }),
+    leftAt: timestamp('left_at', { withTimezone: true })
+  },
+  (table) => [
+    uniqueIndex('chat_participants_conversation_user_idx').on(
+      table.conversationId,
+      table.userId
+    ),
+    index('chat_participants_workspace_user_left_idx').on(
+      table.workspaceId,
+      table.userId,
+      table.leftAt
+    ),
+    index('chat_participants_conversation_idx').on(table.conversationId)
+  ]
+);
+
+export const chatMessages = pgTable(
+  'chat_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => chatConversations.id, { onDelete: 'cascade' }),
+    senderId: uuid('sender_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    clientMessageId: text('client_message_id').notNull(),
+    body: text('body').notNull(),
+    replyToMessageId: uuid('reply_to_message_id'),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('chat_messages_idempotency_idx').on(
+      table.conversationId,
+      table.senderId,
+      table.clientMessageId
+    ),
+    index('chat_messages_conversation_created_idx').on(
+      table.conversationId,
+      table.createdAt,
+      table.id
+    )
+  ]
+);
+
+export const chatReactions = pgTable(
+  'chat_reactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => chatMessages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    reaction: text('reaction').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('chat_reactions_message_user_reaction_idx').on(
+      table.messageId,
+      table.userId,
+      table.reaction
+    ),
+    index('chat_reactions_message_idx').on(table.messageId)
+  ]
+);
+
+export const chatAttachments = pgTable(
+  'chat_attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    messageId: uuid('message_id').references(() => chatMessages.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => chatConversations.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    uploaderId: uuid('uploader_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    fileName: text('file_name').notNull(),
+    filePath: text('file_path').notNull(),
+    fileType: text('file_type').notNull(),
+    fileSize: integer('file_size').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('chat_attachments_message_idx').on(table.messageId),
+    index('chat_attachments_conversation_idx').on(table.conversationId)
+  ]
 );
 
 export const workspaceInvites = pgTable('workspace_invites', {
@@ -578,6 +775,15 @@ export type Workspace = typeof workspaces.$inferSelect;
 export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
 export type WorkspaceInvite = typeof workspaceInvites.$inferSelect;
 export type WorkspaceRole = (typeof workspaceRoleEnum.enumValues)[number];
+export type DirectConversation = typeof directConversations.$inferSelect;
+export type DirectMessage = typeof directMessages.$inferSelect;
+export type ChatConversation = typeof chatConversations.$inferSelect;
+export type ChatParticipant = typeof chatParticipants.$inferSelect;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type ChatReaction = typeof chatReactions.$inferSelect;
+export type ChatAttachment = typeof chatAttachments.$inferSelect;
+export type ChatConversationKind = (typeof chatConversationKindEnum.enumValues)[number];
+export type ChatParticipantRole = (typeof chatParticipantRoleEnum.enumValues)[number];
 export type Workflow = typeof workflows.$inferSelect;
 export type Stage = typeof stages.$inferSelect;
 export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;

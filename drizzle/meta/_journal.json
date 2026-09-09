@@ -15,6 +15,41 @@
       "when": 1788484413014,
       "tag": "0001_mushy_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788492036648,
+      "tag": "0002_flat_calypso",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788493551517,
+      "tag": "0003_tearful_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788831673117,
+      "tag": "0004_fresh_landau",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788831690929,
+      "tag": "0005_rich_jetstream",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788846641723,
+      "tag": "0006_even_trauma",
+      "breakpoints": true
     }
   ]
 }
