@@ -22,6 +22,8 @@
 		...rest
 	}: Props = $props();
 
+	let imgError = $state(false);
+	$effect(() => { src; imgError = false; });
 	const initials = $derived(
 		name
 			.split(' ')
@@ -42,8 +44,8 @@
 	style={`width:${size}px;height:${size}px;font-size:${Math.max(10, size * 0.38)}px;`}
 	{...rest}
 >
-	{#if src}
-		<img {src} {alt} class="size-full object-cover" />
+	{#if src && !imgError}
+		<img {src} {alt} class="size-full object-cover" onerror={() => (imgError = true)} />
 	{:else}
 		{initials || '?'}
 	{/if}

@@ -419,6 +419,17 @@
                 </td>
                 <td class="px-4 py-3 sm:px-6 sm:py-4 text-right">
                   <div class="flex items-center justify-end gap-2">
+                    {#if !isMe}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        class="h-8 px-2.5"
+                        onclick={() => window.dispatchEvent(new CustomEvent('chat-open-member', { detail: member.id }))}
+                      >
+                        <HugeiconsIcon icon={SentIcon} size={14} strokeWidth={1.8} />
+                        <span>{tr('members.message')}</span>
+                      </Button>
+                    {/if}
                     {#if isOwner && !isMemberOwner && !isMe}
                       <Button
                         variant="ghost"

@@ -34,7 +34,8 @@
   const TOOLTIP_OFFSET = 16;
 
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
+  let retryCount = 0;
+  const MAX_RETRIES = 25; // 25 × 200ms = 5s before skipping
   let isWelcome = $state(false);
 
   function updateTargetRect() {
@@ -54,10 +55,18 @@
     const el = document.querySelector(step.target);
     if (!el) {
       // Element not in DOM yet (e.g. async data still loading) — retry instead of skipping
-      if (retryTimer) clearTimeout(retryTimer);
-      retryTimer = setTimeout(updateTargetRect, 200);
+      if (retryCount < MAX_RETRIES) {
+        retryCount++;
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = setTimeout(updateTargetRect, 200);
+        return;
+      }
+      // Max retries exceeded — target not visible (e.g. widget hidden). Skip to next step.
+      retryCount = 0;
+      next();
       return;
     }
+    retryCount = 0;
 
     const rect = el.getBoundingClientRect();
     targetRect = rect;
@@ -85,6 +94,7 @@
   // Re-compute on step change only
   $effect(() => {
     currentStep;
+    retryCount = 0;
     if (open && steps && steps.length) {
       requestAnimationFrame(updateTargetRect);
     }
@@ -167,15 +177,15 @@
 
     if (tooltipPlacement === 'bottom') {
       top = t.bottom + TOOLTIP_OFFSET;
-      left = t.left;
+      left = t.left + t.width / 2 - TOOLTIP_W / 2;
     } else if (tooltipPlacement === 'top') {
       top = t.top - TOOLTIP_OFFSET - TOOLTIP_H;
-      left = t.left;
+      left = t.left + t.width / 2 - TOOLTIP_W / 2;
     } else if (tooltipPlacement === 'right') {
-      top = t.top;
+      top = t.top + t.height / 2 - TOOLTIP_H / 2;
       left = t.right + TOOLTIP_OFFSET;
     } else {
-      top = t.top;
+      top = t.top + t.height / 2 - TOOLTIP_H / 2;
       left = t.left - TOOLTIP_OFFSET - TOOLTIP_W;
     }
 
@@ -199,14 +209,38 @@
       `border-radius: 12px`
     ].join(';');
   });
+
+  // 4 panels around the target for backdrop blur — avoids clip-path + backdrop-filter bug
+  const blurPanels = $derived.by(() => {
+    if (!targetRect) return null;
+    const VW = window.innerWidth;
+    const VH = window.innerHeight;
+    const t = targetRect.top - PADDING;
+    const l = targetRect.left - PADDING;
+    const r = targetRect.right + PADDING;
+    const b = targetRect.bottom + PADDING;
+    const h = b - t;
+    return [
+      `position:fixed;top:0;left:0;width:${VW}px;height:${t}px`,
+      `position:fixed;top:${b}px;left:0;width:${VW}px;height:${VH - b}px`,
+      `position:fixed;top:${t}px;left:0;width:${l}px;height:${h}px`,
+      `position:fixed;top:${t}px;left:${r}px;width:${VW - r}px;height:${h}px`
+    ];
+  });
 </script>
 
 {#if open && steps && steps.length && (isWelcome || targetRect)}
   {#if !isWelcome}
+    <!-- Blur panels around target (4 panels, no clip-path) -->
+    {#if blurPanels}
+      {#each blurPanels as panelStyle}
+        <div class="pointer-events-none z-[199] transition-all duration-200" style="{panelStyle};backdrop-filter:blur(2px)"></div>
+      {/each}
+    {/if}
     <!-- Overlay with cut-out hole — catches clicks outside target -->
     <div
       class="fixed inset-0 z-[200] transition-all duration-200"
-      style="clip-path: {clipPath}; background: var(--overlay-scrim); backdrop-filter: blur(2px);"
+      style="clip-path: {clipPath}; background: var(--overlay-scrim);"
     >
     </div>
 

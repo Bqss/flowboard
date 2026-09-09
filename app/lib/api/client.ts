@@ -357,6 +357,89 @@ export type ApiWorkspaceMember = {
   joinedAt: string;
 };
 
+export type ApiChatAttachment = {
+  id: string;
+  fileName: string;
+  filePath: string;
+  fileType: string;
+  fileSize: number;
+  width: number | null;
+  height: number | null;
+};
+
+export type ApiChatReaction = {
+  reaction: string;
+  userId: string;
+  userName: string;
+};
+export type ApiChatMessage = {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  body: string;
+  replyToMessageId: string | null;
+  replyToBody: string | null;
+  replyToSenderName: string | null;
+  replyToDeleted: boolean | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  reactions: ApiChatReaction[];
+  attachments: ApiChatAttachment[];
+};
+
+export type ApiChatConversation = {
+  id: string;
+  kind: 'direct' | 'group';
+  name: string | null;
+  partner: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+  lastMessage: {
+    id: string;
+    body: string;
+    senderId: string;
+    senderName: string;
+    createdAt: string;
+    deletedAt: string | null;
+  } | null;
+  unreadCount: number;
+  updatedAt: string;
+};
+
+export type ApiChatConversationDetail = {
+  id: string;
+  kind: 'direct' | 'group';
+  name: string | null;
+  partner: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+    role: string;
+  } | null;
+  participants: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+    role: string;
+  }>;
+  userRole: 'admin' | 'member';
+};
+
+export type ApiChatMember = {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  role: 'owner' | 'member';
+};
+
 export type MeResponse = {
   user: ApiUser;
   workspace: ApiWorkspace | null;
@@ -459,10 +542,17 @@ async function request<T>(
 ): Promise<T> {
   const { fetch: fetchFn = fetch, headers, ...rest } = options;
 
+  // Don't set Content-Type for FormData — the browser sets multipart boundary
+  const isFormData = rest.body instanceof FormData;
+  const defaultHeaders: Record<string, string> = {};
+  if (!isFormData) {
+    defaultHeaders['Content-Type'] = 'application/json';
+  }
+
   const res = await fetchFn(`/api${path}`, {
     ...rest,
     headers: {
-      'Content-Type': 'application/json',
+      ...defaultHeaders,
       ...headers
     }
   });
@@ -546,6 +636,120 @@ export const api = {
     request<{ members: ApiWorkspaceMember[] }>(`/workspaces/${workspaceId}/members`, {
       fetch: fetchFn
     }),
+
+  listChatConversations: (workspaceId: string, search?: string, fetchFn?: FetchLike) =>
+    request<{ conversations: ApiChatConversation[] }>(
+      `/workspaces/${workspaceId}/chat/conversations${search ? `?search=${encodeURIComponent(search)}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  getChatUnread: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ unread: number }>(`/workspaces/${workspaceId}/chat/unread`, {
+      fetch: fetchFn
+    }),
+
+  listChatMembers: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ members: ApiChatMember[] }>(`/workspaces/${workspaceId}/chat/members`, {
+      fetch: fetchFn
+    }),
+
+  createDirectChat: (workspaceId: string, memberId: string, fetchFn?: FetchLike) =>
+    request<{ conversation: { id: string; kind: 'direct' }; partner: { id: string; name: string; email: string; avatarUrl: string | null; role: string } }>(
+      `/workspaces/${workspaceId}/chat/direct`,
+      { method: 'POST', body: JSON.stringify({ memberId }), fetch: fetchFn }
+    ),
+
+  createGroupRoom: (workspaceId: string, name: string, memberIds: string[], fetchFn?: FetchLike) =>
+    request<{ conversation: { id: string; kind: 'group'; name: string }; participants: Array<{ userId: string; name: string; role: string }> }>(
+      `/workspaces/${workspaceId}/chat/rooms`,
+      { method: 'POST', body: JSON.stringify({ name, memberIds }), fetch: fetchFn }
+    ),
+
+  getChatConversation: (workspaceId: string, conversationId: string, fetchFn?: FetchLike) =>
+    request<ApiChatConversationDetail>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}`,
+      { fetch: fetchFn }
+    ),
+
+  renameChatRoom: (workspaceId: string, conversationId: string, name: string, fetchFn?: FetchLike) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}`,
+      { method: 'PATCH', body: JSON.stringify({ name }), fetch: fetchFn }
+    ),
+
+  addChatParticipant: (workspaceId: string, conversationId: string, userId: string, fetchFn?: FetchLike) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/participants`,
+      { method: 'POST', body: JSON.stringify({ userId }), fetch: fetchFn }
+    ),
+
+  removeChatParticipant: (workspaceId: string, conversationId: string, userId: string, fetchFn?: FetchLike) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/participants/${userId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  getChatMessages: (workspaceId: string, conversationId: string, before?: string, fetchFn?: FetchLike) =>
+    request<{ messages: ApiChatMessage[] }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  sendChatMessage: (
+    workspaceId: string,
+    conversationId: string,
+    body: string,
+    clientMessageId: string,
+    replyToMessageId?: string,
+    attachmentIds?: string[],
+    fetchFn?: FetchLike
+  ) =>
+    request<{ message: ApiChatMessage }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ body, clientMessageId, replyToMessageId, attachmentIds }),
+        fetch: fetchFn
+      }
+    ),
+
+  uploadChatAttachment: (
+    workspaceId: string,
+    conversationId: string,
+    file: File,
+    fetchFn?: FetchLike
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<{ attachment: ApiChatAttachment }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/attachments`,
+      { method: 'POST', body: formData, fetch: fetchFn }
+    );
+  },
+
+  editChatMessage: (workspaceId: string, conversationId: string, messageId: string, body: string, fetchFn?: FetchLike) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages/${messageId}`,
+      { method: 'PATCH', body: JSON.stringify({ body }), fetch: fetchFn }
+    ),
+
+  deleteChatMessage: (workspaceId: string, conversationId: string, messageId: string, fetchFn?: FetchLike) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages/${messageId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  toggleChatReaction: (workspaceId: string, conversationId: string, messageId: string, reaction: string, fetchFn?: FetchLike) =>
+    request<{ action: 'added' | 'removed' }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(reaction)}`,
+      { method: 'PUT', fetch: fetchFn }
+    ),
+
+  markChatRead: (workspaceId: string, conversationId: string, fetchFn?: FetchLike) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/read`,
+      { method: 'POST', fetch: fetchFn }
+    ),
 
   listWorkspaces: (fetchFn?: FetchLike) =>
     request<{

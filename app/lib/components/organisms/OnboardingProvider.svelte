@@ -6,7 +6,6 @@
   import { api, ApiError } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import ChallengeWidget from './ChallengeWidget.svelte';
   import Spotlight from './Spotlight.svelte';
   import {
     WorkflowSquare01Icon,
@@ -42,6 +41,7 @@
 
   let { children }: { children: import('svelte').Snippet } = $props();
 
+  // Challenge data is pushed to parent layout via CustomEvent (see $effect below)
   const tr = (key: string, values?: Record<string, string | number>) =>
     dashboardText($locale, key, values);
 
@@ -75,11 +75,33 @@
     }
   });
 
+  // Push challenge data to parent layout via CustomEvent
+  $effect(() => {
+    if (!loading && !allChallengesDone) {
+      window.dispatchEvent(new CustomEvent('challenge-data', {
+        detail: {
+          challenges,
+          labels: {
+            title: tr('onboarding.challengesTitle'),
+            progress: (done: number, total: number) => tr('onboarding.challengesProgress', { done, total }),
+            complete: tr('onboarding.challengesComplete'),
+            notStarted: tr('onboarding.challengeNotStarted'),
+            completed: tr('onboarding.challengeCompleted'),
+            goalLabel: tr('onboarding.goalLabel')
+          }
+        }
+      }));
+    } else {
+      window.dispatchEvent(new CustomEvent('challenge-data', { detail: null }));
+    }
+  });
+
   // Tour definitions per route
   const tours: Tour[] = [
     {
       key: 'dashboard',
       route: '/dashboard',
+      requireElement: ['[data-onboarding="challenge-widget"]', '[data-onboarding="chat-widget"]'],
       steps: [
         { title: tr('onboarding.welcomeDashboard'), body: tr('onboarding.welcomeDashboardDesc') },
         { target: '[data-onboarding="stats-overview"]', title: tr('onboarding.tourDashStats'), body: tr('onboarding.tourDashStatsDesc'), placement: 'auto' },
@@ -87,7 +109,9 @@
         { target: '[data-onboarding="workflows-section"]', title: tr('onboarding.tourDashWorkflows'), body: tr('onboarding.tourDashWorkflowsDesc'), placement: 'auto' },
         { target: '[data-onboarding="workspaces-section"]', title: tr('onboarding.tourDashWorkspaces'), body: tr('onboarding.tourDashWorkspacesDesc'), placement: 'auto' },
         { target: '[data-onboarding="team-section"]', title: tr('onboarding.tourDashTeam'), body: tr('onboarding.tourDashTeamDesc'), placement: 'auto' },
-        { target: '[data-onboarding="shortcuts-section"]', title: tr('onboarding.tourDashShortcuts'), body: tr('onboarding.tourDashShortcutsDesc'), placement: 'auto' }
+        { target: '[data-onboarding="shortcuts-section"]', title: tr('onboarding.tourDashShortcuts'), body: tr('onboarding.tourDashShortcutsDesc'), placement: 'auto' },
+        { target: '[data-onboarding="challenge-widget"]', title: tr('onboarding.tourDashChallenge'), body: tr('onboarding.tourDashChallengeDesc'), placement: 'top' },
+        { target: '[data-onboarding="chat-widget"]', title: tr('onboarding.tourDashChat'), body: tr('onboarding.tourDashChatDesc'), placement: 'top' }
       ]
     },
     {
@@ -296,12 +320,20 @@
     });
   }
 
-  // Trigger tour if not seen yet
+  let tourRetryCount = 0;
+  const MAX_TOUR_RETRIES = 10;
   function maybeTriggerTour() {
-    if (loading) return;
+    if (loading) {
+      if (tourRetryCount < MAX_TOUR_RETRIES) { tourRetryCount++; setTimeout(maybeTriggerTour, 300); }
+      return;
+    }
     const tour = findTourForCurrentRoute();
     if (tour && !obState.seenTours.includes(tour.key)) {
+      tourRetryCount = 0;
       activeTour = tour;
+    } else if (!tour && tourRetryCount < MAX_TOUR_RETRIES) {
+      tourRetryCount++;
+      setTimeout(maybeTriggerTour, 300);
     }
   }
 
@@ -379,19 +411,6 @@
 
 {@render children()}
 
-{#if !loading && !allChallengesDone}
-  <ChallengeWidget
-    {challenges}
-    labels={{
-      title: tr('onboarding.challengesTitle'),
-      progress: (done, total) => tr('onboarding.challengesProgress', { done, total }),
-      complete: tr('onboarding.challengesComplete'),
-      notStarted: tr('onboarding.challengeNotStarted'),
-      completed: tr('onboarding.challengeCompleted'),
-      goalLabel: tr('onboarding.goalLabel')
-    }}
-  />
-{/if}
 
 {#if activeTour}
   <Spotlight

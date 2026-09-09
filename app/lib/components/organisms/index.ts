@@ -6,6 +6,7 @@ import AppFooter from './AppFooter.svelte';
 import CommandPalette from './CommandPalette.svelte';
 import NotificationCenter from './NotificationCenter.svelte';
 import DashboardLayout from './DashboardLayout.svelte';
+import ChatDock from './ChatDock.svelte';
 
 // Data
 import CardGrid from './CardGrid.svelte';
@@ -96,6 +97,7 @@ export {
 	Toaster,
 	ChallengeWidget,
 	OnboardingProvider,
+	ChatDock,
 	FormSection,
 	MultiStepForm,
 	FilterBar,

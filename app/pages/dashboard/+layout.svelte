@@ -1,10 +1,9 @@
 <script lang="ts">
-  import '../../ds.css';
   import { page } from '$app/stores';
   import { goto, invalidateAll } from '$app/navigation';
   import { api, ApiError } from '$lib/api/client';
   import type { LayoutData } from '../$types';
-  import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider } from '$lib/components/organisms/index.js';
+  import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget } from '$lib/components/organisms/index.js';
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
   import { Avatar } from '$lib/components/atoms/index.js';
   import { DropdownMenu, toast, type MenuItem } from '$lib/components/molecules/index.js';
@@ -95,7 +94,7 @@
       label: tr('nav.members'),
       active: $page.url.pathname.startsWith('/dashboard/members'),
       icon: usersIcon
-    }
+    },
   ]);
 
   const settingsItems = $derived([
@@ -248,14 +247,19 @@
     }
   }
 
+
   $effect(() => {
     $locale;
     if (!data.workspace?.id) return;
     void loadNotifications();
+
     const timer = setInterval(() => {
       void loadNotifications();
     }, 30_000);
-    return () => clearInterval(timer);
+
+    return () => {
+      clearInterval(timer);
+    };
   });
 
   async function markAllNotificationsRead() {
@@ -288,6 +292,15 @@
       onselect: logout
     }
   ]);
+
+  let challengeData = $state<{ challenges: any[]; labels: any } | null>(null);
+  $effect(() => {
+    function handleChallengeData(e: Event) {
+      challengeData = (e as CustomEvent).detail;
+    }
+    window.addEventListener('challenge-data', handleChallengeData);
+    return () => window.removeEventListener('challenge-data', handleChallengeData);
+  });
 </script>
 
 {#snippet homeIcon()}
@@ -299,6 +312,7 @@
 {#snippet workflowsIcon()}
   <HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} />
 {/snippet}
+
 {#snippet settingsIcon()}
   <HugeiconsIcon icon={Settings01Icon} size={20} strokeWidth={1.8} />
 {/snippet}
@@ -482,5 +496,19 @@
     </main>
   </div>
 
+
+  <div class="fixed bottom-4 right-4 z-[210] flex items-end gap-2 sm:bottom-6 sm:right-6">
+    {#if data.workspace?.id && data.user}
+      <ChatDock
+        workspaceId={data.workspace.id}
+        userId={data.user.id}
+        userName={data.user.name}
+        userAvatarUrl={data.user.avatarUrl ?? null}
+      />
+    {/if}
+    {#if challengeData}
+      <ChallengeWidget challenges={challengeData.challenges} labels={challengeData.labels} />
+    {/if}
+  </div>
   <Toaster />
 </div>
