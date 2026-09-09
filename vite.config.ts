@@ -2,7 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, loadEnv } from 'vite';
 const backendRe =
-  /(?:^|\/)(?:app\/(?:handlers|middlewares|services|db|core)|routes)\/|hooks\.server\.ts$/;
+  /(?:^|\/)(?:app\/(?:handlers|middlewares|services|db|core|validators|config)|routes)\/|hooks\.server\.ts$/;
 
 /** Rebuild the Elysia graph when backend files change so SSR fetches never hit a stale app. */
 const backendHmr = (): Plugin => ({

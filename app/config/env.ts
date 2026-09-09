@@ -53,7 +53,14 @@ export const env = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
   googleRedirectUri:
     process.env.GOOGLE_REDIRECT_URI ??
-    `http://localhost:${process.env.PORT ?? 3000}/api/auth/google/callback`
+    `http://localhost:${process.env.PORT ?? 3000}/api/auth/google/callback`,
+  googleSheetsRedirectUri:
+    process.env.GOOGLE_SHEETS_REDIRECT_URI ??
+    `http://localhost:${process.env.PORT ?? 3000}/api/integrations/google-sheets/callback`
+  ,
+  schedulerIntervalMs: Number(process.env.SCHEDULER_INTERVAL_MS ?? 30_000),
+  schedulerDigestIntervalMs: Number(process.env.SCHEDULER_DIGEST_INTERVAL_MS ?? 60 * 60 * 1000),
+  schedulerSheetsIntervalMs: Number(process.env.SCHEDULER_SHEETS_INTERVAL_MS ?? 60_000)
 } as const;
 
 export const isProd = isProduction;

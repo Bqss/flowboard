@@ -8,8 +8,8 @@ import { createWorkflowsRoutes } from './workflows';
 import { createNotificationsRoutes } from './notifications';
 import { createChatRoutes } from './chat';
 import { createWebhooksRoutes } from './webhooks';
-import { createIntegrationsRoutes } from './integrations';
 import { createWajomRoutes } from './wajom';
+ import { createGoogleSheetsRoutes } from './google-sheets';
 import { createOnboardingRoutes } from './onboarding';
 
 /**
@@ -27,8 +27,8 @@ export const buildApi = () =>
     .use(createNotificationsRoutes())
     .use(createChatRoutes())
     .use(createWebhooksRoutes())
-    .use(createIntegrationsRoutes())
     .use(createWajomRoutes())
+     .use(createGoogleSheetsRoutes())
     .use(createOnboardingRoutes())
 
 export type Api = ReturnType<typeof buildApi>;

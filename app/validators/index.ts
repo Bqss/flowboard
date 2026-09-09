@@ -539,3 +539,52 @@ export const UpdateOnboardingSchema = t.Object({
   completeChallenge: t.Optional(t.String()),
   markTourSeen: t.Optional(t.String())
 });
+
+/* --------------------------------------------------------------- Google Sheets */
+
+const ColumnMappingSchema = t.Object({
+  name: t.Integer({ minimum: 0 }),
+  wa: t.Integer({ minimum: 0 }),
+  product: t.Optional(t.Union([t.Integer({ minimum: 0 }), t.Null()])),
+  tag: t.Optional(t.Union([t.Integer({ minimum: 0 }), t.Null()]))
+});
+
+export const CreateSheetsConnectionSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 })
+});
+
+export const ConfigureSheetsConnectionSchema = t.Object({
+  workflowId: t.String({ format: 'uuid' }),
+  spreadsheetId: t.String({ minLength: 1 }),
+  spreadsheetName: t.String({ minLength: 1, maxLength: 200 }),
+  sheetName: t.String({ minLength: 1, maxLength: 100 }),
+  columnMapping: ColumnMappingSchema,
+  headerRowCount: t.Optional(t.Integer({ minimum: 1, maximum: 10 }))
+});
+
+export const UpdateSheetsConnectionSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  workflowId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  spreadsheetId: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()])),
+  spreadsheetName: t.Optional(t.Union([t.String({ minLength: 1, maxLength: 200 }), t.Null()])),
+  sheetName: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  columnMapping: t.Optional(t.Union([ColumnMappingSchema, t.Null()])),
+  headerRowCount: t.Optional(t.Integer({ minimum: 1, maximum: 10 })),
+  enabled: t.Optional(t.Boolean())
+});
+
+export const SheetsConnectionParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  connectionId: t.String({ format: 'uuid' })
+});
+
+export const SheetsSheetsQuery = t.Object({
+  spreadsheetId: t.String({ minLength: 1 }),
+  connectionId: t.Optional(t.String({ format: 'uuid' }))
+});
+
+export const SheetsHeadersQuery = t.Object({
+  spreadsheetId: t.String({ minLength: 1 }),
+  sheetName: t.String({ minLength: 1 }),
+  connectionId: t.Optional(t.String({ format: 'uuid' }))
+});

@@ -151,3 +151,85 @@ export async function googleLoginOrCreate(info: GoogleUserInfo): Promise<{ sessi
   const sessionId = await createSession(user.id);
   return { sessionId, isNewUser: true };
 }
+
+// ---------------------------------------------------------------------------
+// Google Sheets OAuth — separate scope set, offline access for refresh token
+// ---------------------------------------------------------------------------
+
+const SHEETS_SCOPES = [
+  'https://www.googleapis.com/auth/spreadsheets.readonly',
+  'https://www.googleapis.com/auth/drive.metadata.readonly'
+].join(' ');
+
+export type GoogleSheetsTokens = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  scope: string;
+  token_type: string;
+};
+
+/** Build the Google authorization URL for Sheets access (offline, consent). */
+export function getGoogleSheetsAuthUrl(state: string): string {
+  const params = new URLSearchParams({
+    client_id: env.googleClientId,
+    redirect_uri: env.googleSheetsRedirectUri,
+    response_type: 'code',
+    scope: SHEETS_SCOPES,
+    state,
+    access_type: 'offline',
+    prompt: 'consent'
+  });
+  return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+}
+
+/** Exchange authorization code for Sheets tokens (includes refresh_token). */
+export async function exchangeCodeForSheetsTokens(code: string): Promise<GoogleSheetsTokens> {
+  const body = new URLSearchParams({
+    client_id: env.googleClientId,
+    client_secret: env.googleClientSecret,
+    code,
+    grant_type: 'authorization_code',
+    redirect_uri: env.googleSheetsRedirectUri
+  });
+
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Sheets token exchange failed: ${res.status} ${text}`);
+  }
+
+  return res.json() as Promise<GoogleSheetsTokens>;
+}
+
+/** Refresh an expired access token using a stored refresh token. */
+export async function refreshGoogleSheetsToken(refreshToken: string): Promise<{
+  access_token: string;
+  expires_in: number;
+}> {
+  const body = new URLSearchParams({
+    client_id: env.googleClientId,
+    client_secret: env.googleClientSecret,
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token'
+  });
+
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google Sheets token refresh failed: ${res.status} ${text}`);
+  }
+
+  const data = await res.json() as { access_token: string; expires_in: number };
+  return { access_token: data.access_token, expires_in: data.expires_in };
+}

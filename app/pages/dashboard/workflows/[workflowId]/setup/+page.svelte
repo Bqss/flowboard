@@ -1,11 +1,15 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import {
+import {
     api,
     ApiError,
     type ApiWorkflow,
     type ApiWorkflowSetupStage,
-    type ApiWorkspaceMember
+    type ApiWorkspaceMember,
+    type ApiSheetsConnection,
+    type ApiSpreadsheetInfo,
+    type ApiSheetTabInfo,
+    type ApiDriveItem
   } from '$lib/api/client';
   import {
     Button,
@@ -49,7 +53,11 @@
     BubbleChatNotificationIcon,
     FlowConnectionIcon,
     CheckmarkBadge01Icon,
-    CircleIcon
+    CircleIcon,
+    AiSheetsIcon,
+    Folder01Icon,
+    Link01Icon,
+    Refresh01Icon
   } from '@hugeicons/core-free-icons';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
@@ -169,6 +177,28 @@
   let savingChecklistModal = $state(false);
   // Stage Reordering
   let reordering = $state(false);
+
+  // Google Sheets integration
+  let sheetsAssigned = $state<ApiSheetsConnection[]>([]);
+  let sheetsUnassigned = $state<ApiSheetsConnection[]>([]);
+  let sheetsLoading = $state(true);
+  let sheetsModalOpen = $state(false);
+  let configuringConn = $state<ApiSheetsConnection | null>(null);
+  let driveItems = $state<ApiDriveItem[]>([]);
+  let drivePath = $state<Array<{ id: string; name: string }>>([]);
+  let driveLoading = $state(false);
+  let spreadsheets = $state<ApiSpreadsheetInfo[]>([]);
+  let sheetTabs = $state<ApiSheetTabInfo[]>([]);
+  let sheetHeaders = $state<string[][]>([]);
+  let selectedSpreadsheetId = $state('');
+  let selectedSpreadsheetName = $state('');
+  let selectedSheetName = $state('');
+  let sheetsSaving = $state(false);
+  let sheetsSyncingId = $state<string | null>(null);
+  let sheetsForm = $state({
+    headerRowCount: 1,
+    columnMapping: { name: 0, wa: 1, product: null as number | null | undefined, tag: null as number | null | undefined }
+  });
 
   const actionKindOptions = $derived([
     { value: 'none', label: tr('setup.manualNoWa') },
@@ -309,10 +339,12 @@
     if (!data.workspace?.id || !workflowId) return;
     loadingData = true;
     try {
-      const [setupRes, workflowsRes, membersRes] = await Promise.all([
+      const [setupRes, workflowsRes, membersRes, sheetsAssignedRes, sheetsAllRes] = await Promise.all([
         api.getWorkflowSetup(data.workspace.id, workflowId),
         api.listWorkflows(data.workspace.id),
-        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] }))
+        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
+        api.listSheetsConnectionsForWorkflow(data.workspace.id, workflowId).catch(() => ({ connections: [] })),
+        api.listSheetsConnections(data.workspace.id).catch(() => ({ connections: [] }))
       ]);
       const nextStages = setupRes.stages ?? [];
       const nextStageAutomationDraft: Record<string, StageAutomationDraft> = {};
@@ -334,6 +366,10 @@
 
       workflow = workflowsRes.workflows?.find((w) => w.id === workflowId) ?? null;
       members = membersRes.members ?? [];
+
+      sheetsAssigned = sheetsAssignedRes.connections ?? [];
+      sheetsUnassigned = (sheetsAllRes.connections ?? []).filter((c) => !c.workflowId);
+      sheetsLoading = false;
 
       if (workflow) {
         workflowName = workflow.name;
@@ -732,6 +768,177 @@
       toast.error(err instanceof ApiError ? err.message : tr('setup.checklistDeleteError'));
     } finally {
       deletingChecklist = false;
+    }
+  }
+
+  // ---- Google Sheets functions ----
+
+  async function browseDriveFolder(parentId?: string) {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId || !configuringConn) return;
+    driveLoading = true;
+    try {
+      const response = await api.browseSheetsDrive(workspaceId, configuringConn.id, parentId);
+      driveItems = response.items ?? [];
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to browse Google Drive');
+      driveItems = [];
+    } finally {
+      driveLoading = false;
+    }
+  }
+
+  function openDriveFolder(folderId: string, folderName: string) {
+    drivePath = [...drivePath, { id: folderId, name: folderName }];
+    browseDriveFolder(folderId);
+  }
+
+  function navigateToPath(index: number) {
+    if (index < 0) {
+      drivePath = [];
+      browseDriveFolder();
+    } else {
+      drivePath = drivePath.slice(0, index + 1);
+      browseDriveFolder(drivePath[index].id);
+    }
+  }
+
+   async function onSpreadsheetSelected(id: string, name: string) {
+     const workspaceId = data.workspace?.id;
+     if (!workspaceId || !configuringConn) return;
+     selectedSpreadsheetId = id;
+     selectedSpreadsheetName = name;
+     selectedSheetName = '';
+     sheetHeaders = [];
+     try {
+       const response = await api.listSheetsTabs(workspaceId, id, configuringConn.id);
+       sheetTabs = response.sheets ?? [];
+       if (sheetTabs.length > 0) {
+         selectedSheetName = sheetTabs[0].title;
+         await onSheetSelected(sheetTabs[0].title);
+       }
+     } catch (err) {
+       toast.error(err instanceof ApiError ? err.message : 'Failed to list sheet tabs');
+     }
+   }
+ 
+   async function onSheetSelected(sheetName: string) {
+     const workspaceId = data.workspace?.id;
+     if (!workspaceId || !selectedSpreadsheetId || !configuringConn) return;
+     selectedSheetName = sheetName;
+     sheetHeaders = [];
+     try {
+       const response = await api.getSheetsHeaders(workspaceId, selectedSpreadsheetId, sheetName, configuringConn.id);
+       sheetHeaders = response.headers ?? [];
+     } catch (err) {
+       toast.error(err instanceof ApiError ? err.message : 'Failed to get headers');
+     }
+   }
+ 
+   function openSheetsConfigureModal(conn: ApiSheetsConnection) {
+     configuringConn = conn;
+     if (conn.spreadsheetId && conn.spreadsheetName && conn.columnMapping) {
+       selectedSpreadsheetId = conn.spreadsheetId;
+       selectedSpreadsheetName = conn.spreadsheetName;
+       selectedSheetName = conn.sheetName;
+       sheetsForm = {
+         headerRowCount: conn.headerRowCount,
+         columnMapping: { name: conn.columnMapping.name, wa: conn.columnMapping.wa, product: conn.columnMapping.product ?? null, tag: conn.columnMapping.tag ?? null }
+       };
+       // Load tabs + headers for existing config
+       const workspaceId = data.workspace?.id;
+       if (workspaceId) {
+         api.listSheetsTabs(workspaceId, conn.spreadsheetId, conn.id).then((res) => {
+           sheetTabs = res.sheets ?? [];
+         }).catch(() => {});
+         api.getSheetsHeaders(workspaceId, conn.spreadsheetId, conn.sheetName, conn.id).then((res) => {
+           sheetHeaders = res.headers ?? [];
+         }).catch(() => {});
+       }
+     } else {
+       selectedSpreadsheetId = '';
+       selectedSpreadsheetName = '';
+       selectedSheetName = '';
+       driveItems = [];
+       drivePath = [];
+       sheetTabs = [];
+       sheetHeaders = [];
+       sheetsForm = {
+         headerRowCount: 1,
+         columnMapping: { name: 0, wa: 1, product: null, tag: null }
+       };
+       browseDriveFolder();
+     }
+     sheetsModalOpen = true;
+   }
+
+  function closeSheetsModal() {
+    if (sheetsSaving) return;
+    sheetsModalOpen = false;
+    configuringConn = null;
+  }
+
+  async function saveSheetsConfig() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId || !configuringConn) return;
+    if (!selectedSpreadsheetId || !selectedSheetName) {
+      toast.error('Please select a spreadsheet and sheet tab.');
+      return;
+    }
+    sheetsSaving = true;
+    try {
+      await api.configureSheetsConnection(workspaceId, configuringConn.id, {
+        workflowId,
+        spreadsheetId: selectedSpreadsheetId,
+        spreadsheetName: selectedSpreadsheetName,
+        sheetName: selectedSheetName,
+        columnMapping: sheetsForm.columnMapping,
+        headerRowCount: sheetsForm.headerRowCount
+      });
+      sheetsModalOpen = false;
+      configuringConn = null;
+      await loadSetupData();
+      toast.success('Google Sheets sync configured for this workflow.');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to configure connection');
+    } finally {
+      sheetsSaving = false;
+    }
+  }
+
+  async function unassignSheet(connId: string) {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    try {
+      await api.updateSheetsConnection(workspaceId, connId, {
+        workflowId: null,
+        spreadsheetId: null,
+        spreadsheetName: null,
+        columnMapping: null
+      });
+      await loadSetupData();
+      toast.success('Google Sheets connection unassigned from this workflow.');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to unassign connection');
+    }
+  }
+
+  async function manualSyncSheet(connId: string) {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    sheetsSyncingId = connId;
+    try {
+      const response = await api.syncSheetsConnection(workspaceId, connId);
+      if (response.result.error) {
+        toast.error(response.result.error);
+      } else {
+        toast.success(`Synced: ${response.result.created} created, ${response.result.skipped} skipped.`);
+      }
+      await loadSetupData();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Sync failed');
+    } finally {
+      sheetsSyncingId = null;
     }
   }
 
@@ -1359,6 +1566,81 @@
           {/if}
         </form>
         </div>
+
+      <!-- Google Sheets Integration -->
+      <div class="space-y-1">
+        <h2 class="ds-section-title text-ink">Google Sheets Sync</h2>
+        <p class="ds-caption text-mute">Assign a connected Google account to sync spreadsheet rows into this workflow.</p>
+      </div>
+
+      <div class="rounded-2xl border border-hairline bg-card shadow-card p-6 space-y-4">
+        {#if sheetsLoading}
+          <p class="text-sm text-mute">Loading…</p>
+        {:else}
+          {#if sheetsAssigned.length > 0}
+            <div class="space-y-3">
+              {#each sheetsAssigned as conn (conn.id)}
+                <div class="rounded-xl border border-hairline bg-canvas px-4 py-3">
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                    <div class="min-w-0 flex-1 space-y-1">
+                      <div class="flex items-center gap-2">
+                        <HugeiconsIcon icon={AiSheetsIcon} size={16} strokeWidth={1.8} class="text-primary" />
+                        <span class="ds-label truncate text-ink">{conn.name}</span>
+                        <Badge tone={conn.enabled ? 'done' : 'idle'}>
+                          {conn.enabled ? 'Active' : 'Disabled'}
+                        </Badge>
+                      </div>
+                      <p class="ds-caption text-mute">{conn.spreadsheetName} · {conn.sheetName}</p>
+                      {#if conn.lastSyncedAt}
+                        <p class="text-xs text-mute">Last synced: {new Date(conn.lastSyncedAt).toLocaleString()}</p>
+                      {/if}
+                    </div>
+                    {#if canManage}
+                      <div class="flex shrink-0 flex-wrap items-center gap-1">
+                        <Button variant="ghost" size="sm" onclick={() => manualSyncSheet(conn.id)} disabled={sheetsSyncingId === conn.id}>
+                          <HugeiconsIcon icon={Refresh01Icon} size={15} strokeWidth={1.8} />
+                          Sync
+                        </Button>
+                        <Button variant="ghost" size="sm" onclick={() => openSheetsConfigureModal(conn)}>Edit</Button>
+                        <Button variant="ghost" size="sm" onclick={() => unassignSheet(conn.id)}>Unassign</Button>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          {#if sheetsUnassigned.length > 0}
+            <div class="space-y-2">
+              <p class="ds-label text-ink">Available connections</p>
+              <div class="space-y-2">
+                {#each sheetsUnassigned as conn (conn.id)}
+                  <div class="flex items-center justify-between rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-3">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <HugeiconsIcon icon={AiSheetsIcon} size={16} strokeWidth={1.8} class="text-mute" />
+                      <span class="ds-label truncate text-ink">{conn.name}</span>
+                    </div>
+                    {#if canManage}
+                      <Button variant="secondary" size="sm" onclick={() => openSheetsConfigureModal(conn)}>
+                        <HugeiconsIcon icon={Link01Icon} size={15} strokeWidth={1.8} />
+                        Assign
+                      </Button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if sheetsAssigned.length === 0 && sheetsUnassigned.length === 0}
+            <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-6 text-center">
+              <HugeiconsIcon icon={AiSheetsIcon} size={24} strokeWidth={1.8} class="mx-auto text-mute" />
+              <p class="text-sm text-mute mt-2">No Google Sheets connections available. Connect a Google account from the Integrations settings page first.</p>
+            </div>
+          {/if}
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
@@ -1778,5 +2060,149 @@
         <span>{checklistModalMode === 'create' ? tr('setup.createChecklistItem') : tr('setup.saveChecklistItem')}</span>
       </Button>
     </div>
+  {/snippet}
+</Dialog>
+
+<!-- Modal: Configure Google Sheets Connection -->
+<Dialog
+  bind:open={sheetsModalOpen}
+  title="Configure Google Sheets Sync"
+  description="Select a spreadsheet and map columns to workflow fields"
+  size="lg"
+  onclose={closeSheetsModal}
+>
+  <div class="space-y-4">
+    {#if configuringConn}
+      <div class="rounded-xl border border-hairline bg-canvas-sunken px-4 py-3 flex items-center gap-2">
+        <HugeiconsIcon icon={AiSheetsIcon} size={16} strokeWidth={1.8} class="text-primary" />
+        <span class="ds-label text-ink">{configuringConn.name}</span>
+      </div>
+    {/if}
+
+    <div>
+      <label class="ds-label text-ink mb-2 block">Select Spreadsheet</label>
+      {#if selectedSpreadsheetId}
+        <div class="rounded-xl border border-primary bg-primary-soft px-4 py-3 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <HugeiconsIcon icon={AiSheetsIcon} size={16} strokeWidth={1.8} class="text-primary shrink-0" />
+            <span class="ds-label text-ink truncate">{selectedSpreadsheetName}</span>
+          </div>
+          <button type="button" onclick={() => { selectedSpreadsheetId = ''; selectedSpreadsheetName = ''; sheetTabs = []; sheetHeaders = []; selectedSheetName = ''; }} class="text-sm text-mute hover:text-ink shrink-0">Change</button>
+        </div>
+      {:else}
+        <!-- Breadcrumb -->
+        {#if drivePath.length > 0}
+          <button type="button" onclick={() => navigateToPath(drivePath.length - 2)} class="flex items-center gap-1 mb-3 text-sm text-mute hover:text-ink transition-colors">
+            <HugeiconsIcon icon={ArrowLeft01Icon} size={14} strokeWidth={1.8} />
+            <span>{drivePath[drivePath.length - 1].name}</span>
+          </button>
+        {/if}
+
+        <div class="rounded-xl border border-hairline bg-canvas-sunken overflow-hidden">
+          {#if driveLoading}
+            <div class="divide-y divide-hairline">
+              {#each Array(5) as _}
+                <div class="flex items-center gap-3 px-4 py-2.5">
+                  <Skeleton class="h-[18px] w-[18px] rounded-md shrink-0" />
+                  <Skeleton class="h-4 flex-1 rounded-lg" />
+                  <Skeleton class="h-[14px] w-[14px] rounded shrink-0" />
+                </div>
+              {/each}
+            </div>
+          {:else if driveItems.length === 0}
+            <div class="px-4 py-8 text-center">
+              <p class="text-sm text-mute">No folders or spreadsheets here.</p>
+            </div>
+          {:else}
+            <div class="max-h-64 overflow-y-auto divide-y divide-hairline">
+              {#each driveItems as item (item.id)}
+                <button
+                  type="button"
+                  onclick={() => item.isFolder ? openDriveFolder(item.id, item.name) : onSpreadsheetSelected(item.id, item.name)}
+                  class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-lane"
+                >
+                  {#if item.isFolder}
+                    <HugeiconsIcon icon={Folder01Icon} size={18} strokeWidth={1.8} class="text-primary shrink-0" />
+                  {:else}
+                    <HugeiconsIcon icon={AiSheetsIcon} size={18} strokeWidth={1.8} class="text-mute shrink-0" />
+                  {/if}
+                  <span class="text-sm text-ink truncate flex-1">{item.name}</span>
+                  {#if item.isFolder}
+                    <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} class="text-mute shrink-0" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    {#if selectedSpreadsheetId}
+      <div>
+        <label class="ds-label text-ink mb-2 block" for="gs-sheet-tab">Sheet Tab</label>
+        {#if sheetTabs.length > 0}
+          <select
+            id="gs-sheet-tab"
+            class="w-full rounded-xl border border-hairline bg-canvas px-3 py-2 text-sm text-ink"
+            onchange={(e) => onSheetSelected(e.currentTarget.value)}
+          >
+            {#each sheetTabs as tab (tab.title)}
+              <option value={tab.title} selected={tab.title === selectedSheetName}>{tab.title}</option>
+            {/each}
+          </select>
+        {/if}
+      </div>
+
+      {#if sheetHeaders.length > 0}
+        <div>
+          <label class="ds-label text-ink mb-2 block">Column Mapping</label>
+          <p class="text-sm text-mute mb-3">Map spreadsheet columns to card fields.</p>
+          <div class="space-y-2">
+            <div class="flex items-center gap-3">
+              <span class="w-20 shrink-0 text-sm text-mute">Name</span>
+              <select class="flex-1 rounded-lg border border-hairline bg-canvas px-3 py-1.5 text-sm text-ink" bind:value={sheetsForm.columnMapping.name}>
+                {#each sheetHeaders[0] as header, i}
+                  <option value={i}>Col {i + 1}: {header}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="w-20 shrink-0 text-sm text-mute">WhatsApp</span>
+              <select class="flex-1 rounded-lg border border-hairline bg-canvas px-3 py-1.5 text-sm text-ink" bind:value={sheetsForm.columnMapping.wa}>
+                {#each sheetHeaders[0] as header, i}
+                  <option value={i}>Col {i + 1}: {header}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="w-20 shrink-0 text-sm text-mute">Product</span>
+              <select class="flex-1 rounded-lg border border-hairline bg-canvas px-3 py-1.5 text-sm text-ink" bind:value={sheetsForm.columnMapping.product}>
+                <option value={null}>— None —</option>
+                {#each sheetHeaders[0] as header, i}
+                  <option value={i}>Col {i + 1}: {header}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="w-20 shrink-0 text-sm text-mute">Tag</span>
+              <select class="flex-1 rounded-lg border border-hairline bg-canvas px-3 py-1.5 text-sm text-ink" bind:value={sheetsForm.columnMapping.tag}>
+                <option value={null}>— None —</option>
+                {#each sheetHeaders[0] as header, i}
+                  <option value={i}>Col {i + 1}: {header}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+        </div>
+      {/if}
+    {/if}
+  </div>
+  {#snippet footer()}
+    <Button variant="secondary" onclick={closeSheetsModal} disabled={sheetsSaving}>{tr('setup.cancel')}</Button>
+    <Button variant="primary" onclick={saveSheetsConfig} loading={sheetsSaving} disabled={!canManage || !selectedSpreadsheetId || !selectedSheetName}>
+      <HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={1.8} />
+      <span>Save Configuration</span>
+    </Button>
   {/snippet}
 </Dialog>

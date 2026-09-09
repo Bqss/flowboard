@@ -294,6 +294,52 @@ export type ApiMcpConfig = {
   mcpServers: Record<string, { url: string; headers: Record<string, string> }>;
 };
 
+export type ApiSheetsConnection = {
+  id: string;
+  workspaceId: string;
+  workflowId: string | null;
+  name: string;
+  spreadsheetId: string | null;
+  spreadsheetName: string | null;
+  sheetName: string;
+  columnMapping: { name: number; wa: number; product?: number | null; tag?: number | null } | null;
+  headerRowCount: number;
+  lastSyncedRow: number;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiSpreadsheetInfo = { id: string; name: string };
+export type ApiSheetTabInfo = { title: string; index: number };
+export type ApiDriveItem = { id: string; name: string; mimeType: string; isFolder: boolean };
+
+export type ApiSheetsConnectionInput = {
+  name: string;
+};
+
+export type ApiSheetsConfigureInput = {
+  workflowId: string;
+  spreadsheetId: string;
+  spreadsheetName: string;
+  sheetName: string;
+  columnMapping: { name: number; wa: number; product?: number | null; tag?: number | null };
+  headerRowCount?: number;
+};
+
+export type ApiSheetsConnectionUpdate = {
+  name?: string;
+  workflowId?: string | null;
+  spreadsheetId?: string | null;
+  spreadsheetName?: string | null;
+  sheetName?: string;
+  columnMapping?: ApiSheetsConnection['columnMapping'];
+  headerRowCount?: number;
+  enabled?: boolean;
+};
+
 export type ApiWaitingActionCard = {
   cardId: string;
   workflowId: string;
@@ -1429,6 +1475,90 @@ export const api = {
         joinedAt: string;
       }>;
     }>(`/admin/workspaces/${workspaceId}/members`, { fetch: fetchFn }),
+
+  /* --------------------------------------------------------------- Google Sheets */
+
+  listSheetsConnections: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ connections: ApiSheetsConnection[] }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets`,
+      { fetch: fetchFn }
+    ),
+
+  listSheetsSpreadsheets: (workspaceId: string, connectionId?: string, fetchFn?: FetchLike) =>
+    request<{ spreadsheets: ApiSpreadsheetInfo[] }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/spreadsheets${connectionId ? `?connectionId=${connectionId}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  browseSheetsDrive: (workspaceId: string, connectionId: string, parentId?: string, fetchFn?: FetchLike) =>
+    request<{ items: ApiDriveItem[] }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/browse?connectionId=${connectionId}${parentId ? `&parentId=${encodeURIComponent(parentId)}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  listSheetsTabs: (workspaceId: string, spreadsheetId: string, connectionId?: string, fetchFn?: FetchLike) =>
+    request<{ sheets: ApiSheetTabInfo[] }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/sheets?spreadsheetId=${encodeURIComponent(spreadsheetId)}${connectionId ? `&connectionId=${connectionId}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  getSheetsHeaders: (
+    workspaceId: string,
+    spreadsheetId: string,
+    sheetName: string,
+    connectionId?: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ headers: string[][] }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/headers?spreadsheetId=${encodeURIComponent(spreadsheetId)}&sheetName=${encodeURIComponent(sheetName)}${connectionId ? `&connectionId=${connectionId}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  createSheetsConnection: (workspaceId: string, input: ApiSheetsConnectionInput, fetchFn?: FetchLike) =>
+    request<{ connection: ApiSheetsConnection }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets`,
+      { method: 'POST', body: JSON.stringify(input), fetch: fetchFn }
+    ),
+
+  listSheetsConnectionsForWorkflow: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
+    request<{ connections: ApiSheetsConnection[] }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/workflow/${workflowId}`,
+      { fetch: fetchFn }
+    ),
+
+  configureSheetsConnection: (
+    workspaceId: string,
+    connectionId: string,
+    input: ApiSheetsConfigureInput,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ connection: ApiSheetsConnection }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/${connectionId}/configure`,
+      { method: 'PUT', body: JSON.stringify(input), fetch: fetchFn }
+    ),
+
+  updateSheetsConnection: (
+    workspaceId: string,
+    connectionId: string,
+    input: ApiSheetsConnectionUpdate,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ connection: ApiSheetsConnection }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/${connectionId}`,
+      { method: 'PATCH', body: JSON.stringify(input), fetch: fetchFn }
+    ),
+
+  deleteSheetsConnection: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/${connectionId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  syncSheetsConnection: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
+    request<{ result: { created: number; skipped: number; error?: string } }>(
+      `/workspaces/${workspaceId}/integrations/google-sheets/${connectionId}/sync`,
+      { method: 'POST', fetch: fetchFn }
+    ),
 
   getOnboardingState: (fetchFn?: FetchLike) =>
     request<{

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, ApiError, type ApiWajomConnection, type ApiWajomJob, type ApiMcpApiKey, type ApiMcpScopeMode, type ApiWorkflow } from '$lib/api/client';
+  import { api, ApiError, type ApiWajomConnection, type ApiWajomJob, type ApiMcpApiKey, type ApiMcpScopeMode, type ApiWorkflow, type ApiSheetsConnection } from '$lib/api/client';
   import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, Checkbox, Input, Skeleton } from '$lib/components/atoms/index.js';
@@ -11,13 +11,13 @@
     CheckmarkCircle02Icon,
     Link01Icon,
     Refresh01Icon,
-    ShieldKeyIcon,
     TestTube01Icon,
     Delete02Icon,
     Add01Icon,
     Copy01Icon,
     Key02Icon,
-    SentIcon
+    SentIcon,
+    AiSheetsIcon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../../$types';
 
@@ -41,7 +41,6 @@
   let issuedToken = $state<string | null>(null);
   let issuedTokenConnectionId = $state<string | null>(null);
   let tokenCopied = $state(false);
-
   // MCP API keys
   let apiKeys = $state<ApiMcpApiKey[]>([]);
   let apiKeysLoading = $state(true);
@@ -65,6 +64,18 @@
   let newKeyEnabledTools = $state<string[]>([]);
   let copyingPromptKeyId = $state<string | null>(null);
   let exportingConfigKeyId = $state<string | null>(null);
+
+  // Google Sheets
+  let sheetsConnections = $state<ApiSheetsConnection[]>([]);
+  let sheetsLoading = $state(true);
+  let sheetsModalOpen = $state(false);
+  let sheetsStep = $state<'connect' | 'name'>('connect');
+  let sheetsSaving = $state(false);
+  let sheetsSyncingId = $state<string | null>(null);
+  let editingSheetsId = $state<string | null>(null);
+  let sheetsForm = $state({
+    name: ''
+  });
 
   const ALL_TOOLS = [
     'create_card',
@@ -168,7 +179,6 @@
 
   let form = $state({
     name: '',
-    instanceId: '',
     sendApiKey: '',
     clearSendApiKey: false
   });
@@ -179,13 +189,9 @@
     editingId = connection?.id ?? null;
     form = {
       name: connection?.name ?? '',
-      instanceId: connection?.instanceId ?? '',
       sendApiKey: '',
       clearSendApiKey: false
     };
-    issuedToken = null;
-    issuedTokenConnectionId = null;
-    tokenCopied = false;
     errorMessage = null;
     successMessage = null;
     formOpen = true;
@@ -203,32 +209,39 @@
     if (!workspaceId) {
       loading = false;
       apiKeysLoading = false;
+      sheetsLoading = false;
       return;
     }
 
     loading = true;
     errorMessage = null;
-    try {
-      const [connectionResponse, jobResponse, keysResponse, workflowsResponse] = await Promise.all([
-        api.listWajomConnections(workspaceId),
-        api.listWajomJobs(workspaceId),
-        api.listApiKeys(workspaceId),
-        api.listWorkflows(workspaceId)
-      ]);
-      connections = connectionResponse.connections ?? [];
-      jobs = jobResponse.jobs ?? [];
-      apiKeys = keysResponse.keys ?? [];
-      workflowsList = workflowsResponse.workflows ?? [];
-    } catch (error) {
-      errorMessage = error instanceof ApiError ? error.message : tr('integrations.loadError');
-    } finally {
-      loading = false;
-      apiKeysLoading = false;
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
-      });
+    const [connR, jobsR, keysR, wfR, sheetsR] = await Promise.allSettled([
+      api.listWajomConnections(workspaceId),
+      api.listWajomJobs(workspaceId),
+      api.listApiKeys(workspaceId),
+      api.listWorkflows(workspaceId),
+      api.listSheetsConnections(workspaceId)
+    ]);
+
+    if (connR.status === 'fulfilled') connections = connR.value.connections ?? [];
+    if (jobsR.status === 'fulfilled') jobs = jobsR.value.jobs ?? [];
+    if (keysR.status === 'fulfilled') apiKeys = keysR.value.keys ?? [];
+    if (wfR.status === 'fulfilled') workflowsList = wfR.value.workflows ?? [];
+    if (sheetsR.status === 'fulfilled') sheetsConnections = sheetsR.value.connections ?? [];
+
+    const firstError = [connR, jobsR, keysR, wfR, sheetsR].find((r) => r.status === 'rejected');
+    if (firstError && firstError.status === 'rejected') {
+      const err = firstError.reason;
+      errorMessage = err instanceof ApiError ? err.message : tr('integrations.loadError');
     }
-  }
+
+    loading = false;
+    apiKeysLoading = false;
+    sheetsLoading = false;
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+    });
+   }
 
   async function handleCreateApiKey() {
     const workspaceId = data.workspace?.id;
@@ -395,8 +408,149 @@
     }
   }
 
+  // ---- Google Sheets functions ----
+
+  async function loadSheetsConnections() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    try {
+      const response = await api.listSheetsConnections(workspaceId);
+      sheetsConnections = response.connections ?? [];
+    } catch {
+      // silent — best-effort
+    } finally {
+      sheetsLoading = false;
+    }
+  }
+
+  function openSheetsModal() {
+    editingSheetsId = null;
+    sheetsStep = 'connect';
+    sheetsForm = { name: '' };
+    sheetsModalOpen = true;
+  }
+
+  function closeSheetsModal() {
+    if (sheetsSaving) return;
+    sheetsModalOpen = false;
+    editingSheetsId = null;
+  }
+
+  /** Step 1: Redirect to Google OAuth for Sheets */
+  function connectGoogle() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    window.location.href = `/api/workspaces/${workspaceId}/integrations/google-sheets/auth`;
+  }
+
+  async function submitSheetsForm() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    if (!sheetsForm.name.trim()) {
+      errorMessage = 'Please enter a connection name.';
+      return;
+    }
+    sheetsSaving = true;
+    errorMessage = null;
+    try {
+      if (editingSheetsId) {
+        await api.updateSheetsConnection(workspaceId, editingSheetsId, {
+          name: sheetsForm.name
+        });
+        successMessage = 'Google Sheets connection updated.';
+      } else {
+        await api.createSheetsConnection(workspaceId, {
+          name: sheetsForm.name
+        });
+        successMessage = 'Google account connected. Assign it to a workflow from the workflow setup page.';
+      }
+      sheetsModalOpen = false;
+      await loadSheetsConnections();
+    } catch (error) {
+      errorMessage = error instanceof ApiError ? error.message : 'Failed to save connection';
+    } finally {
+      sheetsSaving = false;
+    }
+  }
+
+  function openEditSheetsModal(conn: ApiSheetsConnection) {
+    editingSheetsId = conn.id;
+    sheetsForm = { name: conn.name };
+    sheetsStep = 'name';
+    sheetsModalOpen = true;
+  }
+
+  let confirmDeleteSheetsId = $state<string | null>(null);
+  let confirmDeleteSheetsLabel = $state('');
+  let deletingSheetsId = $state<string | null>(null);
+
+  function openDeleteSheetsConfirm(connId: string, name: string) {
+    confirmDeleteSheetsId = connId;
+    confirmDeleteSheetsLabel = name;
+  }
+
+  function closeDeleteSheetsConfirm() {
+    confirmDeleteSheetsId = null;
+    confirmDeleteSheetsLabel = '';
+  }
+
+  async function handleDeleteSheetsConnection() {
+    const workspaceId = data.workspace?.id;
+    const connId = confirmDeleteSheetsId;
+    if (!workspaceId || !connId) return;
+    deletingSheetsId = connId;
+    errorMessage = null;
+    successMessage = null;
+    try {
+      await api.deleteSheetsConnection(workspaceId, connId);
+      sheetsConnections = sheetsConnections.filter((c) => c.id !== connId);
+      closeDeleteSheetsConfirm();
+      successMessage = 'Google Sheets connection deleted.';
+    } catch (error) {
+      errorMessage = error instanceof ApiError ? error.message : 'Failed to delete connection';
+    } finally {
+      deletingSheetsId = null;
+    }
+  }
+
+  async function manualSyncSheets(connId: string) {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    sheetsSyncingId = connId;
+    try {
+      const response = await api.syncSheetsConnection(workspaceId, connId);
+      if (response.result.error) {
+        errorMessage = response.result.error;
+      } else {
+        successMessage = `Synced: ${response.result.created} created, ${response.result.skipped} skipped.`;
+      }
+      await loadSheetsConnections();
+    } catch (error) {
+      errorMessage = error instanceof ApiError ? error.message : 'Sync failed';
+    } finally {
+      sheetsSyncingId = null;
+    }
+  }
+
   $effect(() => {
     if (data.workspace?.id) loadData();
+  });
+
+  $effect(() => {
+    const url = new URL(window.location.href);
+    const step = url.searchParams.get('sheets_step');
+    const error = url.searchParams.get('sheets_error');
+    if (error) {
+      errorMessage = 'Google Sheets authentication failed. Please try again.';
+      url.searchParams.delete('sheets_error');
+      window.history.replaceState({}, '', url.pathname);
+    }
+    if (step === 'select') {
+      sheetsStep = 'name';
+      sheetsModalOpen = true;
+      url.searchParams.delete('sheets_step');
+      window.history.replaceState({}, '', url.pathname);
+    }
   });
 
   async function submitForm() {
@@ -405,28 +559,22 @@
     saving = true;
     errorMessage = null;
     successMessage = null;
-    issuedToken = null;
-    issuedTokenConnectionId = null;
 
     try {
       if (editingId) {
         const body: Parameters<typeof api.updateWajomConnection>[2] = {
           name: form.name,
-          instanceId: form.instanceId,
           ...(form.sendApiKey ? { sendApiKey: form.sendApiKey } : {}),
           ...(form.clearSendApiKey ? { clearSendApiKey: true } : {})
         };
         await api.updateWajomConnection(workspaceId, editingId, body);
         successMessage = tr('integrations.updated');
       } else {
-        const response = await api.createWajomConnection(workspaceId, {
+        await api.createWajomConnection(workspaceId, {
           name: form.name,
-          instanceId: form.instanceId,
           sendApiKey: form.sendApiKey || null
         });
         window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'connect_wa' }));
-        issuedToken = response.connectorToken;
-        issuedTokenConnectionId = response.connection.id;
         successMessage = tr('integrations.created');
       }
       await loadData();
@@ -481,11 +629,6 @@
     }
   }
 
-  async function copyToken() {
-    if (!issuedToken || !navigator.clipboard) return;
-    await navigator.clipboard.writeText(issuedToken);
-    tokenCopied = true;
-  }
 
   function formatDate(value: string | null) {
     if (!value) return tr('integrations.never');
@@ -528,26 +671,6 @@
     </div>
   {/if}
 
-  {#if issuedToken}
-    <section class="rounded-2xl border border-primary/25 bg-primary-soft p-4 sm:p-5 shadow-card">
-      <div class="flex items-start gap-3">
-        <HugeiconsIcon icon={ShieldKeyIcon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
-        <div class="min-w-0 flex-1 space-y-3">
-          <div>
-            <h2 class="ds-section-title text-ink">{tr('integrations.tokenTitle')}</h2>
-            <p class="ds-caption mt-1 text-mute">{tr('integrations.tokenDescription')}</p>
-          </div>
-          <div class="flex flex-col gap-2 sm:flex-row">
-            <Input value={issuedToken} readonly aria-label={tr('integrations.tokenLabel')} class="font-mono text-xs" />
-            <Button variant="secondary" onclick={copyToken}>
-              <HugeiconsIcon icon={Copy01Icon} size={15} strokeWidth={1.8} />
-              {tokenCopied ? tr('common.copied') : tr('integrations.copyToken')}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </section>
-  {/if}
 
   <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="wa-section">
     <div class="mb-4 sm:mb-6 flex items-start gap-3">
@@ -756,7 +879,140 @@
       </div>
     {/if}
   </section>
+
+  <!-- Google Sheets -->
+  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="gs-section">
+    <div class="mb-4 sm:mb-6 flex items-start gap-3">
+      <HugeiconsIcon icon={AiSheetsIcon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
+      <div class="flex-1">
+        <h2 class="ds-section-title text-ink">Google Sheets</h2>
+        <p class="text-sm font-normal leading-relaxed text-mute mt-1">
+          Connect your Google account here, then assign it to a workflow from the workflow setup page.
+        </p>
+      </div>
+      {#if canManage && !sheetsLoading}
+        <Button variant="primary" size="sm" onclick={openSheetsModal} data-onboarding="connect-sheets">
+          <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={1.8} />
+          Add Connection
+        </Button>
+      {/if}
+    </div>
+
+    {#if sheetsLoading}
+      <div class="space-y-2">
+        {#each Array(2) as _}
+          <Skeleton class="h-14 w-full rounded-xl" />
+        {/each}
+      </div>
+    {:else if sheetsConnections.length === 0}
+      <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
+        <HugeiconsIcon icon={AiSheetsIcon} size={24} strokeWidth={1.8} class="mx-auto text-mute" />
+        <p class="text-sm text-mute mt-2">No Google accounts connected yet.</p>
+      </div>
+    {:else}
+      <div class="space-y-3">
+        {#each sheetsConnections as conn (conn.id)}
+          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="ds-label truncate text-ink">{conn.name}</span>
+                  {#if conn.workflowId}
+                    <Badge tone={conn.enabled ? 'done' : 'idle'}>
+                      {conn.enabled ? 'Active' : 'Disabled'}
+                    </Badge>
+                  {:else}
+                    <Badge tone="queued">Unassigned</Badge>
+                  {/if}
+                </div>
+                <p class="ds-caption text-mute">
+                  {#if conn.spreadsheetName}
+                    {conn.spreadsheetName} · {conn.sheetName}
+                  {:else}
+                    Not configured — assign to a workflow to set up sync
+                  {/if}
+                </p>
+                {#if conn.lastSyncedAt}
+                  <p class="text-sm font-normal leading-relaxed text-mute">
+                    Last synced: {formatDate(conn.lastSyncedAt)} · Row {conn.lastSyncedRow}
+                    {#if conn.lastError}
+                      · <span class="text-status-urgent-ink">{conn.lastError}</span>
+                    {/if}
+                  </p>
+                {/if}
+              </div>
+              {#if canManage}
+                <div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                  {#if conn.workflowId}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onclick={() => manualSyncSheets(conn.id)}
+                      disabled={sheetsSyncingId === conn.id}
+                    >
+                      <HugeiconsIcon icon={Refresh01Icon} size={15} strokeWidth={1.8} />
+                      Sync
+                    </Button>
+                  {/if}
+                  <Button variant="ghost" size="sm" onclick={() => openEditSheetsModal(conn)}>
+                    {tr('common.edit')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onclick={() => openDeleteSheetsConfirm(conn.id, conn.name)}
+                    disabled={deletingSheetsId === conn.id}
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                    Delete
+                  </Button>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
 </div>
+
+<!-- Google Sheets connection modal -->
+<Dialog
+  bind:open={sheetsModalOpen}
+  title={editingSheetsId ? 'Edit Connection Name' : 'Connect Google Sheets'}
+  description="Connect your Google account for spreadsheet sync"
+  size="md"
+  onclose={closeSheetsModal}
+>
+  <div class="space-y-4">
+    {#if sheetsStep === 'connect' && !editingSheetsId}
+      <div class="rounded-xl border border-hairline bg-canvas px-4 py-6 text-center">
+        <HugeiconsIcon icon={AiSheetsIcon} size={32} strokeWidth={1.8} class="mx-auto text-primary" />
+        <p class="text-sm text-mute mt-3">
+          Connect your Google account to enable spreadsheet sync. You can assign it to a workflow later.
+        </p>
+        <Button variant="primary" class="mt-4" onclick={connectGoogle}>
+          <HugeiconsIcon icon={Link01Icon} size={16} strokeWidth={1.8} />
+          Connect Google Account
+        </Button>
+      </div>
+    {:else}
+      <FormField label="Connection Name" required>
+        {#snippet control(args)}
+          <Input {...args} bind:value={sheetsForm.name} placeholder="e.g. Lead Form Google Account" />
+        {/snippet}
+      </FormField>
+    {/if}
+  </div>
+  {#snippet footer()}
+    <Button variant="secondary" onclick={closeSheetsModal} disabled={sheetsSaving}>{tr('common.cancel')}</Button>
+    {#if sheetsStep !== 'connect' || editingSheetsId}
+      <Button variant="primary" onclick={submitSheetsForm} loading={sheetsSaving} disabled={!canManage}>
+        {editingSheetsId ? tr('common.save') : 'Save Connection'}
+      </Button>
+    {/if}
+  {/snippet}
+</Dialog>
 
 <!-- Wajom connection Add/Edit modal -->
 <Dialog
@@ -773,21 +1029,15 @@
       submitForm();
     }}
   >
-    <div class="grid gap-4 sm:grid-cols-2">
-      <FormField label={tr('integrations.name')} required>
-        {#snippet control(args)}
-          <Input {...args} bind:value={form.name} placeholder="Wajom production" />
-        {/snippet}
-      </FormField>
-      <FormField label={tr('integrations.instanceId')} required helper={tr('integrations.instanceHelper')}>
-        {#snippet control(args)}
-          <Input {...args} bind:value={form.instanceId} placeholder="wajom-prod-01" />
-        {/snippet}
-      </FormField>
-    </div>
+    <FormField label={tr('integrations.name')} required>
+      {#snippet control(args)}
+        <Input {...args} bind:value={form.name} placeholder="Wajom production" />
+      {/snippet}
+    </FormField>
 
     <FormField
       label={tr('integrations.sendApiKey')}
+      required={!editingId}
       helper={editingId ? tr('integrations.sendApiKeyEditHelper') : tr('integrations.sendApiKeyCreateHelper')}
     >
       {#snippet control(args)}
@@ -979,6 +1229,28 @@
       disabled={revokingKeyId !== null}
     >
       {revokingKeyId !== null ? tr('common.deleting') : tr('integrations.apiKeyRevoke')}
+    </Button>
+  {/snippet}
+</Dialog>
+
+<!-- Delete Google Sheets connection confirmation -->
+<Dialog
+  open={Boolean(confirmDeleteSheetsId)}
+  title="Delete Google Sheets Connection"
+  description={`Are you sure you want to delete "${confirmDeleteSheetsLabel}"? This will remove the connection and stop all syncing. This action cannot be undone.`}
+  size="sm"
+  onclose={closeDeleteSheetsConfirm}
+>
+  {#snippet footer()}
+    <Button variant="secondary" onclick={closeDeleteSheetsConfirm} disabled={deletingSheetsId !== null}>
+      {tr('common.cancel')}
+    </Button>
+    <Button
+      variant="destructive"
+      onclick={handleDeleteSheetsConnection}
+      disabled={deletingSheetsId !== null}
+    >
+      {deletingSheetsId !== null ? tr('common.deleting') : 'Delete'}
     </Button>
   {/snippet}
 </Dialog>

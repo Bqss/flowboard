@@ -1,6 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { getApi, reloadApi } from '@routes/api';
-import { startScheduler } from '@services/scheduler';
+import { startScheduler, stopScheduler } from '@services/scheduler';
 
 startScheduler();
 
@@ -29,5 +29,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 if (import.meta.hot) {
   import.meta.hot.on('flowboard:api-reload', () => {
     reloadApi();
+  });
+  import.meta.hot.dispose(() => {
+    stopScheduler();
   });
 }
