@@ -144,3 +144,29 @@ export const checkWajomConnection = async (connection: WajomConnection) => {
     return { ok: false as const, checked: true, error: message };
   }
 };
+
+export type WajomInstance = {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  status: string;
+};
+
+export const resolveWajomInstance = async (apiKey: string): Promise<WajomInstance> => {
+  const url = new URL(`${env.wajomApiBaseUrl}/api/internal/whatsapp/resolve`);
+  url.searchParams.set('api_key', apiKey);
+  const response = await withTimeout(url, {
+    headers: { 'x-internal-api-token': env.wajomInternalApiToken }
+  });
+  const payload = await readJson(response);
+  if (!response.ok) {
+    const message = typeof payload?.error === 'string' ? payload.error : `Wajom API returned ${response.status}.`;
+    throw new Error(message);
+  }
+  return {
+    id: String(payload?.id ?? ''),
+    name: typeof payload?.name === 'string' ? payload.name : null,
+    phone: typeof payload?.phone === 'string' ? payload.phone : null,
+    status: typeof payload?.status === 'string' ? payload.status : 'unknown'
+  };
+};

@@ -57,7 +57,6 @@ export type ApiWajomConnection = {
   lastCheckedAt: string | null;
   lastError: string | null;
   hasSendApiKey: boolean;
-  connectorTokenPrefix: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -1246,6 +1245,7 @@ export const api = {
       { fetch: fetchFn }
     ),
 
+
   listWajomJobs: (workspaceId: string, connectionId?: string, fetchFn?: FetchLike) =>
     request<{ jobs: ApiWajomJob[] }>(
       `/workspaces/${workspaceId}/integrations/wajom/jobs${connectionId ? `?connectionId=${connectionId}` : ''}`,
@@ -1256,14 +1256,13 @@ export const api = {
     workspaceId: string,
     body: {
       name: string;
-      instanceId: string;
       countryCode?: string;
       sendApiKey?: string | null;
       enabledTools?: string[];
     },
     fetchFn?: FetchLike
   ) =>
-    request<{ connection: ApiWajomConnection; connectorToken: string }>(
+    request<{ connection: ApiWajomConnection }>(
       `/workspaces/${workspaceId}/integrations/wajom`,
       { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
     ),
@@ -1293,11 +1292,6 @@ export const api = {
       { method: 'POST', fetch: fetchFn }
     ),
 
-  rotateWajomConnectorToken: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
-    request<{ connection: ApiWajomConnection; connectorToken: string }>(
-      `/workspaces/${workspaceId}/integrations/wajom/${connectionId}/rotate`,
-      { method: 'POST', fetch: fetchFn }
-    ),
 
   testWajomConnection: (workspaceId: string, connectionId: string, fetchFn?: FetchLike) =>
     request<{ result: { ok: boolean; checked: boolean; error?: string; message?: string } }>(

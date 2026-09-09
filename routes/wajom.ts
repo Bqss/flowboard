@@ -2,36 +2,41 @@ import { Elysia } from 'elysia';
 import * as wajom from '@handlers/wajom';
 import { createRequireAuth } from '@middlewares';
 import { createRequireWorkspaceOwner } from '@middlewares/workspace';
-import { checkIntegrationRateLimit, createRequestId } from '@services/integration-security';
-import { findWajomConnectionByToken } from '@services/wajom-connections';
+import { checkIntegrationRateLimit } from '@services/integration-security';
+import { getWajomConnection } from '@services/wajom-connections';
+import { resolveApiKey } from '@services/api-keys';
 import {
   CreateWajomConnectionSchema,
   UpdateWajomConnectionSchema,
   WajomConnectionParam,
   WajomDeliveryStatusSchema,
-  WajomInboundReplySchema,
   WajomJobParam,
   WajomJobsQuery,
   WajomTestSendSchema,
-  WajomToolCallSchema,
   WorkspaceIdParam
 } from '@validators';
 
-const readConnectorToken = (request: Request) => {
-  const authorization = request.headers.get('authorization');
-  if (authorization?.startsWith('Bearer ')) return authorization.slice(7).trim();
-  return request.headers.get('x-api-key')?.trim() ?? '';
-};
-
+/**
+ * Connector-facing guard: MCP API key (Bearer fbm_...) + connectionId query param.
+ * Replaces the old connector token guard. Wajom passes the workspace's MCP API key
+ * and the connectionId to identify which Wajom connection to use.
+ */
 const connectorGuard = new Elysia()
-  .derive({ as: 'scoped' }, async ({ request }) => {
-    const token = readConnectorToken(request);
-    const connection = token ? await findWajomConnectionByToken(token) : null;
+  .derive({ as: 'scoped' }, async ({ request, query }) => {
+    const authorization = request.headers.get('authorization');
+    const apiKey = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    const auth = apiKey ? await resolveApiKey(apiKey) : null;
+
+    const connectionId = (query as { connectionId?: string })?.connectionId;
+    const connection =
+      auth && connectionId ? await getWajomConnection(auth.workspaceId, connectionId) : null;
+
     const caller =
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip')?.trim() ||
       'unknown';
     const rate = checkIntegrationRateLimit(`${connection?.id ?? 'anonymous'}:${caller}`);
+
     return { wajomConnection: connection, connectorRate: rate };
   })
   .onBeforeHandle({ as: 'scoped' }, ({ wajomConnection, connectorRate, set }) => {
@@ -49,8 +54,7 @@ const connectorGuard = new Elysia()
 /**
  * Workspace-scoped Wajom management routes (session auth + owner guard).
  * Uses `prefix` so `createRequireAuth()` runs at the instance level —
- * Elysia 1.1.x does not reliably pass cookies to plugins `.use()`-ed
- * inside `.group()`.
+ * see the routing docs in AGENTS.md.
  */
 const wajomWorkspaceRoutes = () =>
   new Elysia({ prefix: '/workspaces/:workspaceId/integrations/wajom' })
@@ -68,7 +72,6 @@ const wajomWorkspaceRoutes = () =>
       body: UpdateWajomConnectionSchema
     })
     .post('/:connectionId/revoke', wajom.revokeConnection, { params: WajomConnectionParam })
-    .post('/:connectionId/rotate', wajom.rotateConnection, { params: WajomConnectionParam })
     .post('/:connectionId/test', wajom.testConnection, { params: WajomConnectionParam })
     .post('/:connectionId/test-send', wajom.testSend, {
       params: WajomConnectionParam,
@@ -76,29 +79,14 @@ const wajomWorkspaceRoutes = () =>
     });
 
 /**
- * Connector-facing routes (Bearer token auth via connectorGuard).
+ * Connector-facing routes (MCP API key auth + connectionId query param).
+ * Only health check and delivery status remain — tools/manifest/call/inbound
+ * are handled by the MCP server.
  */
 const wajomConnectorRoutes = () =>
   new Elysia({ prefix: '/integrations/wajom' })
     .use(connectorGuard)
-    .onError({ as: 'scoped' }, ({ code, request, set }) => {
-      if (code === 'VALIDATION') {
-        const requestId = createRequestId(request.headers.get('x-request-id') ?? undefined);
-        set.status = 422;
-        set.headers['x-request-id'] = requestId;
-        return {
-          ok: false,
-          error: 'Invalid connector request.',
-          code: 'invalid_input',
-          requestId
-        };
-      }
-    })
-    .get('/tools', wajom.listTools)
-    .get('/manifest', wajom.manifest)
     .get('/health', wajom.connectorHealth)
-    .post('/call', wajom.callTool, { body: WajomToolCallSchema })
-    .post('/inbound/reply', wajom.inboundReply, { body: WajomInboundReplySchema })
     .post('/jobs/:jobId/status', wajom.deliveryStatus, {
       params: WajomJobParam,
       body: WajomDeliveryStatusSchema

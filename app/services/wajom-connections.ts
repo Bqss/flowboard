@@ -5,11 +5,8 @@ import {
   type WajomConnection
 } from '@db';
 import {
-  createConnectorToken,
   decryptSecret,
-  encryptSecret,
-  getTokenPrefix,
-  hashConnectorToken
+  encryptSecret
 } from './integration-secrets';
 import { env } from '@config/env';
 
@@ -34,7 +31,7 @@ const healthEndpointFor = (instanceId: string) =>
 
 export type WajomConnectionInput = {
   name: string;
-  instanceId: string;
+  instanceId?: string;
   countryCode?: string;
   sendApiKey?: string | null;
   enabledTools?: WajomToolName[];
@@ -55,7 +52,6 @@ export type PublicWajomConnection = {
   lastCheckedAt: string | null;
   lastError: string | null;
   hasSendApiKey: boolean;
-  connectorTokenPrefix: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -86,7 +82,6 @@ const toPublicConnection = (row: WajomConnection): PublicWajomConnection => ({
   lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
   lastError: row.lastError,
   hasSendApiKey: Boolean(row.sendApiKeyEncrypted),
-  connectorTokenPrefix: row.connectorTokenPrefix,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString()
 });
@@ -113,10 +108,9 @@ export const getWajomConnection = async (workspaceId: string, connectionId: stri
 
 export const createWajomConnection = async (workspaceId: string, input: WajomConnectionInput) => {
   const name = input.name.trim();
-  const instanceId = input.instanceId.trim();
+  const instanceId = input.instanceId?.trim();
   if (!name || !instanceId) throw new Error('Nama koneksi dan instance ID wajib diisi.');
 
-  const connectorToken = createConnectorToken();
   const [row] = await db
     .insert(wajomConnections)
     .values({
@@ -127,13 +121,11 @@ export const createWajomConnection = async (workspaceId: string, input: WajomCon
       sendEndpoint: SEND_ENDPOINT,
       healthEndpoint: healthEndpointFor(instanceId),
       sendApiKeyEncrypted: input.sendApiKey?.trim() ? encryptSecret(input.sendApiKey.trim()) : null,
-      connectorTokenHash: hashConnectorToken(connectorToken),
-      connectorTokenPrefix: getTokenPrefix(connectorToken),
       enabledTools: cleanTools(input.enabledTools)
     })
     .returning();
 
-  return { connection: toPublicConnection(row), connectorToken };
+  return { connection: toPublicConnection(row) };
 };
 
 export const updateWajomConnection = async (
@@ -178,46 +170,6 @@ export const revokeWajomConnection = async (workspaceId: string, connectionId: s
   return updated ? toPublicConnection(updated) : null;
 };
 
-export const rotateWajomConnectorToken = async (workspaceId: string, connectionId: string) => {
-  const connectorToken = createConnectorToken();
-  const [updated] = await db
-    .update(wajomConnections)
-    .set({
-      connectorTokenHash: hashConnectorToken(connectorToken),
-      connectorTokenPrefix: getTokenPrefix(connectorToken),
-      enabled: true,
-      revokedAt: null,
-      updatedAt: new Date()
-    })
-    .where(and(eq(wajomConnections.id, connectionId), eq(wajomConnections.workspaceId, workspaceId)))
-    .returning();
-
-  return updated ? { connection: toPublicConnection(updated), connectorToken } : null;
-};
-
-export const findWajomConnectionByToken = async (token: string) => {
-  const tokenHash = hashConnectorToken(token);
-  const [row] = await db
-    .select()
-    .from(wajomConnections)
-    .where(
-      and(
-        eq(wajomConnections.connectorTokenHash, tokenHash),
-        eq(wajomConnections.enabled, true),
-        isNull(wajomConnections.revokedAt)
-      )
-    )
-    .limit(1);
-
-  if (!row) return null;
-
-  await db
-    .update(wajomConnections)
-    .set({ lastUsedAt: new Date(), updatedAt: new Date() })
-    .where(eq(wajomConnections.id, row.id));
-
-  return row;
-};
 
 /**
  * Find the active Wajom connection bound to a workspace.

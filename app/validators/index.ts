@@ -381,9 +381,8 @@ const WajomEnabledTools = t.Optional(
 
 export const CreateWajomConnectionSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
-  instanceId: t.String({ minLength: 1, maxLength: 160 }),
   countryCode: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
-  sendApiKey: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  sendApiKey: t.String({ minLength: 1, maxLength: 2000 }),
   enabledTools: WajomEnabledTools
 });
 
