@@ -36,7 +36,7 @@ export const urgencyEnum = pgEnum('urgency', ['high', 'medium', 'low']);
 export const deadlineUnitEnum = pgEnum('deadline_unit', ['hours', 'days']);
 export const repeatRuleEnum = pgEnum('repeat_rule', ['none', 'daily', 'weekly', 'monthly']);
 export const closureByEnum = pgEnum('closure_by', ['initiator', 'assignee']);
-export const cardSourceEnum = pgEnum('card_source', ['manual', 'csv', 'mcp', 'estafet']);
+export const cardSourceEnum = pgEnum('card_source', ['manual', 'csv', 'mcp', 'estafet', 'sheets']);
 export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'trial',
   'active',
@@ -346,8 +346,8 @@ export const wajomConnections = pgTable(
     sendEndpoint: text('send_endpoint').notNull(),
     healthEndpoint: text('health_endpoint'),
     sendApiKeyEncrypted: text('send_api_key_encrypted'),
-    connectorTokenHash: text('connector_token_hash').notNull().unique(),
-    connectorTokenPrefix: text('connector_token_prefix').notNull(),
+    connectorTokenHash: text('connector_token_hash').unique(),
+    connectorTokenPrefix: text('connector_token_prefix'),
     enabledTools: text('enabled_tools')
       .array()
       .notNull()
@@ -876,3 +876,44 @@ export const onboardingState = pgTable(
 
 export type OnboardingState = typeof onboardingState.$inferSelect;
 export type NewOnboardingState = typeof onboardingState.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Google Sheets integration — OAuth connection + polling sync
+// ---------------------------------------------------------------------------
+
+export const googleSheetsConnections = pgTable(
+  'google_sheets_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    workflowId: uuid('workflow_id')
+      .references(() => workflows.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    spreadsheetId: text('spreadsheet_id'),
+    spreadsheetName: text('spreadsheet_name'),
+    sheetName: text('sheet_name').notNull().default('Sheet1'),
+    // AES-256-GCM encrypted refresh token (format: iv.tag.ciphertext)
+    refreshTokenEncrypted: text('refresh_token_encrypted').notNull(),
+    // Maps sheet columns to card fields: { name: 0, wa: 1, product: 2, tag: 3 }
+    // Values are 0-based column indices in the sheet
+    columnMapping: jsonb('column_mapping'),
+    // 1-based row number where data starts (row 1 is typically the header)
+    headerRowCount: integer('header_row_count').notNull().default(1),
+    // Last row index (0-based) that was successfully synced
+    lastSyncedRow: integer('last_synced_row').notNull().default(0),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('google_sheets_connections_workspace_idx').on(table.workspaceId),
+    index('google_sheets_connections_workflow_idx').on(table.workflowId)
+  ]
+);
+
+export type GoogleSheetsConnection = typeof googleSheetsConnections.$inferSelect;
+export type NewGoogleSheetsConnection = typeof googleSheetsConnections.$inferInsert;
