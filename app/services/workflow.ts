@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, isNotNull, isNull, lte, gte, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull, isNull, lt, lte, gte, or, sql } from 'drizzle-orm';
 import {
   cards,
   checklistItems,
@@ -1427,8 +1427,8 @@ export const processRecurringWorkflows = async (): Promise<number> => {
   const now = new Date();
 
   for (const wf of recurringWorkflows) {
-    const cycleStart = getCycleStart(wf.repeatRule, now);
-    const cycleEnd = getCycleEnd(wf.repeatRule, now);
+    const currentCycleStart = getCycleStart(wf.repeatRule, now);
+    const previousCycleStart = getPreviousCycleStart(wf.repeatRule, currentCycleStart);
 
     // Find all customers who had a card in this workflow in the previous cycle.
     const prevCycleCards = await db
@@ -1436,20 +1436,20 @@ export const processRecurringWorkflows = async (): Promise<number> => {
       .from(cards)
       .where(and(
         eq(cards.workflowId, wf.id),
-        gte(cards.createdAt, cycleStart),
-        lte(cards.createdAt, cycleEnd)
+        gte(cards.createdAt, previousCycleStart),
+        lt(cards.createdAt, currentCycleStart)
       ))
       .groupBy(cards.customerId);
 
     for (const { customerId } of prevCycleCards) {
-      // Check if a card already exists for this cycle.
+      // Check if a card already exists for this customer in the current cycle.
       const existing = await db
         .select({ id: cards.id })
         .from(cards)
         .where(and(
           eq(cards.workflowId, wf.id),
           eq(cards.customerId, customerId),
-          gte(cards.createdAt, now)
+          gte(cards.createdAt, currentCycleStart)
         ))
         .limit(1);
 
@@ -1489,6 +1489,7 @@ export const processRecurringWorkflows = async (): Promise<number> => {
           customerId: customer.id,
           assigneeId: assignedUserId,
           source: 'manual',
+          tag: getPeriodTag(wf.repeatRule, currentCycleStart),
           dueAt: computeDueAt(wf)
         })
         .returning();
@@ -1501,7 +1502,7 @@ export const processRecurringWorkflows = async (): Promise<number> => {
 };
 
 /**
- * Returns the start of the previous cycle for a given repeat rule.
+ * Returns the start of the current cycle for a given repeat rule.
  * For monthly: first day of the current month.
  * For weekly: start of the current week (Monday).
  * For daily: start of today.
@@ -1521,9 +1522,35 @@ const getCycleStart = (rule: string, now: Date): Date => {
 };
 
 /**
- * Returns the end of the previous cycle (same as cycle start for spawn purposes).
- * We look at cards created in the current cycle to determine who should get a new one.
+ * Returns the start of the previous cycle for a given repeat rule.
  */
-const getCycleEnd = (rule: string, now: Date): Date => {
-  return now;
+const getPreviousCycleStart = (rule: string, currentStart: Date): Date => {
+  const d = new Date(currentStart);
+  if (rule === 'monthly') {
+    return new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  }
+  if (rule === 'weekly') {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7);
+  }
+  // daily
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+};
+
+/**
+ * Returns a human-readable period label for a recurring card.
+ * monthly  → "2026-09"
+ * weekly   → "2026-W37"
+ * daily    → "2026-09-09"
+ */
+const getPeriodTag = (rule: string, cycleStart: Date): string => {
+  const y = cycleStart.getFullYear();
+  const m = String(cycleStart.getMonth() + 1).padStart(2, '0');
+  if (rule === 'monthly') return `${y}-${m}`;
+  if (rule === 'weekly') {
+    const jan1 = new Date(y, 0, 1);
+    const week = Math.ceil(((cycleStart.getTime() - jan1.getTime()) / 86_400_000 + jan1.getDay() + 1) / 7);
+    return `${y}-W${String(week).padStart(2, '0')}`;
+  }
+  const d = String(cycleStart.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
