@@ -417,6 +417,7 @@
     steps={activeTour.steps}
     open={true}
     onClose={closeTour}
+    onSkip={completeTour}
     onComplete={completeTour}
     labels={{
       next: tr('onboarding.tourNext'),

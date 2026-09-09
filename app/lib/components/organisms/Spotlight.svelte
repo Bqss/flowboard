@@ -15,6 +15,7 @@
     open: boolean;
     onClose: () => void;
     onComplete: () => void;
+    onSkip?: () => void;
     labels: {
       next: string;
       prev: string;
@@ -24,7 +25,7 @@
     };
   };
 
-  let { steps, open, onClose, onComplete, labels }: Props = $props();
+  let { steps, open, onClose, onComplete, onSkip, labels }: Props = $props();
 
   let currentStep = $state(0);
   let targetRect = $state<DOMRect | null>(null);
@@ -284,7 +285,7 @@
     <div class="mt-4 flex items-center justify-between gap-2">
       <button
         type="button"
-        onclick={onClose}
+        onclick={onSkip ?? onClose}
         class="text-[13px] font-medium text-mute transition-colors hover:text-ink"
       >
         {labels.skip}
