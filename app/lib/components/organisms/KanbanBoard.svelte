@@ -10,7 +10,7 @@
 		UserCircleIcon,
 		WhatsappIcon,
 		Alert02Icon,
-		Clock01Icon
+		Clock01Icon,
 	} from '@hugeicons/core-free-icons';
 	import type { KanbanColumn, KanbanCard } from './shared.js';
 
@@ -23,6 +23,8 @@
 		columnLabel?: string;
 		waErrorLabel?: string;
 		dragEnabled?: boolean;
+		maxHeight?: string;
+		maxVisibleCards?: number;
 		oncardclick?: (columnId: string, cardId: string) => void;
 		oncardmove?: (cardId: string, fromColumnId: string, toColumnId: string) => void | Promise<void>;
 		onadd?: (columnId: string) => void;
@@ -39,6 +41,8 @@
 		columnLabel = 'Column',
 		waErrorLabel = 'WA Error',
 		dragEnabled = true,
+		maxHeight = 'calc(100vh - 280px)',
+		maxVisibleCards = 20,
 		oncardclick,
 		oncardmove,
 		onadd,
@@ -50,6 +54,7 @@
 	let dragSourceColumnId = $state<string | null>(null);
 	let dropTargetColumnId = $state<string | null>(null);
 	let suppressClick = $state(false);
+	let visibleCounts = $state<Map<string, number>>(new Map());
 
 	const laneTone = (index: number) => {
 		const tones = ['queued', 'progress', 'done'] as const;
@@ -142,7 +147,8 @@
 
 <div
 	bind:this={ref}
-	class={cn('flex gap-4 overflow-x-auto pb-6 pt-1 items-start', className)}
+	class={cn('flex gap-4 overflow-x-auto overflow-y-hidden pb-6 pt-1 items-stretch', className)}
+	style="height: {maxHeight}"
 	{...rest}
 >
 	{#each columns as column, i (column.id)}
@@ -150,9 +156,8 @@
 		<section
 			role="group"
 			aria-label={`${columnLabel} ${column.title}`}
-			data-onboarding={i === 0 ? 'kanban-stage' : undefined}
-			class={cn(
-			'flex w-lane shrink-0 flex-col rounded-2xl bg-canvas-sunken p-3.5 select-none shadow-xs border border-hairline transition-all duration-150',
+		class={cn(
+			'flex w-lane shrink-0 flex-col h-full rounded-2xl bg-canvas-sunken p-3.5 select-none shadow-xs border border-hairline transition-all duration-150 min-h-0',
 				dropTargetColumnId === column.id &&
 					draggingCardId &&
 					dragSourceColumnId !== column.id &&
@@ -187,121 +192,143 @@
 		<span>{addLabel}</span>
 	</button>
 
-			<!-- Cards Stack -->
-			<div class="flex min-h-[140px] flex-1 flex-col gap-2.5">
-				{#if column.items.length === 0}
-				<div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-hairline p-6 text-center space-y-1.5">
-						<p class="text-xs font-medium text-mute">{emptyTitle}</p>
-						{#if dragEnabled && oncardmove}
-							<p class="text-[11px] text-faint">{emptyDropHint}</p>
-						{/if}
-					</div>
-				{:else}
-					{#each column.items as card, ci (card.id)}
-						{@const badgeTone = card.badgeTone ?? resolveTone(card.badge)}
-						{@const barTone = card.labelBarTone ?? (badgeTone === 'neutral' ? tone : badgeTone)}
-						{@const accentHex = labelBarColor[barTone as keyof typeof labelBarColor] ?? '#4f46e5'}
+	<!-- Cards Stack -->
+	<div
+		class="flex flex-col gap-2.5 overflow-y-auto"
+		style="max-height: calc({maxHeight} - 7rem)"
+			onscroll={(e) => {
+				const el = e.currentTarget as HTMLElement;
+				if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
+					const current = visibleCounts.get(column.id) ?? maxVisibleCards;
+					if (current < column.items.length) {
+						const next = new Map(visibleCounts);
+						next.set(column.id, current + maxVisibleCards);
+						visibleCounts = next;
+					}
+				}
+			}}
+		>
+			{#if column.items.length === 0}
+			<div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-hairline p-6 text-center space-y-1.5">
+					<p class="text-xs font-medium text-mute">{emptyTitle}</p>
+					{#if dragEnabled && oncardmove}
+						<p class="text-[11px] text-faint">{emptyDropHint}</p>
+					{/if}
+				</div>
+			{:else}
+				{@const visibleCount = visibleCounts.get(column.id) ?? maxVisibleCards}
+				{@const visibleItems = column.items.slice(0, visibleCount)}
+				{@const remaining = column.items.length - visibleItems.length}
+				{#each visibleItems as card, ci (card.id)}
+					{@const badgeTone = card.badgeTone ?? resolveTone(card.badge)}
+					{@const barTone = card.labelBarTone ?? (badgeTone === 'neutral' ? tone : badgeTone)}
+					{@const accentHex = labelBarColor[barTone as keyof typeof labelBarColor] ?? '#4f46e5'}
 
-						<button
-							type="button"
-							draggable={dragEnabled && Boolean(oncardmove)}
-							ondragstart={(event) => onDragStart(event, column.id, card.id)}
-							ondragend={onDragEnd}
-							onclick={() => handleCardClick(column.id, card.id)}
-							data-onboarding={i === 0 && ci === 0 ? 'kanban-card' : undefined}
-							class={cn(
-						'group relative cursor-grab rounded-xl bg-card pl-4.5 p-3.5 text-left border border-hairline shadow-card hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing space-y-2.5 overflow-hidden',
-								card.selected && 'ring-2 ring-primary border-transparent shadow-card-hover',
-								draggingCardId === card.id && 'opacity-40 ring-2 ring-primary/40'
-							)}
-						>
-							<!-- Left Accent Bar -->
-							<div
-								class="absolute top-3 bottom-3 left-0 w-1 rounded-full"
-								style="background-color: {accentHex};"
-							></div>
+					<button
+						type="button"
+						draggable={dragEnabled && Boolean(oncardmove)}
+						ondragstart={(event) => onDragStart(event, column.id, card.id)}
+						ondragend={onDragEnd}
+						onclick={() => handleCardClick(column.id, card.id)}
+						data-onboarding={i === 0 && ci === 0 ? 'kanban-card' : undefined}
+						class={cn(
+					'group relative cursor-grab rounded-xl bg-card pl-4.5 p-3.5 text-left border border-hairline shadow-card hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing space-y-2.5 overflow-hidden',
+							card.selected && 'ring-2 ring-primary border-transparent shadow-card-hover',
+							draggingCardId === card.id && 'opacity-40 ring-2 ring-primary/40'
+						)}
+					>
+						<!-- Left Accent Bar -->
+						<div
+							class="absolute top-3 bottom-3 left-0 w-1 rounded-full"
+							style="background-color: {accentHex};"
+						></div>
 
-							<!-- Top Meta Row: Badges & Assignee Chip -->
-							<div class="flex items-center justify-between gap-2 pt-0.5">
-								<div class="flex flex-wrap items-center gap-1 min-w-0">
-									{#if card.waError}
-										<Badge tone="urgent" variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
-											{waErrorLabel}
-										</Badge>
-									{/if}
-								{#if card.badge}
-									<Badge tone={badgeTone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
-										{card.badge}
+						<!-- Top Meta Row: Badges & Assignee Chip -->
+						<div class="flex items-center justify-between gap-2 pt-0.5">
+							<div class="flex flex-wrap items-center gap-1 min-w-0">
+								{#if card.waError}
+									<Badge tone="urgent" variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
+										{waErrorLabel}
 									</Badge>
 								{/if}
-								{#if card.dueBadge}
-									<Badge tone={card.dueBadge.tone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2 inline-flex items-center gap-0.5">
-										<HugeiconsIcon icon={Clock01Icon} size={10} strokeWidth={2} />
-										{card.dueBadge.label}
-									</Badge>
-								{/if}
-								</div>
-
-								{#if card.assignee}
-								<div class="flex min-w-0 items-center gap-1.5 rounded-full bg-canvas-sunken px-2 py-0.5 shrink-0">
-										<Avatar name={card.assignee} src={card.assigneeAvatar} size={16} class="shrink-0" />
-										<span class="truncate text-[11px] font-semibold text-ink-soft max-w-[90px]">
-											{card.assignee}
-										</span>
-									</div>
-								{/if}
+							{#if card.badge}
+								<Badge tone={badgeTone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
+									{card.badge}
+								</Badge>
+							{/if}
+							{#if card.dueBadge}
+								<Badge tone={card.dueBadge.tone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2 inline-flex items-center gap-0.5">
+									<HugeiconsIcon icon={Clock01Icon} size={10} strokeWidth={2} />
+									{card.dueBadge.label}
+								</Badge>
+							{/if}
 							</div>
 
-							<!-- Card Title (Customer Name) -->
-							<div>
-								<p class="text-sm font-bold text-ink leading-snug break-words group-hover:text-primary transition-colors">
-									{card.title}
-								</p>
-
-								<!-- Subtitle (Product / WhatsApp number) -->
-								{#if card.subtitle}
-									<p class="text-xs text-mute mt-1 truncate">
-										{card.subtitle}
-									</p>
-								{/if}
-								{#if card.dueDateText}
-									<p class="text-[11px] text-mute mt-1 flex items-center gap-1 truncate">
-										<HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={1.8} class="shrink-0 text-mute" />
-										<span class="truncate">{card.dueDateText}</span>
-									</p>
-								{/if}
-							</div>
-
-							<!-- Footer Row: Checklist Progress -->
-							{#if card.progress}
-							<div class="mt-2.5 flex items-center justify-between pt-2 text-xs">
-									<div class="flex items-center gap-1.5">
-										<HugeiconsIcon
-											icon={CheckListIcon}
-											size={13}
-											strokeWidth={1.8}
-											class={card.progressDone ? 'text-status-done-ink' : 'text-mute'}
-										/>
-										<span
-											class={cn(
-												'text-[11px] font-semibold',
-												card.progressDone ? 'text-status-done-ink' : 'text-mute'
-											)}
-										>
-											{card.progress}
-										</span>
-									</div>
-									{#if card.progressDone}
-										<span class="inline-flex items-center gap-0.5 rounded-full bg-status-done-soft text-status-done-ink border border-status-done/30 px-1.5 py-0.2 text-[10px] font-semibold">
-											✓ Selesai
-										</span>
-									{/if}
+							{#if card.assignee}
+							<div class="flex min-w-0 items-center gap-1.5 rounded-full bg-canvas-sunken px-2 py-0.5 shrink-0">
+									<Avatar name={card.assignee} src={card.assigneeAvatar} size={16} class="shrink-0" />
+									<span class="truncate text-[11px] font-semibold text-ink-soft max-w-[90px]">
+										{card.assignee}
+									</span>
 								</div>
 							{/if}
-						</button>
-					{/each}
+						</div>
+
+						<!-- Card Title (Customer Name) -->
+						<div>
+							<p class="text-sm font-bold text-ink leading-snug break-words group-hover:text-primary transition-colors">
+								{card.title}
+							</p>
+
+							<!-- Subtitle (Product / WhatsApp number) -->
+							{#if card.subtitle}
+								<p class="text-xs text-mute mt-1 truncate">
+									{card.subtitle}
+								</p>
+							{/if}
+							{#if card.dueDateText}
+								<p class="text-[11px] text-mute mt-1 flex items-center gap-1 truncate">
+									<HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={1.8} class="shrink-0 text-mute" />
+									<span class="truncate">{card.dueDateText}</span>
+								</p>
+							{/if}
+						</div>
+
+						<!-- Footer Row: Checklist Progress -->
+						{#if card.progress}
+						<div class="mt-2.5 flex items-center justify-between pt-2 text-xs">
+								<div class="flex items-center gap-1.5">
+									<HugeiconsIcon
+										icon={CheckListIcon}
+										size={13}
+										strokeWidth={1.8}
+										class={card.progressDone ? 'text-status-done-ink' : 'text-mute'}
+									/>
+									<span
+										class={cn(
+											'text-[11px] font-semibold',
+											card.progressDone ? 'text-status-done-ink' : 'text-mute'
+										)}
+									>
+										{card.progress}
+									</span>
+								</div>
+								{#if card.progressDone}
+									<span class="inline-flex items-center gap-0.5 rounded-full bg-status-done-soft text-status-done-ink border border-status-done/30 px-1.5 py-0.2 text-[10px] font-semibold">
+										✓ Selesai
+									</span>
+								{/if}
+							</div>
+						{/if}
+					</button>
+				{/each}
+				{#if remaining > 0}
+					<div class="flex items-center justify-center py-2 text-xs text-faint">
+						<span>{remaining} more…</span>
+					</div>
 				{/if}
-			</div>
+			{/if}
+		</div>
 		</section>
 	{/each}
 </div>
