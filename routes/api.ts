@@ -6,6 +6,7 @@ import { createUsersRoutes } from './users';
 import { createWorkspacesRoutes } from './workspaces';
 import { createWorkflowsRoutes } from './workflows';
 import { createNotificationsRoutes } from './notifications';
+import { createChatRoutes } from './chat';
 import { createWebhooksRoutes } from './webhooks';
 import { createIntegrationsRoutes } from './integrations';
 import { createWajomRoutes } from './wajom';
@@ -24,6 +25,7 @@ export const buildApi = () =>
     .use(createWorkspacesRoutes())
     .use(createWorkflowsRoutes())
     .use(createNotificationsRoutes())
+    .use(createChatRoutes())
     .use(createWebhooksRoutes())
     .use(createIntegrationsRoutes())
     .use(createWajomRoutes())

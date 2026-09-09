@@ -44,6 +44,62 @@ export const WorkspaceMemberParam = t.Object({
   userId: t.String({ format: 'uuid' })
 });
 
+export const ChatConversationParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  conversationId: t.String({ format: 'uuid' })
+});
+
+export const ChatMessageParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  conversationId: t.String({ format: 'uuid' }),
+  messageId: t.String({ format: 'uuid' })
+});
+
+export const ChatReactionParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  conversationId: t.String({ format: 'uuid' }),
+  messageId: t.String({ format: 'uuid' }),
+  reaction: t.String({ minLength: 1, maxLength: 32 })
+});
+
+export const ChatParticipantParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  conversationId: t.String({ format: 'uuid' }),
+  userId: t.String({ format: 'uuid' })
+});
+
+export const CreateDirectSchema = t.Object({
+  memberId: t.String({ format: 'uuid' })
+});
+
+export const CreateGroupSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  memberIds: t.Array(t.String({ format: 'uuid' }), { minItems: 2, maxItems: 100 })
+});
+
+export const SendChatMessageSchema = t.Object({
+  body: t.String({ maxLength: 4000 }),
+  clientMessageId: t.String({ minLength: 1, maxLength: 64 }),
+  replyToMessageId: t.Optional(t.String({ format: 'uuid' })),
+  attachmentIds: t.Optional(t.Array(t.String({ format: 'uuid' })))
+});
+
+export const ChatAttachmentSchema = t.Object({
+  file: t.File()
+});
+
+export const EditChatMessageSchema = t.Object({
+  body: t.String({ minLength: 1, maxLength: 4000 })
+});
+
+export const AddParticipantSchema = t.Object({
+  userId: t.String({ format: 'uuid' })
+});
+
+export const RenameRoomSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 })
+});
+
 export const UpdateWorkspaceSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 })
 });
