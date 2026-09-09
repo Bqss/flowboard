@@ -130,7 +130,7 @@ export type FooterLink = {
 
 /** Modal scrim + card shell classes from DESIGN.md */
 export const modalScrimClass =
-	'fixed inset-0 z-[100] flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-[2px]';
+	'fixed inset-0 z-[300] flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-[2px]';
 
 export const modalPanelClass =
 	'w-full max-w-lg rounded-xl bg-card p-6 shadow-[var(--shadow-modal)] origin-center will-change-[transform,opacity]';

@@ -103,7 +103,7 @@
 <svelte:window onkeydown={onkeydown} />
 
 {#if open}
-	<div bind:this={ref} class={cn('fixed inset-0 z-[100]', className)} use:dismissable={close} {...rest}>
+	<div bind:this={ref} class={cn('fixed inset-0 z-[300]', className)} use:dismissable={close} {...rest}>
 		<button
 			type="button"
 			class="absolute inset-0 bg-[var(--overlay-scrim)] backdrop-blur-[2px]"

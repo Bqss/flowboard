@@ -41,7 +41,7 @@
 		columnLabel = 'Column',
 		waErrorLabel = 'WA Error',
 		dragEnabled = true,
-		maxHeight = 'calc(100vh - 280px)',
+	maxHeight = 'calc(100vh - 220px)',
 		maxVisibleCards = 20,
 		oncardclick,
 		oncardmove,
@@ -147,8 +147,8 @@
 
 <div
 	bind:this={ref}
-	class={cn('flex gap-4 overflow-x-auto overflow-y-hidden pb-6 pt-1 items-stretch', className)}
-	style="height: {maxHeight}"
+	class={cn('flex gap-4 overflow-x-auto pb-6 pt-1 items-stretch', className)}
+	style="max-height: {maxHeight}"
 	{...rest}
 >
 	{#each columns as column, i (column.id)}
@@ -194,8 +194,7 @@
 
 	<!-- Cards Stack -->
 	<div
-		class="flex flex-col gap-2.5 overflow-y-auto"
-		style="max-height: calc({maxHeight} - 7rem)"
+		class="flex flex-1 flex-col gap-2.5 overflow-y-auto min-h-0 pb-3"
 			onscroll={(e) => {
 				const el = e.currentTarget as HTMLElement;
 				if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
@@ -231,11 +230,11 @@
 						ondragend={onDragEnd}
 						onclick={() => handleCardClick(column.id, card.id)}
 						data-onboarding={i === 0 && ci === 0 ? 'kanban-card' : undefined}
-						class={cn(
-					'group relative cursor-grab rounded-xl bg-card pl-4.5 p-3.5 text-left border border-hairline shadow-card hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing space-y-2.5 overflow-hidden',
-							card.selected && 'ring-2 ring-primary border-transparent shadow-card-hover',
-							draggingCardId === card.id && 'opacity-40 ring-2 ring-primary/40'
-						)}
+					class={cn(
+				'group relative flex flex-col gap-2.5 min-h-[88px] cursor-grab rounded-xl bg-card pl-4.5 p-3.5 text-left border border-hairline shadow-card hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 ease-out active:cursor-grabbing overflow-hidden',
+						card.selected && 'ring-2 ring-primary border-transparent shadow-card-hover',
+						draggingCardId === card.id && 'opacity-40 ring-2 ring-primary/40'
+					)}
 					>
 						<!-- Left Accent Bar -->
 						<div

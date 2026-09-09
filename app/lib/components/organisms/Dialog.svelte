@@ -64,7 +64,7 @@
 {#if open}
 	<div
 		bind:this={ref}
-		class={cn('fixed inset-0 z-[100]', className)}
+		class={cn('fixed inset-0 z-[300]', className)}
 		use:dismissable={close}
 		{...rest}
 	>

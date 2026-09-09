@@ -36,7 +36,7 @@
 </script>
 
 {#if open}
-	<div class="fixed inset-0 z-[100]" use:dismissable={close}>
+	<div class="fixed inset-0 z-[300]" use:dismissable={close}>
 		<div class="fixed inset-0 bg-[var(--overlay-scrim)]" aria-hidden="true"></div>
 
 		<div
@@ -45,7 +45,7 @@
 			aria-modal="true"
 			aria-label={title}
 			class={cn(
-				'fixed inset-y-0 z-[101] flex w-full max-w-md flex-col bg-card shadow-[var(--shadow-modal)]',
+			'fixed inset-y-0 z-[301] flex w-full max-w-md flex-col bg-card shadow-[var(--shadow-modal)]',
 				side === 'right' ? 'right-0 rounded-l-xl' : 'left-0 rounded-r-xl',
 				className
 			)}
