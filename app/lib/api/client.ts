@@ -189,6 +189,95 @@ export type ApiCardDetail = {
   waFollowupsStopped?: boolean;
 };
 
+export type ApiTaskPriority = 'low' | 'medium' | 'high';
+
+export type ApiTaskBoard = {
+  id: string;
+  workspaceId?: string;
+  name: string;
+  description: string | null;
+  ownerId: string;
+  ownerName?: string;
+  taskCount?: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: ApiTaskPriority;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  dueAt: string | null;
+  position: number;
+  commentCount: number;
+  attachmentCount: number;
+  completedAt: string | null;
+  createdAt: string;
+};
+
+export type ApiTaskBoardColumn = {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  tasks: ApiTask[];
+};
+
+export type ApiTaskComment = {
+  id: string;
+  content: string;
+  authorId: string | null;
+  authorName: string | null;
+  createdAt: string;
+};
+
+export type ApiTaskAttachment = {
+  id: string;
+  fileName: string;
+  filePath: string;
+  fileType: string;
+  fileSize: number;
+  width: number | null;
+  height: number | null;
+  uploaderId: string;
+  uploaderName: string | null;
+  createdAt: string;
+};
+
+export type ApiTaskDetail = {
+  id: string;
+  boardId: string;
+  columnId: string;
+  title: string;
+  description: string | null;
+  priority: ApiTaskPriority;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  dueAt: string | null;
+  position: number;
+  createdById: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  comments?: ApiTaskComment[];
+  attachments?: ApiTaskAttachment[];
+};
+
+export type ApiTaskActivity = {
+  id: string;
+  eventType: string;
+  description: string;
+  actorId: string | null;
+  actorName: string | null;
+  taskId: string | null;
+  taskTitle: string | null;
+  meta: { from?: string; to?: string } | null;
+  createdAt: string;
+};
+
 export type ApiWorkflowDraft = {
   name: string;
   stages: Array<{
@@ -1597,5 +1686,222 @@ export const api = {
     }>('/onboarding/reset', {
       method: 'POST',
       fetch: fetchFn
-    })
+    }),
+
+  listTaskBoards: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ boards: ApiTaskBoard[] }>(`/workspaces/${workspaceId}/boards`, { fetch: fetchFn }),
+
+  createTaskBoard: (
+    workspaceId: string,
+    body: { name: string; description?: string | null },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ board: ApiTaskBoard; columns: ApiTaskBoardColumn[] }>(
+      `/workspaces/${workspaceId}/boards`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  getTaskBoard: (workspaceId: string, boardId: string, fetchFn?: FetchLike) =>
+    request<{ board: ApiTaskBoard }>(`/workspaces/${workspaceId}/boards/${boardId}`, {
+      fetch: fetchFn
+    }),
+
+  updateTaskBoard: (
+    workspaceId: string,
+    boardId: string,
+    body: { name?: string; description?: string | null },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ board: ApiTaskBoard }>(`/workspaces/${workspaceId}/boards/${boardId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  deleteTaskBoard: (workspaceId: string, boardId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/boards/${boardId}`, {
+      method: 'DELETE',
+      fetch: fetchFn
+    }),
+
+  getTaskBoardView: (workspaceId: string, boardId: string, fetchFn?: FetchLike) =>
+    request<{ board: { columns: ApiTaskBoardColumn[] } }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/board`,
+      { fetch: fetchFn }
+    ),
+
+  createTaskColumn: (
+    workspaceId: string,
+    boardId: string,
+    body: { name: string; color?: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ column: Pick<ApiTaskBoardColumn, 'id' | 'name' | 'color' | 'position'> }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/columns`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateTaskColumn: (
+    workspaceId: string,
+    boardId: string,
+    columnId: string,
+    body: { name?: string; color?: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ column: Pick<ApiTaskBoardColumn, 'id' | 'name' | 'color' | 'position'> }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/columns/${columnId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteTaskColumn: (workspaceId: string, boardId: string, columnId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/boards/${boardId}/columns/${columnId}`, {
+      method: 'DELETE',
+      fetch: fetchFn
+    }),
+
+  reorderTaskColumns: (
+    workspaceId: string,
+    boardId: string,
+    body: { columnIds: string[] },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ columns: Array<Pick<ApiTaskBoardColumn, 'id' | 'name' | 'color' | 'position'>> }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/columns/reorder`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  createTask: (
+    workspaceId: string,
+    boardId: string,
+    body: {
+      columnId?: string;
+      title: string;
+      description?: string | null;
+      priority?: ApiTaskPriority;
+      assigneeId?: string | null;
+      dueAt?: string | null;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ task: ApiTaskDetail }>(`/workspaces/${workspaceId}/boards/${boardId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  getTaskDetail: (workspaceId: string, boardId: string, taskId: string, fetchFn?: FetchLike) =>
+    request<{ task: ApiTaskDetail & { comments: ApiTaskComment[]; attachments: ApiTaskAttachment[] } }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}`,
+      { fetch: fetchFn }
+    ),
+
+  updateTask: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    body: {
+      title?: string;
+      description?: string | null;
+      priority?: ApiTaskPriority;
+      assigneeId?: string | null;
+      dueAt?: string | null;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ task: ApiTaskDetail }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteTask: (workspaceId: string, boardId: string, taskId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}`, {
+      method: 'DELETE',
+      fetch: fetchFn
+    }),
+
+  moveTask: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    body: { columnId: string; position?: number },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ task: ApiTaskDetail }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/move`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  listTaskComments: (workspaceId: string, boardId: string, taskId: string, fetchFn?: FetchLike) =>
+    request<{ comments: ApiTaskComment[] }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/comments`,
+      { fetch: fetchFn }
+    ),
+
+  createTaskComment: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    body: { content: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ comment: ApiTaskComment }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/comments`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteTaskComment: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    commentId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/comments/${commentId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  listTaskAttachments: (workspaceId: string, boardId: string, taskId: string, fetchFn?: FetchLike) =>
+    request<{ attachments: ApiTaskAttachment[] }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/attachments`,
+      { fetch: fetchFn }
+    ),
+
+  uploadTaskAttachment: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    file: File,
+    fetchFn?: FetchLike
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<{ attachment: ApiTaskAttachment }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/attachments`,
+      { method: 'POST', body: formData, fetch: fetchFn }
+    );
+  },
+
+  deleteTaskAttachment: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    attachmentId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/attachments/${attachmentId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  listTaskBoardActivity: (
+    workspaceId: string,
+    boardId: string,
+    limit?: number,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ activity: ApiTaskActivity[] }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/activity${limit ? `?limit=${limit}` : ''}`,
+      { fetch: fetchFn }
+    )
 };

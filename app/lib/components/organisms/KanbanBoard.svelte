@@ -21,6 +21,7 @@
 		emptyTitle?: string;
 		emptyDropHint?: string;
 		columnLabel?: string;
+		countLabel?: string;
 		waErrorLabel?: string;
 		dragEnabled?: boolean;
 		maxHeight?: string;
@@ -39,6 +40,7 @@
 		emptyTitle = 'No customers yet',
 		emptyDropHint = 'Drop card here',
 		columnLabel = 'Column',
+		countLabel = 'kad',
 		waErrorLabel = 'WA Error',
 		dragEnabled = true,
 	maxHeight = 'calc(100vh - 220px)',
@@ -174,8 +176,8 @@
 					<h3 class="text-sm font-bold text-ink truncate tracking-tight">{column.title}</h3>
 				</div>
 			<span class="rounded-full bg-card/80 px-2.5 py-0.5 text-xs font-semibold text-mute">
-					{column.items.length} {column.items.length === 1 ? 'kad' : 'kad'}
-				</span>
+				{column.items.length} {countLabel}
+			</span>
 			</header>
 
 			<!-- Add Customer Button -->

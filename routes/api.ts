@@ -5,6 +5,7 @@ import { createAuthRoutes } from './auth';
 import { createUsersRoutes } from './users';
 import { createWorkspacesRoutes } from './workspaces';
 import { createWorkflowsRoutes } from './workflows';
+import { createTaskBoardsRoutes } from './task-boards';
 import { createNotificationsRoutes } from './notifications';
 import { createChatRoutes } from './chat';
 import { createWebhooksRoutes } from './webhooks';
@@ -24,6 +25,7 @@ export const buildApi = () =>
     .use(createUsersRoutes())
     .use(createWorkspacesRoutes())
     .use(createWorkflowsRoutes())
+    .use(createTaskBoardsRoutes())
     .use(createNotificationsRoutes())
     .use(createChatRoutes())
     .use(createWebhooksRoutes())

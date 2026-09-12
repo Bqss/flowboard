@@ -26,7 +26,8 @@
     GiftIcon,
     Plug02Icon,
     InformationCircleIcon,
-    Menu01Icon
+    Menu01Icon,
+    SquareDashedKanbanIcon
   } from '@hugeicons/core-free-icons';
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
@@ -88,6 +89,12 @@
       label: tr('nav.workflows'),
       active: $page.url.pathname.startsWith('/dashboard/workflows'),
       icon: workflowsIcon
+    },
+    {
+      href: '/dashboard/boards',
+      label: tr('nav.boards'),
+      active: $page.url.pathname.startsWith('/dashboard/boards'),
+      icon: boardsIcon
     },
     {
       href: '/dashboard/members',
@@ -311,6 +318,9 @@
 {/snippet}
 {#snippet workflowsIcon()}
   <HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} />
+{/snippet}
+{#snippet boardsIcon()}
+  <HugeiconsIcon icon={SquareDashedKanbanIcon} size={20} strokeWidth={1.8} />
 {/snippet}
 
 {#snippet settingsIcon()}

@@ -10,7 +10,8 @@ import {
   text,
   timestamp,
   uniqueIndex,
-  uuid
+  uuid,
+  varchar
 } from 'drizzle-orm/pg-core';
 
 export const workspaceRoleEnum = pgEnum('workspace_role', ['owner', 'member']);
@@ -47,6 +48,7 @@ export const planIntervalEnum = pgEnum('plan_interval', ['monthly', 'yearly']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['percent', 'fixed', 'trial_days']);
 export const chatConversationKindEnum = pgEnum('chat_conversation_kind', ['direct', 'group']);
 export const chatParticipantRoleEnum = pgEnum('chat_participant_role', ['admin', 'member']);
+export const taskPriorityEnum = pgEnum('task_priority', ['low', 'medium', 'high']);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -917,3 +919,122 @@ export const googleSheetsConnections = pgTable(
 
 export type GoogleSheetsConnection = typeof googleSheetsConnections.$inferSelect;
 export type NewGoogleSheetsConnection = typeof googleSheetsConnections.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Task Boards — workspace-scoped generic kanban alongside workflows
+// ---------------------------------------------------------------------------
+
+export const taskBoards = pgTable('task_boards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  ownerId: uuid('owner_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const taskColumns = pgTable(
+  'task_columns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    boardId: uuid('board_id')
+      .notNull()
+      .references(() => taskBoards.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    color: text('color').notNull().default('indigo'),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [uniqueIndex('task_columns_board_position_idx').on(table.boardId, table.position)]
+);
+
+export const tasks = pgTable('tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  boardId: uuid('board_id')
+    .notNull()
+    .references(() => taskBoards.id, { onDelete: 'cascade' }),
+  columnId: uuid('column_id')
+    .notNull()
+    .references(() => taskColumns.id, { onDelete: 'restrict' }),
+  title: varchar('title', { length: 500 }).notNull(),
+  description: text('description'),
+  priority: taskPriorityEnum('priority').notNull().default('medium'),
+  assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
+  dueAt: timestamp('due_at', { withTimezone: true }),
+  position: integer('position').notNull().default(0),
+  createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const taskComments = pgTable(
+  'task_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('task_comments_task_created_idx').on(table.taskId, table.createdAt)]
+);
+
+export const taskActivities = pgTable(
+  'task_activities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    boardId: uuid('board_id')
+      .notNull()
+      .references(() => taskBoards.id, { onDelete: 'cascade' }),
+    eventType: text('event_type').notNull(),
+    description: text('description').notNull(),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
+    meta: jsonb('meta'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('task_activities_board_created_idx').on(table.boardId, table.createdAt)]
+);
+
+export const taskAttachments = pgTable(
+  'task_attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    boardId: uuid('board_id')
+      .notNull()
+      .references(() => taskBoards.id, { onDelete: 'cascade' }),
+    uploaderId: uuid('uploader_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    fileName: text('file_name').notNull(),
+    filePath: text('file_path').notNull(),
+    fileType: text('file_type').notNull(),
+    fileSize: integer('file_size').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('task_attachments_task_idx').on(table.taskId)]
+);
+
+export type TaskBoard = typeof taskBoards.$inferSelect;
+export type NewTaskBoard = typeof taskBoards.$inferInsert;
+export type TaskColumn = typeof taskColumns.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+export type TaskComment = typeof taskComments.$inferSelect;
+export type TaskActivity = typeof taskActivities.$inferSelect;
+export type TaskPriority = (typeof taskPriorityEnum.enumValues)[number];
+export type TaskAttachment = typeof taskAttachments.$inferSelect;

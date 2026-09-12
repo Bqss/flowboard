@@ -588,3 +588,90 @@ export const SheetsHeadersQuery = t.Object({
   sheetName: t.String({ minLength: 1 }),
   connectionId: t.Optional(t.String({ format: 'uuid' }))
 });
+
+/* --------------------------------------------------------------- task boards */
+
+export const TaskBoardIdParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  boardId: t.String({ format: 'uuid' })
+});
+
+export const TaskBoardColumnParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  boardId: t.String({ format: 'uuid' }),
+  columnId: t.String({ format: 'uuid' })
+});
+
+export const TaskBoardTaskParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  boardId: t.String({ format: 'uuid' }),
+  taskId: t.String({ format: 'uuid' })
+});
+
+export const TaskBoardCommentParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  boardId: t.String({ format: 'uuid' }),
+  taskId: t.String({ format: 'uuid' }),
+  commentId: t.String({ format: 'uuid' })
+});
+
+export const CreateTaskBoardSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()]))
+});
+
+export const UpdateTaskBoardSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()]))
+});
+
+export const CreateTaskColumnSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  color: t.Optional(t.String({ minLength: 1, maxLength: 50 }))
+});
+
+export const UpdateTaskColumnSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  color: t.Optional(t.String({ minLength: 1, maxLength: 50 }))
+});
+
+export const ReorderTaskColumnsSchema = t.Object({
+  columnIds: t.Array(t.String({ format: 'uuid' }))
+});
+
+export const CreateTaskSchema = t.Object({
+  columnId: t.Optional(t.String({ format: 'uuid' })),
+  title: t.String({ minLength: 1, maxLength: 500 }),
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  priority: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
+  assigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  dueAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()]))
+});
+
+export const UpdateTaskSchema = t.Object({
+  title: t.Optional(t.String({ minLength: 1, maxLength: 500 })),
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  priority: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
+  assigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  dueAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()]))
+});
+
+export const MoveTaskSchema = t.Object({
+  columnId: t.String({ format: 'uuid' }),
+  position: t.Optional(t.Integer({ minimum: 0 }))
+});
+
+export const CreateTaskCommentSchema = t.Object({
+  content: t.String({ minLength: 1, maxLength: 2000 })
+});
+
+export const TaskAttachmentSchema = t.Object({
+  file: t.File()
+});
+
+export const TaskBoardAttachmentParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  boardId: t.String({ format: 'uuid' }),
+  taskId: t.String({ format: 'uuid' }),
+  attachmentId: t.String({ format: 'uuid' })
+});
