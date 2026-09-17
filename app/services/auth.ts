@@ -2,6 +2,7 @@ import { and, eq, gt } from 'drizzle-orm';
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
 import { db, sessions, users, type User } from '@/db';
 import { env } from '@/config/env';
+import type { CookieJar } from '@/core';
 
 /**
  * Authentication service: password hashing and session lifecycle. Pure
@@ -102,6 +103,19 @@ export async function destroySession(sessionId: string | undefined): Promise<voi
   await db.delete(sessions).where(eq(sessions.id, sessionId));
 }
 
+/** Cookie name for the remembered session belonging to one account. */
+export const accountSessionCookieName = (userId: string) => `${env.sessionCookie}_account_${userId}`;
+
+/** Set the active session and the matching remembered account session. */
+export function setSessionCookies(
+  cookie: Record<string, CookieJar>,
+  userId: string,
+  sessionId: string
+): void {
+  cookie[env.sessionCookie].set({ value: sessionId, ...sessionCookieOptions });
+  cookie[accountSessionCookieName(userId)].set({ value: sessionId, ...sessionCookieOptions });
+}
+
 /** Cookie attributes for the session cookie, centralised for reuse. */
 export const sessionCookieOptions = {
   httpOnly: true,
@@ -110,3 +124,4 @@ export const sessionCookieOptions = {
   path: '/',
   maxAge: env.sessionTtlDays * 24 * 60 * 60
 };
+

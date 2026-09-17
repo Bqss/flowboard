@@ -7,6 +7,8 @@ export {
   createSession,
   getUserBySession,
   destroySession,
+  accountSessionCookieName,
+  setSessionCookies,
   sessionCookieOptions
 } from './auth';
 

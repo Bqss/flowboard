@@ -101,9 +101,13 @@ export async function getGoogleUserInfo(accessToken: string): Promise<GoogleUser
  * 2. If a user with the same email exists → link Google to that account.
  * 3. Otherwise → create a new user with provider='google'.
  *
- * Returns the session ID.
+ * Returns the new session and account IDs.
  */
-export async function googleLoginOrCreate(info: GoogleUserInfo): Promise<{ sessionId: string; isNewUser: boolean }> {
+export async function googleLoginOrCreate(info: GoogleUserInfo): Promise<{
+  sessionId: string;
+  userId: string;
+  isNewUser: boolean;
+}> {
   // 1. Existing Google-linked user
   const existingOAuth = await db
     .select()
@@ -113,7 +117,7 @@ export async function googleLoginOrCreate(info: GoogleUserInfo): Promise<{ sessi
 
   if (existingOAuth.length > 0) {
     const sessionId = await createSession(existingOAuth[0].id);
-    return { sessionId, isNewUser: false };
+    return { sessionId, userId: existingOAuth[0].id, isNewUser: false };
   }
 
   // 2. Existing email user → link Google
@@ -131,7 +135,7 @@ export async function googleLoginOrCreate(info: GoogleUserInfo): Promise<{ sessi
       .returning();
 
     const sessionId = await createSession(updated.id);
-    return { sessionId, isNewUser: false };
+    return { sessionId, userId: updated.id, isNewUser: false };
   }
 
   // 3. New user
@@ -149,7 +153,7 @@ export async function googleLoginOrCreate(info: GoogleUserInfo): Promise<{ sessi
   await createWorkspaceForUser(user.id, `${info.name}'s Workspace`);
 
   const sessionId = await createSession(user.id);
-  return { sessionId, isNewUser: true };
+  return { sessionId, userId: user.id, isNewUser: true };
 }
 
 // ---------------------------------------------------------------------------

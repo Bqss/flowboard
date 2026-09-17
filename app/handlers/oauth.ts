@@ -1,5 +1,5 @@
 import { env } from '@/config/env';
-import { sessionCookieOptions } from '@/services/auth';
+import { setSessionCookies } from '@/services/auth';
 import {
   generateState,
   getGoogleAuthUrl,
@@ -81,8 +81,8 @@ export async function googleCallback({ query, cookie, set }: Ctx) {
       set.status = 302;
       return '';
     }
-    const { sessionId } = await googleLoginOrCreate(userInfo);
-    cookie[env.sessionCookie].set({ value: sessionId, ...sessionCookieOptions });
+    const { sessionId, userId } = await googleLoginOrCreate(userInfo);
+    setSessionCookies(cookie, userId, sessionId);
 
     const dest = cookie[DESTINATION_COOKIE]?.value ?? '/dashboard';
     cookie[DESTINATION_COOKIE]?.remove?.();

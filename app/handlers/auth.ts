@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { eq } from 'drizzle-orm';
 import { db, users } from '@/db';
 import { env } from '@/config/env';
-import { toPublicUser, toPublicWorkspace, type Ctx } from '@/core';
+import { toPublicUser, toPublicWorkspace, type Ctx, type PublicUser } from '@/core';
 import {
   hashPassword,
   verifyPassword,
@@ -12,6 +12,9 @@ import {
   destroyUserSessions,
   createSession,
   destroySession,
+  getUserBySession,
+  accountSessionCookieName,
+  setSessionCookies,
   sessionCookieOptions
 } from '@/services';
 import { createWorkspaceForUser, getActiveWorkspaceContext } from '@/services/workspace';
@@ -27,6 +30,7 @@ import { isLockedOut, getRemainingLockoutMs, recordFailedAttempt, clearAttempts 
 type RegisterBody = { email: string; name: string; phone: string; password: string };
 type LoginBody = { email: string; password: string };
 type ChangePasswordBody = { currentPassword: string; newPassword: string };
+type SwitchAccountBody = { userId: string };
 
 export async function register({ body, cookie, set, clientIp }: Ctx<RegisterBody>) {
   const existing = await db.select().from(users).where(eq(users.email, body.email)).limit(1);
@@ -45,7 +49,7 @@ export async function register({ body, cookie, set, clientIp }: Ctx<RegisterBody
   await createWorkspaceForUser(user.id, `${body.name}'s Workspace`);
 
   const sessionId = await createSession(user.id);
-  cookie[env.sessionCookie].set({ value: sessionId, ...sessionCookieOptions });
+  setSessionCookies(cookie, user.id, sessionId);
 
   logger.logAuth('registration_success', { userId: user.id, ip: clientIp });
   set.status = 201;
@@ -87,10 +91,10 @@ export async function login({ body, cookie, set, clientIp }: Ctx<LoginBody>) {
     set.status = 401;
     return { error: 'Invalid credentials' };
   }
-
   clearAttempts(identifier, ip);
+
   const sessionId = await createSession(user.id);
-  cookie[env.sessionCookie].set({ value: sessionId, ...sessionCookieOptions });
+  setSessionCookies(cookie, user.id, sessionId);
 
   logger.logAuth('login_success', { userId: user.id, ip });
   const ctx = await getActiveWorkspaceContext(user.id, user.activeWorkspaceId);
@@ -102,10 +106,82 @@ export async function login({ body, cookie, set, clientIp }: Ctx<LoginBody>) {
 }
 
 export async function logout({ cookie, user }: Ctx) {
-  await destroySession(cookie[env.sessionCookie]?.value);
+  const sessionId = cookie[env.sessionCookie]?.value as string | undefined;
+  await destroySession(sessionId);
   cookie[env.sessionCookie].remove();
+  if (user?.id) cookie[accountSessionCookieName(user.id)]?.remove?.();
   logger.logAuth('logout', { userId: user?.id });
   return { ok: true };
+}
+
+export async function listAccounts({ cookie, user, set }: Ctx) {
+  if (!user) {
+    set.status = 401;
+    return { error: 'Unauthorized' };
+  }
+
+  const currentSessionId = cookie[env.sessionCookie]?.value as string | undefined;
+  if (currentSessionId) {
+    cookie[accountSessionCookieName(user.id)].set({
+      value: currentSessionId,
+      ...sessionCookieOptions
+    });
+  }
+
+  const prefix = `${env.sessionCookie}_account_`;
+  const accounts = new Map<string, PublicUser>();
+
+  for (const cookieName of Object.keys(cookie)) {
+    if (!cookieName.startsWith(prefix)) continue;
+    const sessionId = cookie[cookieName]?.value as string | undefined;
+    const account = await getUserBySession(sessionId);
+    if (!account) {
+      cookie[cookieName]?.remove?.();
+      continue;
+    }
+    accounts.set(account.id, toPublicUser(account));
+  }
+
+  accounts.set(user.id, toPublicUser(user));
+  return {
+    accounts: Array.from(accounts.values()).sort((a, b) => {
+      if (a.id === user.id) return -1;
+      if (b.id === user.id) return 1;
+      return a.name.localeCompare(b.name);
+    })
+  };
+}
+
+export async function switchAccount({ body, cookie, user, set }: Ctx<SwitchAccountBody>) {
+  if (!user) {
+    set.status = 401;
+    return { error: 'Unauthorized' };
+  }
+
+  if (body.userId === user.id) {
+    const ctx = await getActiveWorkspaceContext(user.id, user.activeWorkspaceId);
+    return {
+      user: toPublicUser(user),
+      workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null
+    };
+  }
+
+  const accountCookieName = accountSessionCookieName(body.userId);
+  const sessionId = cookie[accountCookieName]?.value as string | undefined;
+  const target = await getUserBySession(sessionId);
+  if (!target || target.id !== body.userId || !sessionId) {
+    cookie[accountCookieName]?.remove?.();
+    set.status = 401;
+    return { error: 'This account session has expired. Sign in again.' };
+  }
+
+  setSessionCookies(cookie, target.id, sessionId);
+  const ctx = await getActiveWorkspaceContext(target.id, target.activeWorkspaceId);
+  logger.logAuth('account_switched', { userId: target.id });
+  return {
+    user: toPublicUser(target),
+    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null
+  };
 }
 
 export async function changePassword({ body, user, cookie, set, clientIp }: Ctx<ChangePasswordBody>) {
@@ -132,7 +208,7 @@ export async function changePassword({ body, user, cookie, set, clientIp }: Ctx<
   // the current device stays logged in while other devices are forced to re-auth.
   await destroyUserSessions(user.id);
   const sessionId = await createSession(user.id);
-  cookie[env.sessionCookie].set({ value: sessionId, ...sessionCookieOptions });
+  setSessionCookies(cookie, user.id, sessionId);
 
   logger.logAuth('password_changed', { userId: user.id, ip: clientIp });
   return { ok: true };

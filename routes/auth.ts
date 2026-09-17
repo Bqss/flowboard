@@ -2,7 +2,7 @@ import { Elysia } from 'elysia';
 import * as auth from '@handlers/auth';
 import * as oauth from '@handlers/oauth';
 import { createWithUser, createWithClientIp } from '@middlewares';
-import { RegisterSchema, LoginSchema, ChangePasswordSchema, AvatarSchema } from '@validators';
+import { RegisterSchema, LoginSchema, ChangePasswordSchema, AvatarSchema, SwitchAccountSchema } from '@validators';
 
 /**
  * Auth route table: wires the auth handlers to paths, attaches request
@@ -16,6 +16,8 @@ export const createAuthRoutes = () =>
     .post('/register', auth.register, { body: RegisterSchema })
     .post('/login', auth.login, { body: LoginSchema })
     .post('/logout', auth.logout)
+    .get('/accounts', auth.listAccounts)
+    .post('/switch-account', auth.switchAccount, { body: SwitchAccountSchema })
     .post('/change-password', auth.changePassword, { body: ChangePasswordSchema })
     .post('/avatar', auth.uploadAvatar, { body: AvatarSchema })
     .get('/me', auth.me)

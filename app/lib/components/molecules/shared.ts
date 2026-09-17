@@ -1,3 +1,5 @@
+import type { Snippet } from 'svelte';
+
 /**
  * Closes a floating panel on outside pointerdown or Escape.
  * Capture phase so the panel closes before a trigger's own click re-opens it.
@@ -31,10 +33,14 @@ export function dismissable(node: HTMLElement, onDismiss: () => void) {
 export type MenuItem = {
 	label: string;
 	value?: string;
-	icon?: import('svelte').Snippet;
+	icon?: Snippet;
+	avatar?: { name: string; src?: string | null };
+	description?: string;
+	submenu?: MenuItem[];
 	shortcut?: string;
 	destructive?: boolean;
 	disabled?: boolean;
+	active?: boolean;
 	separatorBefore?: boolean;
 	onselect?: () => void;
 };

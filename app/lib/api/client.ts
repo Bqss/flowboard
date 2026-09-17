@@ -16,6 +16,8 @@ export type ApiUser = {
   platformAdmin?: boolean;
 };
 
+export type ApiAccount = Pick<ApiUser, 'id' | 'email' | 'name' | 'avatarUrl'>;
+
 export type ApiWorkspace = {
   id: string;
   name: string;
@@ -725,6 +727,16 @@ export const api = {
 
   logout: (fetchFn?: FetchLike) =>
     request<{ ok: true }>('/auth/logout', { method: 'POST', fetch: fetchFn }),
+
+  listAccounts: (fetchFn?: FetchLike) =>
+    request<{ accounts: ApiAccount[] }>('/auth/accounts', { fetch: fetchFn }),
+
+  switchAccount: (userId: string, fetchFn?: FetchLike) =>
+    request<MeResponse>('/auth/switch-account', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+      fetch: fetchFn
+    }),
 
   me: (fetchFn?: FetchLike) => request<MeResponse>('/auth/me', { fetch: fetchFn }),
 

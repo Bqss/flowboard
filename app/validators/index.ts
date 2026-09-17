@@ -22,6 +22,10 @@ export const ChangePasswordSchema = t.Object({
   newPassword: t.String({ minLength: 8 })
 });
 
+export const SwitchAccountSchema = t.Object({
+  userId: t.String({ format: 'uuid' })
+});
+
 export const AvatarSchema = t.Object({
   avatar: t.File()
 });

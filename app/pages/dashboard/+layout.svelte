@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { goto, invalidateAll } from '$app/navigation';
   import { api, ApiError } from '$lib/api/client';
+  import type { ApiAccount } from '$lib/api/client';
   import type { LayoutData } from '../$types';
   import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget } from '$lib/components/organisms/index.js';
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
@@ -27,7 +28,8 @@
     Plug02Icon,
     InformationCircleIcon,
     Menu01Icon,
-    SquareDashedKanbanIcon
+    SquareDashedKanbanIcon,
+    UserSwitchIcon
   } from '@hugeicons/core-free-icons';
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
@@ -42,11 +44,13 @@
 
   let loggingOut = $state(false);
   let switchingWorkspace = $state(false);
+  let switchingAccount = $state(false);
   let notificationItems = $state<NotificationItem[]>([]);
+  let accounts = $state<ApiAccount[]>([]);
+  let sidebarCollapsed = $state(false);
   let workspaces = $state<
     Array<{ id: string; name: string; slug: string; role: 'owner' | 'member'; joinedAt: string }>
   >([]);
-  let sidebarCollapsed = $state(false);
   let mobileNavOpen = $state(false);
 
   $effect(() => {
@@ -74,6 +78,22 @@
       })
       .catch(() => {
         workspaces = [];
+      });
+  });
+
+  $effect(() => {
+    if (!data.user) {
+      accounts = [];
+      return;
+    }
+
+    api
+      .listAccounts()
+      .then((res) => {
+        accounts = res.accounts ?? [];
+      })
+      .catch(() => {
+        accounts = [];
       });
   });
 
@@ -213,6 +233,21 @@
     }
   }
 
+  async function switchAccount(accountId: string) {
+    if (!data.user || accountId === data.user.id || switchingAccount) return;
+
+    switchingAccount = true;
+    try {
+      await api.switchAccount(accountId);
+      await invalidateAll();
+      await goto('/dashboard');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('shell.switchAccountError'));
+    } finally {
+      switchingAccount = false;
+    }
+  }
+
   const workspaceMenuItems = $derived<MenuItem[]>(
     workspaces.map((workspace) => ({
       label: workspace.name,
@@ -275,14 +310,37 @@
     await loadNotifications();
   }
 
+  const switchAccountMenuItems = $derived<MenuItem[]>([
+    ...accounts.map((account) => ({
+      label: account.name,
+      description: account.email,
+      avatar: { name: account.name, src: account.avatarUrl },
+      active: account.id === data.user?.id,
+      disabled: switchingAccount || account.id === data.user?.id,
+      onselect: () => switchAccount(account.id)
+    })),
+    {
+      label: tr('shell.addAccount'),
+      icon: userSwitchIcon,
+      separatorBefore: accounts.length > 0,
+      onselect: () => goto('/login?addAccount=1')
+    }
+  ]);
+
   const userMenuItems = $derived<MenuItem[]>([
     {
       label: data.user?.name ?? tr('shell.myAccount'),
       disabled: true
     },
     {
+      label: tr('shell.switchAccount'),
+      icon: userSwitchIcon,
+      submenu: switchAccountMenuItems
+    },
+    {
       label: tr('shell.profileSettings'),
       icon: settingsIcon,
+      separatorBefore: true,
       onselect: () => goto('/dashboard/settings')
     },
     {
@@ -299,7 +357,6 @@
       onselect: logout
     }
   ]);
-
   let challengeData = $state<{ challenges: any[]; labels: any } | null>(null);
   $effect(() => {
     function handleChallengeData(e: Event) {
@@ -334,6 +391,9 @@
 {/snippet}
 {#snippet logoutIcon()}
   <HugeiconsIcon icon={Logout03Icon} size={16} strokeWidth={1.8} />
+{/snippet}
+{#snippet userSwitchIcon()}
+  <HugeiconsIcon icon={UserSwitchIcon} size={16} strokeWidth={1.8} />
 {/snippet}
 {#snippet buildingIcon()}
   <HugeiconsIcon icon={Building06Icon} size={16} strokeWidth={1.8} />
