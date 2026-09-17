@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import Nav from '$lib/components/landing/organisms/Nav.svelte';
   import Footer from '$lib/components/landing/organisms/Footer.svelte';
+  import PwaInstallPrompt from '$lib/components/organisms/PwaInstallPrompt.svelte';
   import type { LayoutData } from './$types';
   import { gsap } from 'gsap';
   import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -55,6 +56,7 @@
 
 {@html `<!-- THESIS: Flowboard turns customer operations into a route the whole team can see, refusing the generic centered SaaS hero and repeated feature grid. OWN-WORLD: Cold white routing glass, slate depth, indigo signal paths, concentric 12 to 30 pixel radii, and precise Geist typography. STORY: See a customer reply become a required handover, understand the operating layers, then start a workspace. FIRST VIEWPORT: A compact left thesis faces a large interactive routing console, with the Start free action visible and a native WebGL signal field behind it. FORM: Layered routing glass, grounded direction five, seed 28a00e56. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md. -->`}
 <ModeWatcher defaultMode="light" themeColors={{ dark: '#0b1020', light: '#f8fafc' }} />
+<PwaInstallPrompt />
 <div class="flex min-h-[100dvh] flex-col bg-canvas text-body" class:marketing-shell={isHome}>
   {#if isDashboard || isDesignSystem || isAuth}
     {@render children()}

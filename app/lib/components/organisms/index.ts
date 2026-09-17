@@ -32,6 +32,7 @@ import Spotlight from './Spotlight.svelte';
 import Toaster from './Toaster.svelte';
 import ChallengeWidget from './ChallengeWidget.svelte';
 import OnboardingProvider from './OnboardingProvider.svelte';
+import PwaInstallPrompt from './PwaInstallPrompt.svelte';
 
 // Form
 import FormSection from './FormSection.svelte';
@@ -97,6 +98,7 @@ export {
 	Toaster,
 	ChallengeWidget,
 	OnboardingProvider,
+	PwaInstallPrompt,
 	ChatDock,
 	FormSection,
 	MultiStepForm,

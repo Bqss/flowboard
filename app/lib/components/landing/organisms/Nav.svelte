@@ -82,7 +82,6 @@
     </div>
 
     <div class="flex flex-1 items-center justify-end gap-1.5 sm:gap-2">
-
       <div class="hidden sm:block">{@render languageSwitcher()}</div>
       <button
         type="button"
@@ -100,15 +99,12 @@
           <Button variant="primary" size="sm" href="/dashboard">{copy.nav.openWorkspace}</Button>
         </div>
       {:else}
-        <a href="/login" class="hidden rounded-full px-3 py-2 text-[13px] font-semibold text-mute transition-colors duration-300 hover:bg-lane/70 hover:text-ink md:inline-flex">
-          {copy.nav.signIn}
-        </a>
-        <Button variant="primary" size="sm" href="/register">{copy.nav.startFree}</Button>
+        <Button variant="primary" size="sm" href="/login">{copy.nav.signIn}</Button>
       {/if}
 
       <button
         type="button"
-        class="grid size-9 place-items-center rounded-full text-ink transition-[background-color,transform] duration-300 hover:bg-lane active:scale-95 lg:hidden"
+        class="grid size-9 place-items-center rounded-full text-ink transition-[background-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-lane active:scale-95 lg:hidden"
         onclick={() => (open = !open)}
         aria-label={open ? copy.nav.closeMenu : copy.nav.openMenu}
         aria-expanded={open}
@@ -184,3 +180,4 @@
     }
   }
 </style>
+

@@ -1,7 +1,6 @@
 <script lang="ts">
   /**
-   * Landing wordmark matching the dashboard/auth brand mark.
-   * The indigo A block is the shared actjom anchor.
+   * Landing wordmark using the shared actjom logo asset.
    */
   let {
     size = 'md',
@@ -25,11 +24,11 @@
 {#snippet mark()}
   <span class="inline-flex items-center {dims.gap} font-semibold tracking-[-0.03em] text-ink {dims.text} {klass}">
     <span
-      class="logo-mark relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[11px] bg-primary font-bold text-on-primary shadow-[0_8px_20px_rgba(79,70,229,0.24)]"
-      style={`width: ${dims.box}px; height: ${dims.box}px; font-size: ${Math.max(14, dims.box * 0.42)}px`}
+      class="logo-mark relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[11px] bg-white shadow-[0_8px_20px_rgba(79,70,229,0.16)]"
+      style={`width: ${dims.box}px; height: ${dims.box}px`}
       aria-hidden="true"
     >
-      <span class="relative z-10">A</span>
+      <img src="/logo_clean.png" alt="" class="size-full scale-[2.25] object-cover" />
     </span>
     <span>actjom</span>
   </span>

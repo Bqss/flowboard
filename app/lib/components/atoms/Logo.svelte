@@ -12,13 +12,11 @@
 
 <span
 	bind:this={ref}
-	class={cn(
-		'inline-flex items-center justify-center rounded-lg bg-primary text-on-primary font-extrabold',
-		className
-	)}
-	style={`width:${size}px;height:${size}px;font-size:${Math.max(14, size * 0.44)}px;`}
+	class={cn('inline-flex items-center justify-center overflow-hidden rounded-lg bg-white', className)}
+	style={`width:${size}px;height:${size}px;`}
 	aria-label="actjom"
+	role="img"
 	{...rest}
 >
-	A
+	<img src="/logo_clean.png" alt="" class="size-full scale-[2.25] object-cover" />
 </span>
