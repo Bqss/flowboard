@@ -4,6 +4,7 @@
   import Nav from '$lib/components/landing/organisms/Nav.svelte';
   import Footer from '$lib/components/landing/organisms/Footer.svelte';
   import PwaInstallPrompt from '$lib/components/organisms/PwaInstallPrompt.svelte';
+  import ImpersonateSwitcher from '$lib/components/organisms/ImpersonateSwitcher.svelte';
   import type { LayoutData } from './$types';
   import { gsap } from 'gsap';
   import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -74,5 +75,8 @@
       </main>
       <Footer />
     {/if}
+  {/if}
+  {#if data.impersonator && data.user}
+    <ImpersonateSwitcher impersonator={data.impersonator} targetUser={data.user} />
   {/if}
 </div>

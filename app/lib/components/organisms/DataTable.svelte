@@ -27,6 +27,7 @@
 		onsort?: (key: string, dir: 'asc' | 'desc') => void;
 		onpagechange?: (page: number) => void;
 		onrowclick?: (row: T) => void;
+		cell?: import('svelte').Snippet<[{ row: T; column: TableColumn<T> }]>;
 		class?: string;
 	};
 
@@ -50,6 +51,7 @@
 		onsort,
 		onpagechange,
 		onrowclick,
+		cell: cellSnippet,
 		class: className,
 		...rest
 	}: Props = $props();
@@ -72,7 +74,7 @@
 		onsort?.(key, nextDir);
 	}
 
-	function cell(row: T, col: TableColumn<T>) {
+	function renderDefaultCell(row: T, col: TableColumn<T>) {
 		if (col.render) return col.render(row);
 		return String(row[col.key as keyof T] ?? '—');
 	}
@@ -143,7 +145,11 @@
 										col.align === 'center' && 'text-center'
 									)}
 								>
-									{cell(row, col)}
+									{#if cellSnippet}
+										{@render cellSnippet({ row, column: col })}
+									{:else}
+										{renderDefaultCell(row, col)}
+									{/if}
 								</td>
 							{/each}
 						</tr>

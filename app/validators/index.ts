@@ -493,6 +493,14 @@ export const AdminWorkspaceIdParam = t.Object({
   workspaceId: t.String({ format: 'uuid' })
 });
 
+export const AdminUserIdParam = t.Object({
+  userId: t.String({ format: 'uuid' })
+});
+
+export const AdminImpersonateSchema = t.Object({
+  userId: t.String({ format: 'uuid' })
+});
+
 /* --------------------------------------------------------------- MCP API keys */
 
 export const CreateApiKeySchema = t.Object({

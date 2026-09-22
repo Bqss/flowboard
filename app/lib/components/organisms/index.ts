@@ -33,6 +33,7 @@ import Toaster from './Toaster.svelte';
 import ChallengeWidget from './ChallengeWidget.svelte';
 import OnboardingProvider from './OnboardingProvider.svelte';
 import PwaInstallPrompt from './PwaInstallPrompt.svelte';
+import ImpersonateSwitcher from './ImpersonateSwitcher.svelte';
 
 // Form
 import FormSection from './FormSection.svelte';
@@ -99,6 +100,7 @@ export {
 	ChallengeWidget,
 	OnboardingProvider,
 	PwaInstallPrompt,
+	ImpersonateSwitcher,
 	ChatDock,
 	FormSection,
 	MultiStepForm,

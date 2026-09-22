@@ -109,6 +109,8 @@ export async function logout({ cookie, user }: Ctx) {
   const sessionId = cookie[env.sessionCookie]?.value as string | undefined;
   await destroySession(sessionId);
   cookie[env.sessionCookie].remove();
+  const impersonatorCookieKey = `${env.sessionCookie}_impersonator`;
+  cookie[impersonatorCookieKey]?.remove?.();
   if (user?.id) cookie[accountSessionCookieName(user.id)]?.remove?.();
   logger.logAuth('logout', { userId: user?.id });
   return { ok: true };
@@ -214,7 +216,7 @@ export async function changePassword({ body, user, cookie, set, clientIp }: Ctx<
   return { ok: true };
 }
 
-export async function me({ user, set }: Ctx) {
+export async function me({ user, cookie, set }: Ctx) {
   if (!user) {
     set.status = 401;
     return { error: 'Unauthorized' };
@@ -222,9 +224,64 @@ export async function me({ user, set }: Ctx) {
 
   const ctx = await getActiveWorkspaceContext(user.id, user.activeWorkspaceId);
 
+  const impersonatorCookieKey = `${env.sessionCookie}_impersonator`;
+  const impersonatorSessionId = cookie[impersonatorCookieKey]?.value as string | undefined;
+  let impersonator: { id: string; name: string; email: string } | null = null;
+
+  if (impersonatorSessionId) {
+    const adminUser = await getUserBySession(impersonatorSessionId);
+    if (adminUser?.platformAdmin) {
+      impersonator = {
+        id: adminUser.id,
+        name: adminUser.name,
+        email: adminUser.email
+      };
+    } else {
+      cookie[impersonatorCookieKey]?.remove?.();
+    }
+  }
+
   return {
     user: toPublicUser(user),
-    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null
+    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null,
+    impersonator
+  };
+}
+
+export async function stopImpersonating({ cookie, set }: Ctx) {
+  const impersonatorCookieKey = `${env.sessionCookie}_impersonator`;
+  const adminSessionId = cookie[impersonatorCookieKey]?.value as string | undefined;
+
+  if (!adminSessionId) {
+    set.status = 400;
+    return { error: 'Not currently impersonating' };
+  }
+
+  const adminUser = await getUserBySession(adminSessionId);
+  if (!adminUser || !adminUser.platformAdmin) {
+    cookie[impersonatorCookieKey]?.remove?.();
+    set.status = 403;
+    return { error: 'Invalid admin impersonator session' };
+  }
+
+  const currentSessionId = cookie[env.sessionCookie]?.value as string | undefined;
+  if (currentSessionId && currentSessionId !== adminSessionId) {
+    await destroySession(currentSessionId);
+  }
+
+  cookie[env.sessionCookie].set({
+    value: adminSessionId,
+    ...sessionCookieOptions
+  });
+  cookie[impersonatorCookieKey]?.remove?.();
+
+  const ctx = await getActiveWorkspaceContext(adminUser.id, adminUser.activeWorkspaceId);
+  logger.logAuth('admin_impersonation_stopped', { adminId: adminUser.id });
+
+  return {
+    user: toPublicUser(adminUser),
+    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null,
+    impersonator: null
   };
 }
 

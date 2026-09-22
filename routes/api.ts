@@ -12,6 +12,7 @@ import { createWebhooksRoutes } from './webhooks';
 import { createWajomRoutes } from './wajom';
  import { createGoogleSheetsRoutes } from './google-sheets';
 import { createOnboardingRoutes } from './onboarding';
+import { createAdminRoutes } from './admin';
 
 /**
  * The API surface. `createApiApp()` provides the `/api` prefix plus shared
@@ -32,6 +33,7 @@ export const buildApi = () =>
     .use(createWajomRoutes())
      .use(createGoogleSheetsRoutes())
     .use(createOnboardingRoutes())
+    .use(createAdminRoutes())
 
 export type Api = ReturnType<typeof buildApi>;
 

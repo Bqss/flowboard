@@ -579,6 +579,11 @@ export type ApiChatMember = {
 export type MeResponse = {
   user: ApiUser;
   workspace: ApiWorkspace | null;
+  impersonator?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
 };
 
 /* ----------------------------------------------------------- admin / billing */
@@ -735,6 +740,11 @@ export const api = {
     request<MeResponse>('/auth/switch-account', {
       method: 'POST',
       body: JSON.stringify({ userId }),
+      fetch: fetchFn
+    }),
+  stopImpersonating: (fetchFn?: FetchLike) =>
+    request<MeResponse>('/auth/stop-impersonating', {
+      method: 'POST',
       fetch: fetchFn
     }),
 
@@ -1467,6 +1477,13 @@ export const api = {
 
   adminListUsers: (fetchFn?: FetchLike) =>
     request<{ users: ApiAdminUser[] }>('/admin/users', { fetch: fetchFn }),
+
+  adminImpersonateUser: (userId: string, fetchFn?: FetchLike) =>
+    request<MeResponse>(`/admin/users/${userId}/impersonate`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+      fetch: fetchFn
+    }),
 
   adminListSubscriptions: (fetchFn?: FetchLike) =>
     request<{ subscriptions: ApiAdminSubscription[] }>('/admin/subscriptions', { fetch: fetchFn }),

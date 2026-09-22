@@ -20,6 +20,7 @@ export const createAuthRoutes = () =>
     .post('/switch-account', auth.switchAccount, { body: SwitchAccountSchema })
     .post('/change-password', auth.changePassword, { body: ChangePasswordSchema })
     .post('/avatar', auth.uploadAvatar, { body: AvatarSchema })
+    .post('/stop-impersonating', auth.stopImpersonating)
     .get('/me', auth.me)
     .get('/google', oauth.googleRedirect)
     .get('/google/callback', oauth.googleCallback);

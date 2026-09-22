@@ -1,14 +1,15 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import { api, type ApiAdminUser, type ApiAdminSubscription } from '$lib/api/client';
   import { dashboardText, dashboardIntlLocale } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Skeleton } from '$lib/components/atoms/index.js';
-  import { SearchInput, StatCard, Tabs } from '$lib/components/molecules/index.js';
+  import { Skeleton, Button, Badge } from '$lib/components/atoms/index.js';
+  import { SearchInput, StatCard, Tabs, toast } from '$lib/components/molecules/index.js';
   import { DataTable } from '$lib/components/organisms/index.js';
   import type { TableColumn } from '$lib/components/organisms/shared.js';
   import type { TabItem } from '$lib/components/molecules/shared.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
-  import { UserGroupIcon, UserSquareIcon, UserMultipleIcon } from '@hugeicons/core-free-icons';
+  import { UserGroupIcon, UserSquareIcon, UserMultipleIcon, UserSwitchIcon } from '@hugeicons/core-free-icons';
 
   const tr = (key: string, values?: Record<string, string | number>) =>
     dashboardText($locale, key, values);
@@ -18,6 +19,21 @@
   let loading = $state(true);
   let query = $state('');
   let roleFilter = $state<'all' | 'admins' | 'regular'>('all');
+  let impersonatingId = $state<string | null>(null);
+
+  async function handleImpersonate(target: ApiAdminUser) {
+    if (impersonatingId) return;
+    impersonatingId = target.id;
+    try {
+      await api.adminImpersonateUser(target.id);
+      toast.success(tr('admin.impersonate.success', { name: target.name }));
+      window.location.href = '/dashboard';
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : tr('admin.impersonate.failed');
+      toast.error(message);
+      impersonatingId = null;
+    }
+  }
 
   let initialized = $state(false);
   $effect(() => {
@@ -109,6 +125,11 @@
       key: 'createdAt',
       label: tr('admin.users.joined'),
       render: (row) => formatDate(row.createdAt)
+    },
+    {
+      key: 'actions',
+      label: tr('admin.users.actions'),
+      align: 'right'
     }
   ]);
 </script>
@@ -195,6 +216,39 @@
       rowKey="id"
       emptyTitle={query || roleFilter !== 'all' ? tr('admin.empty.noResults') : tr('admin.users.empty')}
       emptyDescription={query || roleFilter !== 'all' ? tr('admin.empty.noResultsDesc') : tr('admin.users.emptyDesc')}
-    />
+    >
+      {#snippet cell({ row, column })}
+        {#if column.key === 'actions'}
+          {@const isCurrent = row.id === $page.data.user?.id}
+          {#if isCurrent}
+            <Badge tone="idle" class="opacity-70">
+              {tr('admin.users.currentAccount')}
+            </Badge>
+          {:else}
+            <Button
+              size="sm"
+              variant="secondary"
+              class="h-7 gap-1.5 px-2.5 text-xs font-medium"
+              disabled={impersonatingId === row.id}
+              onclick={(e) => {
+                e.stopPropagation();
+                handleImpersonate(row);
+              }}
+            >
+              {#if impersonatingId === row.id}
+                <span class="inline-block size-3 animate-spin rounded-full border-2 border-primary border-t-transparent"></span>
+              {:else}
+                <HugeiconsIcon icon={UserSwitchIcon} size={14} strokeWidth={1.8} />
+              {/if}
+              <span>{tr('admin.users.impersonate')}</span>
+            </Button>
+          {/if}
+        {:else if column.render}
+          {column.render(row)}
+        {:else}
+          {String(row[column.key] ?? '—')}
+        {/if}
+      {/snippet}
+    </DataTable>
   </section>
 </div>

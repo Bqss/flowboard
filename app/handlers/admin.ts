@@ -1,6 +1,10 @@
 import { count, eq } from 'drizzle-orm';
 import { db, users, workspaces, workspaceMembers } from '@db';
-import { type Ctx } from '@core';
+import { type Ctx, toPublicUser, toPublicWorkspace } from '@core';
+import { env } from '@config/env';
+import { createSession, sessionCookieOptions } from '@services';
+import { getActiveWorkspaceContext } from '@services/workspace';
+import { logger } from '@services/logger';
 import {
   changeSubscriptionPlan,
   countSubscriptionsByStatus,
@@ -112,6 +116,93 @@ export async function listUsers() {
     .from(users)
     .orderBy(users.createdAt);
   return { users: rows };
+}
+
+type ImpersonateBody = { userId: string };
+type ImpersonateParams = { userId: string };
+
+async function executeImpersonate(
+  targetUserId: string,
+  cookie: Ctx['cookie'],
+  user: Ctx['user'],
+  set: Ctx['set']
+) {
+  if (!user || !user.platformAdmin) {
+    set.status = 403;
+    return { error: 'Platform admin access required' };
+  }
+
+  if (!targetUserId) {
+    set.status = 400;
+    return { error: 'Target user ID is required' };
+  }
+
+  if (targetUserId === user.id) {
+    set.status = 400;
+    return { error: 'Cannot impersonate yourself' };
+  }
+
+  const [target] = await db.select().from(users).where(eq(users.id, targetUserId)).limit(1);
+  if (!target) {
+    set.status = 404;
+    return { error: 'User not found' };
+  }
+
+  const adminSessionId = cookie[env.sessionCookie]?.value as string | undefined;
+  if (!adminSessionId) {
+    set.status = 401;
+    return { error: 'Admin session missing' };
+  }
+
+  // Preserve the original admin session ID if chained impersonation happens
+  const impersonatorCookieKey = `${env.sessionCookie}_impersonator`;
+  const existingImpersonatorSessionId = cookie[impersonatorCookieKey]?.value as string | undefined;
+  const adminSessionToStore = existingImpersonatorSessionId || adminSessionId;
+
+  cookie[impersonatorCookieKey].set({
+    value: adminSessionToStore,
+    ...sessionCookieOptions
+  });
+
+  const targetSessionId = await createSession(target.id);
+  cookie[env.sessionCookie].set({
+    value: targetSessionId,
+    ...sessionCookieOptions
+  });
+
+  const ctx = await getActiveWorkspaceContext(target.id, target.activeWorkspaceId);
+  logger.logAuth('admin_impersonation_started', {
+    adminId: user.id,
+    targetUserId: target.id
+  });
+
+  return {
+    user: toPublicUser(target),
+    workspace: ctx ? toPublicWorkspace(ctx.workspace, ctx.role) : null,
+    impersonator: {
+      id: user.id,
+      name: user.name,
+      email: user.email
+    }
+  };
+}
+
+export async function impersonateUser({
+  params,
+  cookie,
+  user,
+  set
+}: Ctx<unknown, ImpersonateParams>) {
+  return executeImpersonate(params.userId, cookie, user, set);
+}
+
+export async function impersonateUserByBody({
+  body,
+  cookie,
+  user,
+  set
+}: Ctx<ImpersonateBody>) {
+  return executeImpersonate(body.userId, cookie, user, set);
 }
 
 /* -------------------------------------------------------------------- plans */

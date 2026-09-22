@@ -11,7 +11,9 @@ import {
   UpdateVoucherSchema,
   AdminChangePlanSchema,
   AdminExtendTrialSchema,
-  AdminSetStatusSchema
+  AdminSetStatusSchema,
+  AdminUserIdParam,
+  AdminImpersonateSchema
 } from '@validators';
 
 /**
@@ -24,6 +26,8 @@ export const createAdminRoutes = () =>
     .get('/overview', admin.overview)
     .get('/workspaces', admin.listWorkspaces)
     .get('/users', admin.listUsers)
+    .post('/impersonate', admin.impersonateUserByBody, { body: AdminImpersonateSchema })
+    .post('/users/:userId/impersonate', admin.impersonateUser, { params: AdminUserIdParam })
     .get('/subscriptions', admin.listSubscriptions)
     .get('/plans', admin.listPlans)
     .post('/plans', admin.createPlanHandler, { body: CreatePlanSchema })
