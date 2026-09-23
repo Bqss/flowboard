@@ -1,7 +1,7 @@
+import { join, normalize } from 'node:path';
 import type { Handle } from '@sveltejs/kit';
 import { getApi, reloadApi } from '@routes/api';
 import { startScheduler, stopScheduler } from '@services/scheduler';
-
 startScheduler();
 
 /**
@@ -19,7 +19,19 @@ startScheduler();
  * Both paths dispatch to the same `api` instance, so behaviour is identical.
  */
 export const handle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname.startsWith('/api')) {
+  const pathname = event.url.pathname;
+
+  const uploadPrefixes = ['/chat-uploads/', '/task-uploads/', '/avatars/'];
+  if (uploadPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    const safePath = normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = join(process.cwd(), 'static', safePath);
+    const file = Bun.file(filePath);
+    if (await file.exists()) {
+      return new Response(file);
+    }
+  }
+
+  if (pathname.startsWith('/api')) {
     return getApi().handle(event.request);
   }
 

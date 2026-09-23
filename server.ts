@@ -11,6 +11,7 @@
  * on the same Vite port. Both paths dispatch to the same `api` instance, so
  * behaviour is identical; only the transport wrapper differs.
  */
+import { join, normalize } from 'node:path';
 import { api } from '@routes/api';
 import { env } from '@config/env';
 import { startScheduler } from '@services/scheduler';
@@ -34,8 +35,20 @@ const server = Bun.serve<{
 }>({
   port: env.port,
   hostname: '0.0.0.0',
-  fetch(request, srv) {
+  async fetch(request, srv) {
     const { pathname, searchParams } = new URL(request.url);
+
+    // Serve dynamic uploaded static files (chat uploads, task uploads, avatars)
+    const uploadPrefixes = ['/chat-uploads/', '/task-uploads/', '/avatars/'];
+    if (uploadPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+      const safePath = normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+      const filePath = join(process.cwd(), 'static', safePath);
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        return new Response(file);
+      }
+      return new Response('Not Found', { status: 404 });
+    }
 
     // WebSocket upgrade for chat realtime
     if (pathname === '/api/chat/ws') {
