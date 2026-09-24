@@ -4,6 +4,7 @@ import { sendEmail } from '@services/email';
 import {
   acceptWorkspaceInvite,
   countWorkspaceOwners,
+  createWorkspaceForUser,
   createWorkspaceInvite,
   deleteInvite,
   extendInviteExpiry,
@@ -44,6 +45,24 @@ export async function list({ user, set }: Ctx) {
       joinedAt: row.joinedAt
     }))
   };
+}
+
+type CreateWorkspaceBody = { name: string };
+
+export async function create({ user, body, set }: Ctx<CreateWorkspaceBody>) {
+  if (!user) {
+    set.status = 401;
+    return { error: 'Unauthorized' };
+  }
+
+  const name = body.name.trim();
+  if (!name || name.length > 120) {
+    set.status = 400;
+    return { error: 'Workspace name must be between 1 and 120 characters.' };
+  }
+
+  const workspace = await createWorkspaceForUser(user.id, name);
+  return { workspace: toPublicWorkspace(workspace, 'owner') };
 }
 
 export async function myInvites({ user, set }: Ctx) {

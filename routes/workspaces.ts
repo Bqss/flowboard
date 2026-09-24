@@ -8,6 +8,7 @@ import {
   WorkspaceMemberParam,
   UpdateWorkspaceSchema,
   CreateInviteSchema,
+  CreateWorkspaceSchema,
   AcceptInviteSchema,
   InviteTokenParam,
   InviteIdParam,
@@ -39,6 +40,7 @@ export const createWorkspacesRoutes = () => {
     .get('/invites/:token', workspaces.showInvite, { params: InviteTokenParam })
     .use(createRequireAuth())
     .get('/', workspaces.list)
+    .post('/', workspaces.create, { body: CreateWorkspaceSchema })
     .get('/my-invites', workspaces.myInvites)
     .post('/invites/accept', workspaces.acceptInvite, { body: AcceptInviteSchema })
     .group('/:workspaceId', (app) =>

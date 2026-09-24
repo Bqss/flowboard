@@ -11,6 +11,7 @@
 		Search01Icon,
 		ArrowDown01Icon,
 		Building06Icon,
+		Add01Icon,
 		Tick02Icon,
 		ShieldUserIcon,
 		Logout03Icon,
@@ -41,6 +42,7 @@
 		workspaces?: WorkspaceItem[];
 		currentWorkspaceId?: string;
 		onSwitchWorkspace?: (id: string) => void;
+		onCreateWorkspace?: () => void;
 		collapsed?: boolean;
 		onToggleCollapse?: () => void;
 		mobileOpen?: boolean;
@@ -65,6 +67,7 @@
 			workspaces?: string;
 			signOut?: string;
 			myAccount?: string;
+			addWorkspace?: string;
 		};
 		class?: string;
 		header?: import('svelte').Snippet;
@@ -86,6 +89,7 @@
 		workspaces = [],
 		currentWorkspaceId,
 		onSwitchWorkspace,
+		onCreateWorkspace,
 		collapsed = $bindable(false),
 		onToggleCollapse,
 		mobileOpen = $bindable(false),
@@ -145,16 +149,22 @@
 		}
 	}
 
-	const workspaceMenuItems = $derived<MenuItem[]>(
-		workspaces.map((ws) => ({
+	const workspaceMenuItems = $derived<MenuItem[]>([
+		...workspaces.map((ws) => ({
 			label: ws.name,
 			disabled: ws.id === currentWorkspaceId,
 			icon: ws.id === currentWorkspaceId ? checkIconSnippet : buildingIconSnippet,
-			onselect: () => {
-				onSwitchWorkspace?.(ws.id);
-			}
-		}))
-	);
+			onselect: () => onSwitchWorkspace?.(ws.id)
+		})),
+		...(onCreateWorkspace
+			? [{
+					label: labels.addWorkspace ?? 'Add workspace',
+					icon: addIconSnippet,
+					separatorBefore: workspaces.length > 0,
+					onselect: onCreateWorkspace
+				}]
+			: [])
+	]);
 
 	const defaultUserMenuItems = $derived<MenuItem[]>([
 		{
@@ -216,6 +226,10 @@
 
 {#snippet logoutIconSnippet()}
 	<HugeiconsIcon icon={Logout03Icon} size={15} strokeWidth={1.8} class="text-status-urgent" />
+{/snippet}
+
+{#snippet addIconSnippet()}
+	<HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={1.8} class="text-primary" />
 {/snippet}
 
 {#snippet searchInput(isMobile: boolean = false)}
@@ -456,7 +470,7 @@
 	{:else}
 		<!-- Expanded Header -->
 		<div class="flex h-16 shrink-0 items-center justify-between border-b border-hairline px-3.5">
-			{#if workspaces.length > 1}
+			{#if workspaces.length > 1 || onCreateWorkspace}
 				<DropdownMenu items={workspaceMenuItems} align="start" label="Workspace switcher">
 					{#snippet trigger({ open, toggle })}
 						<button

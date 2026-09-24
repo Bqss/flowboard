@@ -918,6 +918,13 @@ export const api = {
       }>;
     }>('/workspaces', { fetch: fetchFn }),
 
+  createWorkspace: (name: string, fetchFn?: FetchLike) =>
+    request<{ workspace: ApiWorkspace }>('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+      fetch: fetchFn
+    }),
+
   myInvites: (fetchFn?: FetchLike) =>
     request<{
       invites: Array<{

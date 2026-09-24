@@ -11,6 +11,9 @@ export const RegisterSchema = t.Object({
   phone: t.String({ minLength: 1 }),
   password: t.String({ minLength: 8 })
 });
+export const CreateWorkspaceSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 })
+});
 
 export const LoginSchema = t.Object({
   email: t.String({ format: 'email' }),

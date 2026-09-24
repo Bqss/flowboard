@@ -4,10 +4,10 @@
   import { api, ApiError } from '$lib/api/client';
   import type { ApiAccount } from '$lib/api/client';
   import type { LayoutData } from '../$types';
-  import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget } from '$lib/components/organisms/index.js';
+  import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget, Dialog } from '$lib/components/organisms/index.js';
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
-  import { Avatar } from '$lib/components/atoms/index.js';
-  import { DropdownMenu, toast, type MenuItem } from '$lib/components/molecules/index.js';
+  import { Avatar, Button, Input } from '$lib/components/atoms/index.js';
+  import { DropdownMenu, FormField, toast, type MenuItem } from '$lib/components/molecules/index.js';
   import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
   import { locale, locales, setLocale } from '$lib/i18n/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -29,7 +29,8 @@
     InformationCircleIcon,
     Menu01Icon,
     SquareDashedKanbanIcon,
-    UserSwitchIcon
+    UserSwitchIcon,
+    Add01Icon
   } from '@hugeicons/core-free-icons';
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
@@ -52,6 +53,10 @@
     Array<{ id: string; name: string; slug: string; role: 'owner' | 'member'; joinedAt: string }>
   >([]);
   let mobileNavOpen = $state(false);
+  let creatingWorkspace = $state(false);
+  let createWorkspaceOpen = $state(false);
+  let newWorkspaceName = $state('');
+  let createWorkspaceError = $state('');
 
   $effect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -233,6 +238,30 @@
     }
   }
 
+  function openCreateWorkspace() {
+    newWorkspaceName = '';
+    createWorkspaceError = '';
+    createWorkspaceOpen = true;
+  }
+
+  async function createWorkspace() {
+    const name = newWorkspaceName.trim();
+    if (!name || creatingWorkspace) return;
+
+    creatingWorkspace = true;
+    createWorkspaceError = '';
+    try {
+      await api.createWorkspace(name);
+      createWorkspaceOpen = false;
+      await invalidateAll();
+      await goto('/dashboard');
+    } catch (err) {
+      createWorkspaceError = err instanceof ApiError ? err.message : tr('shell.createWorkspaceError');
+    } finally {
+      creatingWorkspace = false;
+    }
+  }
+
   async function switchAccount(accountId: string) {
     if (!data.user || accountId === data.user.id || switchingAccount) return;
 
@@ -248,16 +277,23 @@
     }
   }
 
-  const workspaceMenuItems = $derived<MenuItem[]>(
-    workspaces.map((workspace) => ({
+  const workspaceMenuItems = $derived<MenuItem[]>([
+    ...workspaces.map((workspace) => ({
       label: workspace.name,
-      disabled: switchingWorkspace || workspace.id === data.workspace?.id,
+      disabled: switchingWorkspace || creatingWorkspace || workspace.id === data.workspace?.id,
       icon: workspace.id === data.workspace?.id ? checkIcon : buildingIcon,
       onselect: () => switchWorkspace(workspace.id)
-    }))
-  );
+    })),
+    {
+      label: tr('shell.addWorkspace'),
+      icon: addIcon,
+      separatorBefore: workspaces.length > 0,
+      disabled: creatingWorkspace,
+      onselect: openCreateWorkspace
+    }
+  ]);
 
-  const canSwitchWorkspace = $derived(workspaces.length > 1);
+  const canSwitchWorkspace = $derived(Boolean(data.user));
 
   async function loadNotifications() {
     if (!data.workspace?.id) {
@@ -395,11 +431,14 @@
 {#snippet userSwitchIcon()}
   <HugeiconsIcon icon={UserSwitchIcon} size={16} strokeWidth={1.8} />
 {/snippet}
-{#snippet buildingIcon()}
-  <HugeiconsIcon icon={Building06Icon} size={16} strokeWidth={1.8} />
+{#snippet addIcon()}
+  <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
 {/snippet}
 {#snippet checkIcon()}
   <HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={1.8} />
+{/snippet}
+{#snippet buildingIcon()}
+  <HugeiconsIcon icon={Building06Icon} size={16} strokeWidth={1.8} />
 {/snippet}
 {#snippet adminOverviewIcon()}
   <HugeiconsIcon icon={DashboardSquare02Icon} size={20} strokeWidth={1.8} />
@@ -424,6 +463,7 @@
     workspaces={workspaces}
     currentWorkspaceId={data.workspace?.id}
     onSwitchWorkspace={switchWorkspace}
+    onCreateWorkspace={openCreateWorkspace}
     collapsed={sidebarCollapsed}
     onToggleCollapse={toggleSidebar}
     bind:mobileOpen={mobileNavOpen}
@@ -440,6 +480,7 @@
       exitAdmin: tr('nav.exitAdmin'),
       signOut: tr('shell.signOut'),
       search: tr('shell.search'),
+      addWorkspace: tr('shell.addWorkspace'),
       noResults: tr('common.noResults')
     }}
   />
@@ -544,6 +585,7 @@
               class="flex items-center gap-2 rounded-full border border-hairline bg-card py-1 pl-1.5 pr-2 shadow-control transition-all hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] sm:pr-3"
               aria-expanded={open}
               aria-label={tr('shell.userMenu')}
+
             >
               <div class="relative">
                 <Avatar name={data.user?.name} src={data.user?.avatarUrl ?? undefined} size={28} />
@@ -581,4 +623,49 @@
     {/if}
   </div>
   <Toaster />
+
+  <Dialog
+    bind:open={createWorkspaceOpen}
+    title={tr('shell.createWorkspaceTitle')}
+    description={tr('shell.createWorkspaceDescription')}
+  >
+    <form
+      class="space-y-4"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void createWorkspace();
+      }}
+    >
+      <FormField label={tr('shell.workspaceName')} required>
+        {#snippet control(args)}
+          <Input
+            {...args}
+            bind:value={newWorkspaceName}
+            maxlength={120}
+            required
+            disabled={creatingWorkspace}
+            placeholder={tr('shell.workspaceNamePlaceholder')}
+          />
+        {/snippet}
+      </FormField>
+      {#if createWorkspaceError}
+        <p class="ds-caption text-status-urgent" role="alert">{createWorkspaceError}</p>
+      {/if}
+    </form>
+    {#snippet footer()}
+      <div class="flex justify-end gap-2">
+        <Button variant="secondary" disabled={creatingWorkspace} onclick={() => (createWorkspaceOpen = false)}>
+          {tr('common.cancel')}
+        </Button>
+        <Button
+          variant="primary"
+          loading={creatingWorkspace}
+          disabled={!newWorkspaceName.trim() || creatingWorkspace}
+          onclick={createWorkspace}
+        >
+          {tr('shell.createWorkspace')}
+        </Button>
+      </div>
+    {/snippet}
+  </Dialog>
 </div>
