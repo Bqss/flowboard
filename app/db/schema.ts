@@ -46,9 +46,12 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
 ]);
 export const planIntervalEnum = pgEnum('plan_interval', ['monthly', 'yearly']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['percent', 'fixed', 'trial_days']);
-export const chatConversationKindEnum = pgEnum('chat_conversation_kind', ['direct', 'group']);
+export const chatConversationKindEnum = pgEnum('chat_conversation_kind', ['direct', 'group', 'taskboard', 'workflow']);
+export const chatConversationContextEnum = pgEnum('chat_conversation_context', ['group', 'taskboard', 'workflow']);
 export const chatParticipantRoleEnum = pgEnum('chat_participant_role', ['admin', 'member']);
 export const taskPriorityEnum = pgEnum('task_priority', ['low', 'medium', 'high']);
+export const taskRecurrenceEnum = pgEnum('task_recurrence', ['never', 'daily', 'weekly']);
+
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -77,6 +80,30 @@ export const sessions = pgTable('sessions', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+export const mobileSessions = pgTable(
+  'mobile_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    accessTokenHash: text('access_token_hash').notNull(),
+    refreshTokenHash: text('refresh_token_hash').notNull(),
+    accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }).notNull(),
+    refreshExpiresAt: timestamp('refresh_expires_at', { withTimezone: true }).notNull(),
+    deviceName: text('device_name'),
+    platform: text('platform'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true })
+  },
+  (table) => [
+    uniqueIndex('mobile_sessions_access_token_hash_idx').on(table.accessTokenHash),
+    uniqueIndex('mobile_sessions_refresh_token_hash_idx').on(table.refreshTokenHash),
+    index('mobile_sessions_user_idx').on(table.userId)
+  ]
+);
+
 
 export const workspaces = pgTable('workspaces', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -101,6 +128,42 @@ export const workspaceMembers = pgTable(
   },
   (table) => [uniqueIndex('workspace_members_workspace_user_idx').on(table.workspaceId, table.userId)]
 );
+
+export const workspaceMemberGroups = pgTable(
+  'workspace_member_groups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [uniqueIndex('workspace_member_groups_workspace_name_idx').on(table.workspaceId, table.name)]
+);
+
+export const workspaceMemberGroupMembers = pgTable(
+  'workspace_member_group_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    groupId: uuid('group_id')
+      .notNull()
+      .references(() => workspaceMemberGroups.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex('workspace_member_group_members_group_user_idx').on(table.groupId, table.userId),
+    index('workspace_member_group_members_user_idx').on(table.userId)
+  ]
+);
+
 
 export const directConversations = pgTable(
   'direct_conversations',
@@ -161,11 +224,15 @@ export const chatConversations = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     kind: chatConversationKindEnum('kind').notNull(),
+    contextType: chatConversationContextEnum('context_type'),
+    contextId: uuid('context_id'),
+    groupId: uuid('group_id').references(() => workspaceMemberGroups.id, { onDelete: 'set null' }),
     name: text('name'),
     directKey: text('direct_key'),
     createdById: uuid('created_by_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
   },
@@ -174,10 +241,13 @@ export const chatConversations = pgTable(
       table.workspaceId,
       table.directKey
     ),
+    uniqueIndex('chat_conversations_context_idx').on(table.workspaceId, table.contextType, table.contextId),
+    index('chat_conversations_group_idx').on(table.groupId),
     index('chat_conversations_workspace_updated_idx').on(table.workspaceId, table.updatedAt),
+    index('chat_conversations_workspace_archived_idx').on(table.workspaceId, table.archivedAt),
     check(
       'chat_conversations_kind_check',
-      sql`(kind = 'direct' AND direct_key IS NOT NULL AND name IS NULL) OR (kind = 'group' AND name IS NOT NULL AND direct_key IS NULL)`
+      sql`(kind = 'direct' AND direct_key IS NOT NULL AND name IS NULL) OR (kind IN ('group', 'taskboard', 'workflow') AND name IS NOT NULL AND direct_key IS NULL)`
     )
   ]
 );
@@ -317,6 +387,9 @@ export const workflows = pgTable('workflows', {
   workspaceId: uuid('workspace_id')
     .notNull()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
+  workspaceMemberGroupId: uuid('workspace_member_group_id').references(() => workspaceMemberGroups.id, {
+    onDelete: 'set null'
+  }),
   name: text('name').notNull(),
   description: text('description'),
   ownerId: uuid('owner_id')
@@ -924,11 +997,31 @@ export type NewGoogleSheetsConnection = typeof googleSheetsConnections.$inferIns
 // Task Boards — workspace-scoped generic kanban alongside workflows
 // ---------------------------------------------------------------------------
 
+export const taskLabels = pgTable(
+  'task_labels',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 50 }).notNull(),
+    color: varchar('color', { length: 32 }).notNull().default('indigo'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [uniqueIndex('task_labels_workspace_name_idx').on(table.workspaceId, table.name)]
+);
+
+export type TaskLabel = typeof taskLabels.$inferSelect;
+
 export const taskBoards = pgTable('task_boards', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')
     .notNull()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
+  workspaceMemberGroupId: uuid('workspace_member_group_id').references(() => workspaceMemberGroups.id, {
+    onDelete: 'set null'
+  }),
   name: text('name').notNull(),
   description: text('description'),
   ownerId: uuid('owner_id')
@@ -965,8 +1058,12 @@ export const tasks = pgTable('tasks', {
   title: varchar('title', { length: 500 }).notNull(),
   description: text('description'),
   priority: taskPriorityEnum('priority').notNull().default('medium'),
+  labels: text('labels').array().notNull().default(sql`ARRAY[]::text[]`),
   assigneeId: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
+  startAt: timestamp('start_at', { withTimezone: true }),
   dueAt: timestamp('due_at', { withTimezone: true }),
+  recurrence: taskRecurrenceEnum('recurrence').notNull().default('never'),
+  recurrenceDays: integer('recurrence_days').array().notNull().default(sql`ARRAY[]::integer[]`),
   position: integer('position').notNull().default(0),
   createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
@@ -1037,4 +1134,7 @@ export type NewTask = typeof tasks.$inferInsert;
 export type TaskComment = typeof taskComments.$inferSelect;
 export type TaskActivity = typeof taskActivities.$inferSelect;
 export type TaskPriority = (typeof taskPriorityEnum.enumValues)[number];
+export type TaskRecurrence = (typeof taskRecurrenceEnum.enumValues)[number];
 export type TaskAttachment = typeof taskAttachments.$inferSelect;
+export type WorkspaceMemberGroup = typeof workspaceMemberGroups.$inferSelect;
+export type WorkspaceMemberGroupMember = typeof workspaceMemberGroupMembers.$inferSelect;
