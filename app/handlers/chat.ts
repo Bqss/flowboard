@@ -18,6 +18,7 @@ import {
   sendMessage,
   toggleReaction
 } from '@services/chat';
+import { getOnlineUserIds } from '@services/chatSocket';
 
 type WorkspaceParams = { workspaceId: string };
 type ConversationParams = WorkspaceParams & { conversationId: string };
@@ -70,6 +71,15 @@ export async function getMembersHandler(ctx: Ctx<unknown, WorkspaceParams>) {
   const members = await listWorkspaceMembersForChat(ctx.workspace.id, ctx.user.id);
   return { members };
 }
+export async function getPresenceHandler(ctx: Ctx<unknown, WorkspaceParams>) {
+  if (!hasWorkspaceAccess(ctx)) {
+    ctx.set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  const onlineUserIds = getOnlineUserIds(ctx.workspace.id);
+  return { onlineUserIds };
+}
+
 
 /* ------------------------------------------------------- direct + group */
 

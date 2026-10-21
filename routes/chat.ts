@@ -19,8 +19,8 @@ import {
 
 export const createChatRoutes = () => {
   const workspaceMemberGuard = new Elysia()
-    .derive({ as: 'scoped' }, async ({ cookie, params }) =>
-      resolveWorkspaceMember(cookie, params.workspaceId)
+    .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+      resolveWorkspaceMember(cookie, params.workspaceId, request)
     )
     .onBeforeHandle({ as: 'scoped' }, (ctx) => {
       const { workspace, membership, set } = ctx as typeof ctx & {
@@ -41,6 +41,8 @@ export const createChatRoutes = () => {
     .get('/conversations', chat.listConversationsHandler, { params: WorkspaceIdParam })
     .get('/unread', chat.getUnreadHandler, { params: WorkspaceIdParam })
     .get('/members', chat.getMembersHandler, { params: WorkspaceIdParam })
+    .get('/presence', chat.getPresenceHandler, { params: WorkspaceIdParam })
+    .get('/online-users', chat.getPresenceHandler, { params: WorkspaceIdParam })
     .post('/direct', chat.createDirectHandler, {
       params: WorkspaceIdParam,
       body: CreateDirectSchema

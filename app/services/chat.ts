@@ -1,5 +1,17 @@
 import { and, asc, desc, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm';
-import { db, chatAttachments, chatConversations, chatParticipants, chatMessages, chatReactions, users, workspaceMembers } from '@db';
+import {
+  db,
+  chatAttachments,
+  chatConversations,
+  chatParticipants,
+  chatMessages,
+  chatReactions,
+  users,
+  workspaceMemberGroupMembers,
+  workspaceMemberGroups,
+  workspaceMembers
+} from '@db';
+import { createWorkspaceMemberGroup } from '@services/workspace';
 import { broadcastToUsers } from '@services/chatSocket';
 
 const THREAD_LIMIT = 50;
@@ -61,7 +73,8 @@ const getConversation = async (workspaceId: string, conversationId: string) => {
     .where(
       and(
         eq(chatConversations.id, conversationId),
-        eq(chatConversations.workspaceId, workspaceId)
+        eq(chatConversations.workspaceId, workspaceId),
+        isNull(chatConversations.archivedAt)
       )
     )
     .limit(1);
@@ -139,7 +152,11 @@ const getDirectPartner = async (conversationId: string, userId: string) => {
 
 type ConversationListItem = {
   id: string;
-  kind: 'direct' | 'group';
+  kind: 'direct' | 'group' | 'taskboard' | 'workflow';
+  contextType?: 'group' | 'taskboard' | 'workflow' | null;
+  category: 'personal' | 'group' | 'taskboard' | 'workflow';
+  contextId: string | null;
+  groupId: string | null;
   name: string | null;
   partner: {
     id: string;
@@ -191,7 +208,8 @@ export const listConversations = async (
     .where(
       and(
         sql`${chatConversations.id} = ANY(${sql.raw(`ARRAY['${conversationIds.join("','")}']::uuid[]`)})`,
-        eq(chatConversations.workspaceId, workspaceId)
+        eq(chatConversations.workspaceId, workspaceId),
+        isNull(chatConversations.archivedAt)
       )
     );
 
@@ -262,10 +280,20 @@ export const listConversations = async (
           lastReadAt ? gt(chatMessages.createdAt, lastReadAt) : sql`TRUE`
         )
       );
-
     items.push({
       id: convId,
-      kind: conv.kind as 'direct' | 'group',
+      kind: conv.kind as 'direct' | 'group' | 'taskboard' | 'workflow',
+      contextType: conv.contextType,
+      category:
+        conv.kind === 'direct'
+          ? 'personal'
+          : conv.contextType === 'taskboard'
+            ? 'taskboard'
+            : conv.contextType === 'workflow'
+              ? 'workflow'
+              : 'group',
+      contextId: conv.contextId,
+      groupId: conv.groupId,
       name: conv.name,
       partner: partnerMap.get(convId) ?? null,
       lastMessage: lastMsg
@@ -300,11 +328,13 @@ export const countUnread = async (workspaceId: string, userId: string) => {
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(chatMessages)
     .innerJoin(chatParticipants, eq(chatParticipants.conversationId, chatMessages.conversationId))
+    .innerJoin(chatConversations, eq(chatConversations.id, chatMessages.conversationId))
     .where(
       and(
         eq(chatParticipants.workspaceId, workspaceId),
         eq(chatParticipants.userId, userId),
         isNull(chatParticipants.leftAt),
+        isNull(chatConversations.archivedAt),
         ne(chatMessages.senderId, userId),
         isNull(chatMessages.deletedAt),
         or(
@@ -459,10 +489,8 @@ export const createGroupRoom = async (
   name: string,
   memberIds: string[]
 ): Promise<GroupRoomResult | null> => {
-  // Validate at least 1 other member
   if (memberIds.length < 1) return null;
 
-  // Verify all members are in the workspace
   for (const memberId of memberIds) {
     const member = await findWorkspaceMember(workspaceId, memberId);
     if (!member) return null;
@@ -478,29 +506,29 @@ export const createGroupRoom = async (
     })
     .returning();
 
-  if (!created) throw new Error('Group room could not be created');
+  if (!created) return null;
 
-  // Add creator as admin, others as members
-  const participantValues = [
-    { conversationId: created.id, workspaceId, userId, role: 'admin' as const },
-    ...memberIds.map((mid) => ({
+  const allParticipantIds = [...new Set([...memberIds, userId])];
+  await db.insert(chatParticipants).values(
+    allParticipantIds.map((mid) => ({
       conversationId: created.id,
       workspaceId,
       userId: mid,
-      role: 'member' as const
+      role: mid === userId ? ('admin' as const) : ('member' as const)
     }))
-  ];
-
-  await db.insert(chatParticipants).values(participantValues);
+  );
 
   const participants = await getParticipants(created.id);
-
   return {
-    conversation: { id: created.id, kind: 'group', name: created.name! },
-    participants: participants.map((p) => ({
-      userId: p.userId,
-      name: p.name,
-      role: p.role
+    conversation: {
+      id: created.id,
+      kind: 'group',
+      name: created.name!
+    },
+    participants: participants.map((participant) => ({
+      userId: participant.userId,
+      name: participant.name,
+      role: participant.role
     }))
   };
 };
@@ -509,7 +537,10 @@ export const createGroupRoom = async (
 
 type ConversationDetail = {
   id: string;
-  kind: 'direct' | 'group';
+  kind: 'direct' | 'group' | 'taskboard' | 'workflow';
+  contextType: 'group' | 'taskboard' | 'workflow' | null;
+  contextId: string | null;
+  groupId: string | null;
   name: string | null;
   partner: { id: string; name: string; email: string; avatarUrl: string | null; role: string } | null;
   participants: Array<{ userId: string; name: string; email: string; avatarUrl: string | null; role: string }>;
@@ -545,7 +576,10 @@ export const getConversationDetail = async (
 
   return {
     id: conversation.id,
-    kind: conversation.kind as 'direct' | 'group',
+    kind: conversation.kind as 'direct' | 'group' | 'taskboard' | 'workflow',
+    contextType: conversation.contextType,
+    contextId: conversation.contextId,
+    groupId: conversation.groupId,
     name: conversation.name,
     partner,
     participants: participants.map((p) => ({
@@ -568,15 +602,31 @@ export const renameRoom = async (
   name: string
 ): Promise<boolean> => {
   const conversation = await getConversation(workspaceId, conversationId);
-  if (!conversation || conversation.kind !== 'group') return false;
+  const nextName = name.trim();
+  if (!conversation || conversation.kind !== 'group' || !nextName) return false;
 
   const participation = await assertParticipant(conversationId, userId);
   if (!participation || participation.role !== 'admin') return false;
 
-  await db
-    .update(chatConversations)
-    .set({ name: name.trim(), updatedAt: new Date() })
-    .where(eq(chatConversations.id, conversationId));
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    await tx
+      .update(chatConversations)
+      .set({ name: nextName, updatedAt: now })
+      .where(eq(chatConversations.id, conversationId));
+
+    if (conversation.groupId) {
+      await tx
+        .update(workspaceMemberGroups)
+        .set({ name: nextName, updatedAt: now })
+        .where(
+          and(
+            eq(workspaceMemberGroups.id, conversation.groupId),
+            eq(workspaceMemberGroups.workspaceId, workspaceId)
+          )
+        );
+    }
+  });
 
   return true;
 };
@@ -594,25 +644,55 @@ export const addParticipant = async (
 
   const participation = await assertParticipant(conversationId, userId);
   if (!participation || participation.role !== 'admin') return false;
+  if (!(await findWorkspaceMember(workspaceId, newMemberId))) return false;
 
-  // Verify new member is in workspace
-  await db
-    .insert(chatParticipants)
-    .values({
-      conversationId,
-      workspaceId,
-      userId: newMemberId,
-      role: 'member'
-    })
-    .onConflictDoUpdate({
-      target: [chatParticipants.conversationId, chatParticipants.userId],
-      set: { leftAt: null }
-    });
-
-  await db
-    .update(chatConversations)
-    .set({ updatedAt: new Date() })
-    .where(eq(chatConversations.id, conversationId));
+  await db.transaction(async (tx) => {
+    if (conversation.groupId) {
+      await tx
+        .insert(workspaceMemberGroupMembers)
+        .values({ groupId: conversation.groupId, userId: newMemberId })
+        .onConflictDoNothing();
+      const channels = await tx
+        .select({ id: chatConversations.id })
+        .from(chatConversations)
+        .where(and(eq(chatConversations.groupId, conversation.groupId), isNull(chatConversations.archivedAt)));
+      await tx
+        .insert(chatParticipants)
+        .values(
+          channels.map((channel) => ({
+            conversationId: channel.id,
+            workspaceId,
+            userId: newMemberId,
+            role: 'member' as const
+          }))
+        )
+        .onConflictDoUpdate({
+          target: [chatParticipants.conversationId, chatParticipants.userId],
+          set: { leftAt: null }
+        });
+      await tx
+        .update(chatConversations)
+        .set({ updatedAt: new Date() })
+        .where(eq(chatConversations.groupId, conversation.groupId));
+    } else {
+      await tx
+        .insert(chatParticipants)
+        .values({
+          conversationId,
+          workspaceId,
+          userId: newMemberId,
+          role: 'member' as const
+        })
+        .onConflictDoUpdate({
+          target: [chatParticipants.conversationId, chatParticipants.userId],
+          set: { leftAt: null }
+        });
+      await tx
+        .update(chatConversations)
+        .set({ updatedAt: new Date() })
+        .where(eq(chatConversations.id, conversationId));
+    }
+  });
 
   return true;
 };
@@ -631,9 +711,7 @@ export const removeParticipant = async (
   const participation = await assertParticipant(conversationId, userId);
   if (!participation) return false;
 
-  // Self-leave: anyone can leave
   if (userId === targetUserId) {
-    // Admin must transfer or ensure another admin exists before leaving
     if (participation.role === 'admin') {
       const otherAdmins = await db
         .select({ id: chatParticipants.id })
@@ -646,39 +724,60 @@ export const removeParticipant = async (
             isNull(chatParticipants.leftAt)
           )
         );
-      if (otherAdmins.length === 0) return false; // Must transfer first
+      if (otherAdmins.length === 0) return false;
     }
-
-    await db
-      .update(chatParticipants)
-      .set({ leftAt: new Date() })
-      .where(
-        and(
-          eq(chatParticipants.conversationId, conversationId),
-          eq(chatParticipants.userId, userId)
-        )
-      );
-    return true;
+  } else if (participation.role !== 'admin') {
+    return false;
   }
 
-  // Remove others: admin only
-  if (participation.role !== 'admin') return false;
-
-  await db
-    .update(chatParticipants)
-    .set({ leftAt: new Date() })
-    .where(
-      and(
-        eq(chatParticipants.conversationId, conversationId),
-        eq(chatParticipants.userId, targetUserId),
-        isNull(chatParticipants.leftAt)
-      )
-    );
-
-  await db
-    .update(chatConversations)
-    .set({ updatedAt: new Date() })
-    .where(eq(chatConversations.id, conversationId));
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    if (conversation.groupId) {
+      const channels = await tx
+        .select({ id: chatConversations.id })
+        .from(chatConversations)
+        .where(and(eq(chatConversations.groupId, conversation.groupId), isNull(chatConversations.archivedAt)));
+      for (const channel of channels) {
+        await tx
+          .update(chatParticipants)
+          .set({ leftAt: now })
+          .where(
+            and(
+              eq(chatParticipants.conversationId, channel.id),
+              eq(chatParticipants.userId, targetUserId),
+              isNull(chatParticipants.leftAt)
+            )
+          );
+      }
+      await tx
+        .delete(workspaceMemberGroupMembers)
+        .where(
+          and(
+            eq(workspaceMemberGroupMembers.groupId, conversation.groupId),
+            eq(workspaceMemberGroupMembers.userId, targetUserId)
+          )
+        );
+      await tx
+        .update(chatConversations)
+        .set({ updatedAt: now })
+        .where(eq(chatConversations.groupId, conversation.groupId));
+    } else {
+      await tx
+        .update(chatParticipants)
+        .set({ leftAt: now })
+        .where(
+          and(
+            eq(chatParticipants.conversationId, conversationId),
+            eq(chatParticipants.userId, targetUserId),
+            isNull(chatParticipants.leftAt)
+          )
+        );
+      await tx
+        .update(chatConversations)
+        .set({ updatedAt: now })
+        .where(eq(chatConversations.id, conversationId));
+    }
+  });
 
   return true;
 };
@@ -839,6 +938,7 @@ type SendMessageResult = {
   id: string;
   conversationId: string;
   senderId: string;
+  clientMessageId: string;
   senderName: string;
   senderAvatarUrl: string | null;
   body: string;
@@ -904,6 +1004,7 @@ export const sendMessage = async (
       id: chatMessages.id,
       conversationId: chatMessages.conversationId,
       senderId: chatMessages.senderId,
+      clientMessageId: chatMessages.clientMessageId,
       body: chatMessages.body,
       replyToMessageId: chatMessages.replyToMessageId,
       editedAt: chatMessages.editedAt,
@@ -919,6 +1020,7 @@ export const sendMessage = async (
         id: chatMessages.id,
         conversationId: chatMessages.conversationId,
         senderId: chatMessages.senderId,
+        clientMessageId: chatMessages.clientMessageId,
         body: chatMessages.body,
         replyToMessageId: chatMessages.replyToMessageId,
         editedAt: chatMessages.editedAt,

@@ -25,6 +25,8 @@
     Minimize02Icon,
     CheckmarkCircle02Icon,
     UserGroupIcon,
+    KanbanIcon,
+    WorkflowSquare01Icon,
     AlertCircleIcon
   } from '@hugeicons/core-free-icons';
 
@@ -41,8 +43,9 @@
     dashboardText($locale, key, values);
 
   /* ------------------------------------------------------- dock state */
-  type DockMode = 'collapsed' | 'list' | 'thread' | 'newDirect' | 'createGroup';
+  type DockMode = 'collapsed' | 'list' | 'groupChannels' | 'thread' | 'newDirect' | 'createGroup';
   let dockMode = $state<DockMode>('collapsed');
+  let selectedGroup = $state<ApiChatConversation | null>(null);
   let isMobile = $state(false);
 
   // Check viewport
@@ -61,6 +64,7 @@
   let conversationsError = $state(false);
   let searchQuery = $state('');
   let filterUnread = $state(false);
+  let categoryFilter = $state<'all' | 'direct' | 'group' | 'taskboard' | 'workflow'>('all');
   let unreadTotal = $state(0);
 
   let filteredConversations = $derived.by(() => {
@@ -70,7 +74,32 @@
       seen.add(c.id);
       return true;
     });
-    return filterUnread ? deduped.filter((c) => c.unreadCount > 0) : deduped;
+    const rootList = deduped.filter((c) => {
+      if ((c.kind === 'taskboard' || c.kind === 'workflow') && c.groupId != null) {
+        return false;
+      }
+      return true;
+    });
+    let list = filterUnread ? rootList.filter((c) => getConversationUnread(c) > 0) : rootList;
+    if (categoryFilter === 'direct') {
+      list = list.filter((c) => c.kind === 'direct');
+    } else if (categoryFilter === 'group') {
+      list = list.filter((c) => c.kind === 'group');
+    } else if (categoryFilter === 'taskboard') {
+      list = list.filter((c) => c.kind === 'taskboard');
+    } else if (categoryFilter === 'workflow') {
+      list = list.filter((c) => c.kind === 'workflow');
+    }
+    return list;
+  });
+
+  const channelsForSelectedGroup = $derived.by(() => {
+    if (!selectedGroup || !selectedGroup.groupId) return [];
+    return conversations.filter(
+      (c) =>
+        c.groupId === selectedGroup!.groupId &&
+        (c.kind === 'taskboard' || c.kind === 'workflow')
+    );
   });
 
   async function loadConversations() {
@@ -213,6 +242,54 @@
   let threadIsGroup = $state(false);
   let hasOlderMessages = $state(false);
   let loadingOlder = $state(false);
+  // Presence & typing indicators
+  let onlineUserIds = $state<Set<string>>(new Set());
+  let typingUsers = $state<Map<string, Set<string>>>(new Map());
+  let typingTimer: ReturnType<typeof setTimeout> | null = null;
+  let isCurrentlyTyping = false;
+
+  const isContextChat = $derived(
+    activeConversation?.kind === 'workflow' ||
+    activeConversation?.kind === 'taskboard' ||
+    activeConversation?.contextType === 'workflow' ||
+    activeConversation?.contextType === 'taskboard'
+  );
+  const activeTypingUserIds = $derived(
+    activeConversationId ? Array.from(typingUsers.get(activeConversationId) ?? []) : []
+  );
+
+  const typingStatusText = $derived(() => {
+    if (activeTypingUserIds.length === 0) return '';
+    if (activeTypingUserIds.length === 1) {
+      const p = roomParticipants.find((part) => part.userId === activeTypingUserIds[0]);
+      const name = p?.name ?? (activeConversation?.partner?.id === activeTypingUserIds[0] ? activeConversation.partner.name : 'Someone');
+      return `${name} is typing...`;
+    }
+    return `${activeTypingUserIds.length} people are typing...`;
+  });
+
+  function notifyTyping(isTyping: boolean) {
+    if (!ws || !wsConnected || !activeConversationId) return;
+    try {
+      ws.send(JSON.stringify({ type: 'typing', conversationId: activeConversationId, isTyping }));
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleComposerInput() {
+    if (!activeConversationId) return;
+    if (!isCurrentlyTyping) {
+      isCurrentlyTyping = true;
+      notifyTyping(true);
+    }
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+      isCurrentlyTyping = false;
+      notifyTyping(false);
+    }, 2500);
+  }
+
 
   // Composer
   let composerText = $state('');
@@ -248,8 +325,8 @@
   async function openConversation(conv: ApiChatConversation) {
     activeConversationId = conv.id;
     activeConversation = conv;
-    threadIsGroup = conv.kind === 'group';
-    if (conv.kind === 'group') {
+    threadIsGroup = conv.kind !== 'direct';
+    if (conv.kind !== 'direct') {
       threadTitle = conv.name ?? '';
       threadAvatar = null;
     } else if (conv.partner) {
@@ -264,6 +341,74 @@
       c.id === conv.id ? { ...c, unreadCount: 0 } : c
     );
   }
+  $effect(() => {
+    function handleExternalOpenChat(event: Event) {
+      const customEvent = event as CustomEvent<{
+        conversationId?: string;
+        contextType?: 'group' | 'taskboard' | 'workflow';
+        contextId?: string;
+      }>;
+      const { conversationId, contextType, contextId } = customEvent.detail ?? {};
+      if (!conversationId && (!contextType || !contextId)) return;
+
+      if (dockMode !== 'collapsed') {
+        const matchesCurrent =
+          (conversationId && activeConversationId === conversationId) ||
+          (contextType && contextId && (activeConversation?.contextId === contextId || activeConversation?.id === conversationId));
+        if (matchesCurrent) {
+          collapse();
+          return;
+        }
+      }
+      void (async () => {
+        if (conversations.length === 0) {
+          await loadConversations();
+        }
+        let target = conversations.find((c) => {
+          if (conversationId && c.id === conversationId) return true;
+          if (contextType && contextId && (c.kind === contextType || c.contextType === contextType) && c.contextId === contextId) return true;
+          return false;
+        });
+
+        if (!target) {
+          await loadConversations();
+          target = conversations.find((c) => {
+            if (conversationId && c.id === conversationId) return true;
+            if (contextType && contextId && (c.kind === contextType || c.contextType === contextType) && c.contextId === contextId) return true;
+            return false;
+          });
+        }
+
+        if (!target && contextType && contextId && workspaceId) {
+          try {
+            const res = await api.createChatConversation(workspaceId, {
+              kind: contextType as any,
+              contextType,
+              contextId,
+              name: contextType === 'workflow' ? 'Chat Workflow' : 'Chat Board'
+            });
+            if (res.conversation) {
+              await loadConversations();
+              target = conversations.find((c) => c.id === res.conversation?.id);
+            }
+          } catch {
+            // Ignore
+          }
+        }
+
+        if (target) {
+          await openConversation(target);
+        } else {
+          dockMode = 'list';
+        }
+      })();
+    }
+
+    window.addEventListener('flowboard:open-chat', handleExternalOpenChat);
+    return () => {
+      window.removeEventListener('flowboard:open-chat', handleExternalOpenChat);
+    };
+  });
 
   async function loadMessages(older = false) {
     if (!activeConversationId) return;
@@ -383,6 +528,53 @@
         }
         break;
       }
+      case 'connected': {
+        if (Array.isArray(data.onlineUsers)) {
+          onlineUserIds = new Set(data.onlineUsers);
+        }
+        break;
+      }
+      case 'presence:state': {
+        if (Array.isArray(data.userIds)) {
+          onlineUserIds = new Set(data.userIds);
+        }
+        break;
+      }
+      case 'presence:user_online': {
+        if (typeof data.userId === 'string') {
+          const next = new Set(onlineUserIds);
+          next.add(data.userId);
+          onlineUserIds = next;
+        }
+        break;
+      }
+      case 'presence:user_offline': {
+        if (typeof data.userId === 'string') {
+          const next = new Set(onlineUserIds);
+          next.delete(data.userId);
+          onlineUserIds = next;
+        }
+        break;
+      }
+      case 'typing': {
+        const { conversationId, userId: typingUserId, isTyping } = data;
+        if (conversationId && typingUserId && typingUserId !== userId) {
+          const nextMap = new Map(typingUsers);
+          const currentSet = new Set(nextMap.get(conversationId) ?? []);
+          if (isTyping) {
+            currentSet.add(typingUserId);
+          } else {
+            currentSet.delete(typingUserId);
+          }
+          if (currentSet.size === 0) {
+            nextMap.delete(conversationId);
+          } else {
+            nextMap.set(conversationId, currentSet);
+          }
+          typingUsers = nextMap;
+        }
+        break;
+      }
     }
   }
   const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -460,7 +652,13 @@
       if (!messages.some((m) => m.id === res.message.id)) {
         messages = [...messages, res.message];
       }
+      if (isCurrentlyTyping) {
+        isCurrentlyTyping = false;
+        if (typingTimer) { clearTimeout(typingTimer); typingTimer = null; }
+        notifyTyping(false);
+      }
       composerText = '';
+
       replyToMessage = null;
       pendingAttachments = [];
       // Update conversation list
@@ -619,12 +817,13 @@
     creatingGroup = true;
     try {
       const res = await api.createGroupRoom(workspaceId, groupName.trim(), selectedMemberIds);
+      const conversationId = res.conversation.id;
       await loadConversations();
-      const conv = conversations.find((c) => c.id === res.conversation.id);
+      const conv = conversations.find((c) => c.id === conversationId);
       if (conv) {
         await openConversation(conv);
       } else {
-        activeConversationId = res.conversation.id;
+        activeConversationId = conversationId;
         threadTitle = res.conversation.name;
         threadAvatar = null;
         threadIsGroup = true;
@@ -681,18 +880,41 @@
     return count > 99 ? '99+' : String(count);
   }
 
+  function getConversationUnread(conv: ApiChatConversation): number {
+    if (conv.kind === 'group' && conv.groupId) {
+      const channelUnreads = conversations
+        .filter((c) => c.groupId === conv.groupId && c.id !== conv.id)
+        .reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+      return (conv.unreadCount || 0) + channelUnreads;
+    }
+    return conv.unreadCount || 0;
+  }
+
+  function handleConversationClick(conv: ApiChatConversation) {
+    if (conv.kind === 'group' && conv.groupId) {
+      selectedGroup = conv;
+      dockMode = 'groupChannels';
+    } else {
+      openConversation(conv);
+    }
+  }
   function conversationDisplayName(conv: ApiChatConversation): string {
-    if (conv.kind === 'group') return conv.name ?? '';
+    if (conv.kind !== 'direct') return conv.name ?? 'Grup';
     return conv.partner?.name ?? '';
   }
 
   function conversationAvatar(conv: ApiChatConversation): string | null {
-    if (conv.kind === 'group') return null;
+    if (conv.kind !== 'direct') return null;
     return conv.partner?.avatarUrl ?? null;
   }
 
   function lastMessagePreview(conv: ApiChatConversation): string {
-    if (!conv.lastMessage) return '';
+    if (!conv.lastMessage) {
+      if (conv.kind === 'taskboard') return 'Obrolan papan tugas';
+      if (conv.kind === 'workflow') return 'Obrolan alur kerja';
+      if (conv.kind === 'group') return 'Obrolan tim / grup';
+      return 'Mulai obrolan...';
+    }
     if (conv.lastMessage.deletedAt) return tr('chat.deleted');
     const prefix = conv.lastMessage.senderId === userId ? tr('chat.youPrefix', { message: '' }).replace(': ', '') + ': ' : '';
     return prefix + conv.lastMessage.body;
@@ -736,7 +958,12 @@
   }
 
   function backToList() {
-    dockMode = 'list';
+    if (dockMode === 'thread' && selectedGroup) {
+      dockMode = 'groupChannels';
+    } else {
+      dockMode = 'list';
+      selectedGroup = null;
+    }
     activeConversationId = null;
     activeConversation = null;
     replyToMessage = null;
@@ -748,6 +975,7 @@
 
   function collapse() {
     dockMode = 'collapsed';
+    selectedGroup = null;
     activeConversationId = null;
     replyToMessage = null;
     editingMessageId = null;
@@ -817,38 +1045,7 @@
 
 <!-- Collapsed: floating buttons -->
 {#if dockMode === 'collapsed'}
-  <div data-onboarding="chat-widget" class="flex shrink-0 items-center rounded-full border border-hairline bg-card shadow-popover">
-    <button
-      type="button"
-      onclick={expand}
-      class="flex items-center gap-2.5 rounded-l-full px-4 py-3 transition-all hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-      aria-label={tr('chat.expand')}
-    >
-      <HugeiconsIcon icon={BubbleChatIcon} size={22} strokeWidth={1.8} class="text-primary" />
-      <span class="ds-label text-ink">{tr('chat.dockTitle')}</span>
-      {#if unreadTotal > 0}
-        <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">
-          {formatUnread(unreadTotal)}
-        </span>
-      {/if}
-    </button>
-    <button
-      type="button"
-      onclick={openCompose}
-      class="flex size-11 items-center justify-center transition-all hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-      aria-label={tr('chat.newMessage')}
-    >
-      <HugeiconsIcon icon={Edit01Icon} size={18} strokeWidth={1.8} class="text-mute hover:text-ink" />
-    </button>
-    <button
-      type="button"
-      onclick={expand}
-      class="flex size-11 items-center justify-center rounded-r-full transition-all hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-      aria-label={tr('chat.expandPanel')}
-    >
-      <HugeiconsIcon icon={ArrowUp01Icon} size={18} strokeWidth={1.8} class="text-mute hover:text-ink" />
-    </button>
-  </div>
+  <!-- Floating chat dock removed; chat is accessible via right sidebar -->
 {:else if isMobile}
   <!-- Mobile: full-screen panel -->
   <div class="fixed inset-0 z-[250] flex flex-col bg-canvas" data-theme="app">
@@ -869,13 +1066,24 @@
           <HugeiconsIcon icon={Cancel01Icon} size={20} strokeWidth={1.8} />
         </button>
       {:else}
-        <button type="button" onclick={backToList} class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.back')}>
-          <HugeiconsIcon icon={ArrowLeft01Icon} size={20} strokeWidth={1.8} />
-        </button>
+        {#if !isContextChat}
+          <button type="button" onclick={backToList} class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.back')}>
+            <HugeiconsIcon icon={ArrowLeft01Icon} size={20} strokeWidth={1.8} />
+          </button>
+        {/if}
         <span class="flex-1 truncate ds-label text-ink">
-          {#if dockMode === 'thread'}{threadTitle}{:else if dockMode === 'newDirect'}{tr('chat.newMessage')}{:else if dockMode === 'createGroup'}{tr('chat.createGroup')}{/if}
+          {#if dockMode === 'thread'}
+            <span class="block truncate">{threadTitle}</span>
+          {:else if dockMode === 'groupChannels'}
+            <span class="block truncate">{selectedGroup?.name}</span>
+            <span class="block text-[11px] font-normal text-mute">{channelsForSelectedGroup.length + 1} channels</span>
+          {:else if dockMode === 'newDirect'}
+            {tr('chat.newMessage')}
+          {:else if dockMode === 'createGroup'}
+            {tr('chat.createGroup')}
+          {/if}
         </span>
-        {#if dockMode === 'thread'}
+        {#if dockMode === 'thread' || dockMode === 'groupChannels'}
           <button type="button" onclick={collapse} class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.close')}>
             <HugeiconsIcon icon={Cancel01Icon} size={20} strokeWidth={1.8} />
           </button>
@@ -889,9 +1097,13 @@
         {#snippet listContent()}
           <div class="border-b border-hairline p-3">
             <SearchInput bind:value={searchQuery} placeholder={tr('chat.search')} />
-            <div class="mt-2 flex gap-1.5">
-              <button type="button" onclick={() => (filterUnread = false)} class="rounded-full px-3 py-1 text-xs font-semibold transition-colors {!filterUnread ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.all')}</button>
-              <button type="button" onclick={() => (filterUnread = true)} class="rounded-full px-3 py-1 text-xs font-semibold transition-colors {filterUnread ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.unreadFilter')}</button>
+            <div class="mt-2 flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+              <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'all'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'all' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.all')}</button>
+              <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'group'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'group' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Grup</button>
+              <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'taskboard'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'taskboard' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Board</button>
+              <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'workflow'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'workflow' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Workflow</button>
+              <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'direct'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'direct' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Direct</button>
+              <button type="button" onclick={() => { filterUnread = true; categoryFilter = 'all'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {filterUnread ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.unreadFilter')}</button>
             </div>
           </div>
           <div class="min-h-0 flex-1 overflow-y-auto">
@@ -936,21 +1148,25 @@
               </div>
             {:else}
               {#each filteredConversations as conv (conv.id)}
-                <button type="button" onclick={() => openConversation(conv)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40 {conv.unreadCount > 0 ? 'bg-primary-soft/30' : ''}">
-                  {#if conv.kind === 'group'}
+                <button type="button" onclick={() => handleConversationClick(conv)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40 {conv.unreadCount > 0 ? 'bg-primary-soft/30' : ''}">
+                  {#if conv.kind === 'taskboard'}
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"><HugeiconsIcon icon={KanbanIcon} size={20} strokeWidth={1.8} /></div>
+                  {:else if conv.kind === 'workflow'}
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"><HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} /></div>
+                  {:else if conv.kind === 'group'}
                     <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary"><HugeiconsIcon icon={UserGroupIcon} size={20} strokeWidth={1.8} /></div>
                   {:else}
-                    <Avatar name={conversationDisplayName(conv)} src={conversationAvatar(conv) ?? undefined} size={40} online />
+                    <Avatar name={conversationDisplayName(conv)} src={conversationAvatar(conv) ?? undefined} size={40} online={Boolean(conv.partner?.id && onlineUserIds.has(conv.partner.id))} />
                   {/if}
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center justify-between gap-2">
                       <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(conv)}</span>
-                      <span class="shrink-0 text-[11px] text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : ''}</span>
+                      <span class="shrink-0 text-[11px] text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : formatDate(conv.updatedAt)}</span>
                     </div>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="truncate text-xs text-mute">{lastMessagePreview(conv)}</span>
-                      {#if conv.unreadCount > 0}
-                        <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">{formatUnread(conv.unreadCount)}</span>
+                    <div class="flex items-center justify-between gap-2 mt-0.5">
+                      <span class="truncate text-xs {conv.lastMessage ? 'text-mute' : 'text-faint italic'}">{lastMessagePreview(conv)}</span>
+                      {#if getConversationUnread(conv) > 0}
+                        <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">{formatUnread(getConversationUnread(conv))}</span>
                       {/if}
                     </div>
                   </div>
@@ -959,7 +1175,88 @@
             {/if}
           </div>
         {/snippet}
+        {#snippet groupChannelsContent()}
+          <div class="min-h-0 flex-1 overflow-y-auto">
+            {#if selectedGroup}
+              <button
+                type="button"
+                onclick={() => openConversation(selectedGroup!)}
+                class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {selectedGroup.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
+              >
+                <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
+                  #
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate text-sm font-semibold text-ink">General</span>
+                    <span class="shrink-0 text-[11px] text-faint">
+                      {selectedGroup.lastMessage ? formatDate(selectedGroup.lastMessage.createdAt) : formatDate(selectedGroup.updatedAt)}
+                    </span>
+                  </div>
+                  <div class="mt-0.5 flex items-center justify-between gap-2">
+                    <span class="truncate text-xs {selectedGroup.lastMessage ? 'text-mute' : 'text-faint italic'}">
+                      {lastMessagePreview(selectedGroup)}
+                    </span>
+                    {#if selectedGroup.unreadCount > 0}
+                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                        {formatUnread(selectedGroup.unreadCount)}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+              </button>
+            {/if}
+
+            {#each channelsForSelectedGroup as channel (channel.id)}
+              <button
+                type="button"
+                onclick={() => openConversation(channel)}
+                class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {channel.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
+              >
+                {#if channel.kind === 'taskboard'}
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                    <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
+                  </div>
+                {:else if channel.kind === 'workflow'}
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                    <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+                  </div>
+                {:else}
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
+                    #
+                  </div>
+                {/if}
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(channel)}</span>
+                    <span class="shrink-0 text-[11px] text-faint">
+                      {channel.lastMessage ? formatDate(channel.lastMessage.createdAt) : formatDate(channel.updatedAt)}
+                    </span>
+                  </div>
+                  <div class="mt-0.5 flex items-center justify-between gap-2">
+                    <span class="truncate text-xs {channel.lastMessage ? 'text-mute' : 'text-faint italic'}">
+                      {lastMessagePreview(channel)}
+                    </span>
+                    {#if channel.unreadCount > 0}
+                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                        {formatUnread(channel.unreadCount)}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+              </button>
+            {/each}
+
+            {#if channelsForSelectedGroup.length === 0}
+              <div class="p-6 text-center">
+                <p class="text-xs text-mute font-medium">Belum ada papan tugas atau alur kerja yang ditugaskan ke grup ini.</p>
+              </div>
+            {/if}
+          </div>
+        {/snippet}
         {@render listContent()}
+      {:else if dockMode === 'groupChannels' && selectedGroup}
+        {@render groupChannelsContent()}
       {:else if dockMode === 'thread' && activeConversationId}
         {#snippet threadContent()}
           {#if showRoomInfo}
@@ -1164,6 +1461,16 @@
                 <span class="text-xs text-mute">{tr('chat.uploading')}</span>
               </div>
             {/if}
+            {#if typingStatusText()}
+              <div class="flex items-center gap-1.5 border-t border-hairline bg-canvas-sunken/40 px-3 py-1 text-xs text-mute">
+                <span class="inline-flex gap-0.5">
+                  <span class="size-1 rounded-full bg-primary animate-bounce"></span>
+                  <span class="size-1 rounded-full bg-primary animate-bounce [animation-delay:0.2s]"></span>
+                  <span class="size-1 rounded-full bg-primary animate-bounce [animation-delay:0.4s]"></span>
+                </span>
+                <span>{typingStatusText()}</span>
+              </div>
+            {/if}
             <div class="flex items-end gap-2 border-t border-hairline bg-card p-3">
               <input bind:this={fileInput} type="file" accept={ACCEPTED_FILE_TYPES} multiple onchange={handleFileSelect} class="hidden" />
               <button type="button" onclick={() => fileInput?.click()} disabled={uploadingAttachment} class="flex size-10 shrink-0 items-center justify-center rounded-xl text-mute transition-colors hover:bg-canvas-sunken hover:text-ink disabled:opacity-40" aria-label={tr('chat.attachFile')}>
@@ -1171,6 +1478,7 @@
               </button>
               <textarea
                 bind:value={composerText}
+                oninput={handleComposerInput}
                 onkeydown={handleKeydown}
                 onpaste={handlePaste}
                 rows="1"
@@ -1208,7 +1516,7 @@
             {:else}
               {#each filteredMembers as m (m.id)}
                 <button type="button" onclick={() => startDirect(m.id)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40">
-                  <Avatar name={m.name} src={m.avatarUrl ?? undefined} size={40} online />
+                  <Avatar name={m.name} src={m.avatarUrl ?? undefined} size={40} online={onlineUserIds.has(m.id)} />
                   <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-ink">{m.name}</div><div class="truncate text-xs text-mute">{m.email}</div></div>
                 </button>
               {/each}
@@ -1285,49 +1593,72 @@
     </div>
   </div>
 {:else}
-  <!-- Desktop: dock panel -->
-  <div use:clickOutside class="flex w-[380px] flex-col rounded-2xl border border-hairline bg-card shadow-popover h-[600px] max-h-[calc(100vh-120px)] overflow-hidden">
+  <!-- Desktop: Integrated Right Sidebar Container (side-by-side with content) -->
+  <aside
+    class="flex w-[360px] lg:w-[400px] xl:w-[420px] shrink-0 flex-col border-l border-hairline bg-card shadow-xs h-full z-20 overflow-hidden animate-in slide-in-from-right duration-200"
+  >
     <!-- Desktop header -->
     <div class="flex items-center gap-2 border-b border-hairline px-3 py-3">
       {#if dockMode === 'list'}
-        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.collapse')}>
-          <HugeiconsIcon icon={Minimize02Icon} size={18} strokeWidth={1.8} />
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+          <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
         <span class="flex-1 ds-label text-ink">{tr('chat.dockTitle')}</span>
         {#if unreadTotal > 0}
           <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">{formatUnread(unreadTotal)}</span>
         {/if}
-        <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.newMessage')}>
+        <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.newMessage')}>
           <HugeiconsIcon icon={Edit01Icon} size={18} strokeWidth={1.8} />
         </button>
       {:else if dockMode === 'thread'}
-        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.back')}>
-          <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.8} />
-        </button>
-        {#if threadIsGroup}
+        {#if !isContextChat}
+          <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
+            <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.8} />
+          </button>
+        {/if}
+        {#if activeConversation?.kind === 'taskboard'}
+          <div class="flex size-8 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"><HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} /></div>
+        {:else if activeConversation?.kind === 'workflow'}
+          <div class="flex size-8 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"><HugeiconsIcon icon={WorkflowSquare01Icon} size={16} strokeWidth={1.8} /></div>
+        {:else if threadIsGroup}
           <div class="flex size-8 items-center justify-center rounded-full bg-primary-soft text-primary"><HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} /></div>
         {:else}
-          <Avatar name={threadTitle} src={threadAvatar ?? undefined} size={28} online />
+          <Avatar name={threadTitle} src={threadAvatar ?? undefined} size={28} online={Boolean(activeConversation?.partner?.id && onlineUserIds.has(activeConversation.partner.id))} />
         {/if}
-        <button type="button" onclick={loadRoomInfo} class="min-w-0 flex-1 truncate text-left">
+        <button type="button" onclick={loadRoomInfo} class="min-w-0 flex-1 truncate text-left cursor-pointer">
           <span class="block truncate text-sm font-semibold text-ink">{threadTitle}</span>
-          {#if threadIsGroup}<span class="block text-[11px] text-mute">{tr('chat.groupRoom')}</span>{/if}
         </button>
-        <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.newMessage')}>
-          <HugeiconsIcon icon={Edit01Icon} size={18} strokeWidth={1.8} />
+        {#if !isContextChat}
+          <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.newMessage')}>
+            <HugeiconsIcon icon={Edit01Icon} size={18} strokeWidth={1.8} />
+          </button>
+        {/if}
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+          <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
-        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.collapse')}>
-          <HugeiconsIcon icon={Minimize02Icon} size={18} strokeWidth={1.8} />
+      {:else if dockMode === 'groupChannels'}
+        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.8} />
+        </button>
+        <div class="flex size-8 items-center justify-center rounded-full bg-primary-soft text-primary">
+          <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
+        </div>
+        <div class="min-w-0 flex-1 truncate text-left">
+          <span class="block truncate text-sm font-semibold text-ink">{selectedGroup?.name}</span>
+          <span class="block text-[11px] text-mute">{channelsForSelectedGroup.length + 1} channels</span>
+        </div>
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+          <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
       {:else}
-        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.back')}>
+        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
           <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.8} />
         </button>
         <span class="flex-1 truncate ds-label text-ink">
           {#if dockMode === 'newDirect'}{tr('chat.newMessage')}{:else if dockMode === 'createGroup'}{tr('chat.createGroup')}{/if}
         </span>
-        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.collapse')}>
-          <HugeiconsIcon icon={Minimize02Icon} size={18} strokeWidth={1.8} />
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+          <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
       {/if}
     </div>
@@ -1336,9 +1667,13 @@
     {#if dockMode === 'list'}
       <div class="border-b border-hairline p-3">
         <SearchInput bind:value={searchQuery} placeholder={tr('chat.search')} />
-        <div class="mt-2 flex gap-1.5">
-          <button type="button" onclick={() => (filterUnread = false)} class="rounded-full px-3 py-1 text-xs font-semibold transition-colors {!filterUnread ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.all')}</button>
-          <button type="button" onclick={() => (filterUnread = true)} class="rounded-full px-3 py-1 text-xs font-semibold transition-colors {filterUnread ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.unreadFilter')}</button>
+        <div class="mt-2 flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+          <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'all'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'all' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.all')}</button>
+          <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'group'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'group' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Grup</button>
+          <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'taskboard'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'taskboard' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Board</button>
+          <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'workflow'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'workflow' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Workflow</button>
+          <button type="button" onclick={() => { filterUnread = false; categoryFilter = 'direct'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {!filterUnread && categoryFilter === 'direct' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">Direct</button>
+          <button type="button" onclick={() => { filterUnread = true; categoryFilter = 'all'; }} class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {filterUnread ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}">{tr('chat.unreadFilter')}</button>
         </div>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto">
@@ -1383,21 +1718,25 @@
           </div>
         {:else}
           {#each filteredConversations as conv (conv.id)}
-            <button type="button" onclick={() => openConversation(conv)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40 {conv.unreadCount > 0 ? 'bg-primary-soft/30' : ''}">
-              {#if conv.kind === 'group'}
+            <button type="button" onclick={() => handleConversationClick(conv)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40 {conv.unreadCount > 0 ? 'bg-primary-soft/30' : ''}">
+              {#if conv.kind === 'taskboard'}
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"><HugeiconsIcon icon={KanbanIcon} size={20} strokeWidth={1.8} /></div>
+              {:else if conv.kind === 'workflow'}
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"><HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} /></div>
+              {:else if conv.kind === 'group'}
                 <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary"><HugeiconsIcon icon={UserGroupIcon} size={20} strokeWidth={1.8} /></div>
               {:else}
-                <Avatar name={conversationDisplayName(conv)} src={conversationAvatar(conv) ?? undefined} size={40} online />
+                <Avatar name={conversationDisplayName(conv)} src={conversationAvatar(conv) ?? undefined} size={40} online={Boolean(conv.partner?.id && onlineUserIds.has(conv.partner.id))} />
               {/if}
               <div class="min-w-0 flex-1">
                 <div class="flex items-center justify-between gap-2">
                   <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(conv)}</span>
-                  <span class="shrink-0 text-[11px] text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : ''}</span>
+                  <span class="shrink-0 text-[11px] text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : formatDate(conv.updatedAt)}</span>
                 </div>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="truncate text-xs text-mute">{lastMessagePreview(conv)}</span>
-                  {#if conv.unreadCount > 0}
-                    <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">{formatUnread(conv.unreadCount)}</span>
+                <div class="flex items-center justify-between gap-2 mt-0.5">
+                  <span class="truncate text-xs {conv.lastMessage ? 'text-mute' : 'text-faint italic'}">{lastMessagePreview(conv)}</span>
+                  {#if getConversationUnread(conv) > 0}
+                    <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">{formatUnread(getConversationUnread(conv))}</span>
                   {/if}
                 </div>
               </div>
@@ -1405,6 +1744,8 @@
           {/each}
         {/if}
       </div>
+    {:else if dockMode === 'groupChannels' && selectedGroup}
+      {@render groupChannelsContent()}
     {:else if dockMode === 'thread' && activeConversationId}
       {#if showRoomInfo}
         <div class="min-h-0 flex-1 overflow-y-auto p-4">
@@ -1608,6 +1949,16 @@
             <span class="text-xs text-mute">{tr('chat.uploading')}</span>
           </div>
         {/if}
+        {#if typingStatusText()}
+          <div class="flex items-center gap-1.5 border-t border-hairline bg-canvas-sunken/40 px-3 py-1 text-xs text-mute">
+            <span class="inline-flex gap-0.5">
+              <span class="size-1 rounded-full bg-primary animate-bounce"></span>
+              <span class="size-1 rounded-full bg-primary animate-bounce [animation-delay:0.2s]"></span>
+              <span class="size-1 rounded-full bg-primary animate-bounce [animation-delay:0.4s]"></span>
+            </span>
+            <span>{typingStatusText()}</span>
+          </div>
+        {/if}
         <div class="flex items-end gap-2 border-t border-hairline bg-card p-3">
           <input bind:this={fileInput} type="file" accept={ACCEPTED_FILE_TYPES} multiple onchange={handleFileSelect} class="hidden" />
           <button type="button" onclick={() => fileInput?.click()} disabled={uploadingAttachment} class="flex size-10 shrink-0 items-center justify-center rounded-xl text-mute transition-colors hover:bg-canvas-sunken hover:text-ink disabled:opacity-40" aria-label={tr('chat.attachFile')}>
@@ -1615,6 +1966,7 @@
           </button>
           <textarea
             bind:value={composerText}
+            oninput={handleComposerInput}
             onkeydown={handleKeydown}
             onpaste={handlePaste}
             rows="1"
@@ -1649,7 +2001,7 @@
         {:else}
           {#each filteredMembers as m (m.id)}
             <button type="button" onclick={() => startDirect(m.id)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40">
-              <Avatar name={m.name} src={m.avatarUrl ?? undefined} size={40} online />
+              <Avatar name={m.name} src={m.avatarUrl ?? undefined} size={40} online={onlineUserIds.has(m.id)} />
               <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-ink">{m.name}</div><div class="truncate text-xs text-mute">{m.email}</div></div>
             </button>
           {/each}
@@ -1718,7 +2070,7 @@
         </div>
       {/if}
     {/if}
-  </div>
+  </aside>
 {/if}
 
 <!-- Delete confirmation dialog -->
