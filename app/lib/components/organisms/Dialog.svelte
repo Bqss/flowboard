@@ -12,11 +12,12 @@
 		open?: boolean;
 		title?: string;
 		description?: string;
-		size?: 'sm' | 'md' | 'lg' | 'xl';
+		size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 		onclose?: () => void;
 		class?: string;
 		children?: import('svelte').Snippet;
 		footer?: import('svelte').Snippet;
+		customHeader?: import('svelte').Snippet;
 	};
 
 	let {
@@ -29,6 +30,7 @@
 		class: className,
 		children,
 		footer,
+		customHeader,
 		...rest
 	}: Props = $props();
 	const closeLabel = $derived(dashboardText($locale, 'common.close'));
@@ -37,7 +39,8 @@
 		sm: 'max-w-sm',
 		md: 'max-w-lg',
 		lg: 'max-w-2xl',
-		xl: 'max-w-3xl'
+		xl: 'max-w-3xl',
+		full: 'max-w-[min(96vw,1200px)]'
 	} as const;
 
 	function close() {
@@ -65,6 +68,7 @@
 	<div
 		bind:this={ref}
 		class={cn('fixed inset-0 z-[300]', className)}
+		data-floating
 		use:dismissable={close}
 		{...rest}
 	>
@@ -86,28 +90,33 @@
 				class={cn(
 					modalPanelClass,
 					sizes[size],
-					'pointer-events-auto flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden'
+					'pointer-events-auto flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden',
+					size === 'full' && 'p-0'
 				)}
 				transition:modalPanel={{ duration: 300, y: 8, startScale: 0.97 }}
 			>
-				<div class="mb-4 flex shrink-0 items-start justify-between gap-3">
-					<div class="min-w-0">
-						{#if title}
-							<h2 id="dialog-title" class="ds-section-title text-ink">{title}</h2>
-						{/if}
-						{#if description}
-							<p class="ds-body mt-1 text-mute">{description}</p>
-						{/if}
+				{#if customHeader}
+					{@render customHeader()}
+				{:else}
+					<div class="mb-4 flex shrink-0 items-start justify-between gap-3">
+						<div class="min-w-0">
+							{#if title}
+								<h2 id="dialog-title" class="ds-section-title text-ink">{title}</h2>
+							{/if}
+							{#if description}
+								<p class="ds-body mt-1 text-mute">{description}</p>
+							{/if}
+						</div>
+						<button
+							type="button"
+							onclick={close}
+							aria-label={closeLabel}
+							class="grid size-8 shrink-0 place-items-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+						>
+							<XIcon class="size-4" />
+						</button>
 					</div>
-					<button
-						type="button"
-						onclick={close}
-						aria-label={closeLabel}
-						class="grid size-8 shrink-0 place-items-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-					>
-						<XIcon class="size-4" />
-					</button>
-				</div>
+				{/if}
 
 				<div class="min-w-0 flex-1 overflow-y-auto overscroll-contain">{@render children?.()}</div>
 

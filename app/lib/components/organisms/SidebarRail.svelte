@@ -8,7 +8,6 @@
 	import {
 		PanelLeftCloseIcon,
 		PanelLeftOpenIcon,
-		Search01Icon,
 		ArrowDown01Icon,
 		Building06Icon,
 		Add01Icon,
@@ -58,8 +57,6 @@
 			settings?: string;
 			admin?: string;
 			workspace?: string;
-			search?: string;
-			noResults?: string;
 			collapse?: string;
 			expand?: string;
 			adminMode?: string;
@@ -107,39 +104,13 @@
 		...rest
 	}: Props = $props();
 
-	let searchQuery = $state('');
-
 	const ariaLabel = $derived(labels.ariaLabel ?? 'Main navigation');
 	const subtitle = $derived(labels.subtitle ?? 'Onboarding desk');
 	const workspaceLabel = $derived(labels.workspace ?? 'Workspace');
 	const settingsLabel = $derived(labels.settings ?? 'Configuration');
 	const adminLabel = $derived(labels.admin ?? 'Platform Admin');
-	const searchPlaceholder = $derived(labels.search ?? 'Search menu…');
-	const noResultsText = $derived(labels.noResults ?? 'No matching menu items');
 	const collapseLabel = $derived(labels.collapse ?? 'Collapse sidebar');
 	const expandLabel = $derived(labels.expand ?? 'Expand sidebar');
-
-	const filteredItems = $derived(
-		searchQuery.trim()
-			? items.filter((it) => it.label.toLowerCase().includes(searchQuery.trim().toLowerCase()))
-			: items
-	);
-
-	const filteredSettingsItems = $derived(
-		searchQuery.trim()
-			? settingsItems.filter((it) => it.label.toLowerCase().includes(searchQuery.trim().toLowerCase()))
-			: settingsItems
-	);
-
-	const filteredAdminItems = $derived(
-		searchQuery.trim()
-			? adminItems.filter((it) => it.label.toLowerCase().includes(searchQuery.trim().toLowerCase()))
-			: adminItems
-	);
-
-	const hasResults = $derived(
-		filteredItems.length > 0 || filteredSettingsItems.length > 0 || filteredAdminItems.length > 0
-	);
 
 	function handleToggle() {
 		if (onToggleCollapse) {
@@ -232,144 +203,124 @@
 	<HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={1.8} class="text-primary" />
 {/snippet}
 
-{#snippet searchInput(isMobile: boolean = false)}
-	<div class={cn('pt-2.5 pb-1', isMobile ? 'px-4' : 'px-3')}>
-		<div class="relative flex items-center">
-			<HugeiconsIcon
-				icon={Search01Icon}
-				size={15}
-				strokeWidth={1.8}
-				class="pointer-events-none absolute left-2.5 text-faint"
-			/>
-			<input
-				type="text"
-				bind:value={searchQuery}
-				placeholder={searchPlaceholder}
-				class="h-8.5 w-full rounded-lg border border-hairline bg-canvas-sunken/80 pl-8 pr-7 text-[13.5px] text-ink placeholder:text-mute/70 transition-all focus:border-primary/50 focus:bg-card focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
-			/>
-			{#if searchQuery}
-				<button
-					type="button"
-					onclick={() => (searchQuery = '')}
-					class="absolute right-2 flex size-4 items-center justify-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink"
-					aria-label="Clear search"
-				>
-					<HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={2} />
-				</button>
-			{/if}
-		</div>
-	</div>
-{/snippet}
-
 {#snippet navList(isRail: boolean)}
 	<nav class={cn('flex flex-1 flex-col overflow-y-auto px-2.5 space-y-4', isRail ? 'items-center px-1.5 py-3' : 'items-stretch py-2')}>
-		{#if isRail}
-			<!-- Rail quick search icon button to expand & focus -->
-			<Tooltip text={searchPlaceholder} side="right">
-				<button
-					type="button"
-					onclick={() => {
-						collapsed = false;
-					}}
-					class="flex size-10 items-center justify-center rounded-xl text-mute transition-all hover:bg-lane/80 hover:text-ink"
-					aria-label={searchPlaceholder}
-				>
-					<HugeiconsIcon icon={Search01Icon} size={18} strokeWidth={1.8} />
-				</button>
-			</Tooltip>
-			<div class="my-0.5 h-px w-6 bg-hairline" aria-hidden="true"></div>
+
+		<!-- Main Workspace Navigation -->
+		{#if items.length > 0}
+			<div>
+				{#if !isRail}
+					<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
+						{workspaceLabel}
+					</p>
+				{/if}
+				<div class="flex flex-col gap-0.5">
+					{#each items as item (item.label)}
+						{#if isRail}
+							<Tooltip text={item.label} side="right">
+								<NavItem
+									label={item.label}
+									href={item.href}
+									active={item.active}
+									badge={item.badge}
+									disabled={item.disabled}
+									onselect={() => {
+										item.onselect?.();
+										if (mobileOpen) mobileOpen = false;
+									}}
+									variant="rail"
+									icon={item.icon}
+									data-testid={item.testId}
+								/>
+							</Tooltip>
+						{:else}
+							<NavItem
+								label={item.label}
+								href={item.href}
+								active={item.active}
+								badge={item.badge}
+								disabled={item.disabled}
+								onselect={() => {
+									item.onselect?.();
+									if (mobileOpen) mobileOpen = false;
+								}}
+								variant="expanded"
+								icon={item.icon}
+								data-testid={item.testId}
+							/>
+						{/if}
+					{/each}
+				</div>
+			</div>
 		{/if}
 
-		{#if !hasResults && searchQuery.trim()}
-			<div class="px-3 py-6 text-center">
-				<p class="text-[13px] text-mute">{noResultsText}</p>
-				<button
-					type="button"
-					onclick={() => (searchQuery = '')}
-					class="mt-2 text-[12px] font-semibold text-primary hover:underline"
-				>
-					Clear filter
-				</button>
+		<!-- Settings / Config Section -->
+		{#if settingsItems.length > 0}
+			<div>
+				{#if !isRail}
+					<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
+						{settingsLabel}
+					</p>
+				{:else if items.length > 0}
+					<div class="my-1.5 h-px w-6 bg-hairline" aria-hidden="true"></div>
+				{/if}
+				<div class="flex flex-col gap-0.5">
+					{#each settingsItems as item (item.label)}
+						{#if isRail}
+							<Tooltip text={item.label} side="right">
+								<NavItem
+									label={item.label}
+									href={item.href}
+									active={item.active}
+									badge={item.badge}
+									disabled={item.disabled}
+									onselect={() => {
+										item.onselect?.();
+										if (mobileOpen) mobileOpen = false;
+									}}
+									variant="rail"
+									icon={item.icon}
+									data-testid={item.testId}
+								/>
+							</Tooltip>
+						{:else}
+							<NavItem
+								label={item.label}
+								href={item.href}
+								active={item.active}
+								badge={item.badge}
+								disabled={item.disabled}
+								onselect={() => {
+									item.onselect?.();
+									if (mobileOpen) mobileOpen = false;
+								}}
+								variant="expanded"
+								icon={item.icon}
+								data-testid={item.testId}
+							/>
+						{/if}
+					{/each}
+				</div>
 			</div>
-		{:else}
-			<!-- Main Workspace Navigation -->
-			{#if filteredItems.length > 0}
-				<div>
-					{#if !isRail}
-						<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
-							{workspaceLabel}
-						</p>
-					{/if}
-					<div class="flex flex-col gap-0.5">
-						{#each filteredItems as item (item.label)}
-							{#if isRail}
-								<Tooltip text={item.label} side="right">
-									<NavItem
-										label={item.label}
-										href={item.href}
-										active={item.active}
-										badge={item.badge}
-										disabled={item.disabled}
-										onselect={() => {
-											item.onselect?.();
-											if (mobileOpen) mobileOpen = false;
-										}}
-										variant="rail"
-										icon={item.icon}
-										data-testid={item.testId}
-									/>
-								</Tooltip>
-							{:else}
-								<NavItem
-									label={item.label}
-									href={item.href}
-									active={item.active}
-									badge={item.badge}
-									disabled={item.disabled}
-									onselect={() => {
-										item.onselect?.();
-										if (mobileOpen) mobileOpen = false;
-									}}
-									variant="expanded"
-									icon={item.icon}
-									data-testid={item.testId}
-								/>
-							{/if}
-						{/each}
-					</div>
-				</div>
-			{/if}
+		{/if}
 
-			<!-- Settings / Config Section -->
-			{#if filteredSettingsItems.length > 0}
-				<div>
-					{#if !isRail}
-						<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
-							{settingsLabel}
+		<!-- Admin Section -->
+		{#if adminItems.length > 0}
+			<div>
+				{#if !isRail}
+					<div class="flex items-center justify-between px-2 pb-1.5">
+						<p class="text-[11.5px] font-bold uppercase tracking-wider text-primary select-none">
+							{adminLabel}
 						</p>
-					{:else if filteredItems.length > 0}
-						<div class="my-1.5 h-px w-6 bg-hairline" aria-hidden="true"></div>
-					{/if}
-					<div class="flex flex-col gap-0.5">
-						{#each filteredSettingsItems as item (item.label)}
-							{#if isRail}
-								<Tooltip text={item.label} side="right">
-									<NavItem
-										label={item.label}
-										href={item.href}
-										active={item.active}
-										badge={item.badge}
-										disabled={item.disabled}
-										onselect={() => {
-											item.onselect?.();
-											if (mobileOpen) mobileOpen = false;
-										}}
-										variant="rail"
-										icon={item.icon}
-										data-testid={item.testId}
-									/>
-								</Tooltip>
-							{:else}
+						<span class="rounded bg-primary/10 px-1 py-0.2 text-[10px] font-semibold tracking-wide text-primary">ADMIN</span>
+					</div>
+				{:else if items.length > 0 || settingsItems.length > 0}
+					<div class="my-1.5 h-px w-6 bg-primary/20" aria-hidden="true"></div>
+				{/if}
+				<div class="flex flex-col gap-0.5">
+					{#each adminItems as item (item.label)}
+						{#if isRail}
+							<Tooltip text={item.label} side="right">
 								<NavItem
 									label={item.label}
 									href={item.href}
@@ -380,68 +331,30 @@
 										item.onselect?.();
 										if (mobileOpen) mobileOpen = false;
 									}}
-									variant="expanded"
+									variant="rail"
 									icon={item.icon}
 									data-testid={item.testId}
 								/>
-							{/if}
-						{/each}
-					</div>
+							</Tooltip>
+						{:else}
+							<NavItem
+								label={item.label}
+								href={item.href}
+								active={item.active}
+								badge={item.badge}
+								disabled={item.disabled}
+								onselect={() => {
+									item.onselect?.();
+									if (mobileOpen) mobileOpen = false;
+								}}
+								variant="expanded"
+								icon={item.icon}
+								data-testid={item.testId}
+							/>
+						{/if}
+					{/each}
 				</div>
-			{/if}
-
-			<!-- Admin Section -->
-			{#if filteredAdminItems.length > 0}
-				<div>
-					{#if !isRail}
-						<div class="flex items-center justify-between px-2 pb-1.5">
-							<p class="text-[11.5px] font-bold uppercase tracking-wider text-primary select-none">
-								{adminLabel}
-							</p>
-							<span class="rounded bg-primary/10 px-1 py-0.2 text-[10px] font-semibold tracking-wide text-primary">ADMIN</span>
-						</div>
-					{:else if filteredItems.length > 0 || filteredSettingsItems.length > 0}
-						<div class="my-1.5 h-px w-6 bg-primary/20" aria-hidden="true"></div>
-					{/if}
-					<div class="flex flex-col gap-0.5">
-						{#each filteredAdminItems as item (item.label)}
-							{#if isRail}
-								<Tooltip text={item.label} side="right">
-									<NavItem
-										label={item.label}
-										href={item.href}
-										active={item.active}
-										badge={item.badge}
-										disabled={item.disabled}
-										onselect={() => {
-											item.onselect?.();
-											if (mobileOpen) mobileOpen = false;
-										}}
-										variant="rail"
-										icon={item.icon}
-										data-testid={item.testId}
-									/>
-								</Tooltip>
-							{:else}
-								<NavItem
-									label={item.label}
-									href={item.href}
-									active={item.active}
-									badge={item.badge}
-									disabled={item.disabled}
-									onselect={() => {
-										item.onselect?.();
-										if (mobileOpen) mobileOpen = false;
-									}}
-									variant="expanded"
-									icon={item.icon}
-									data-testid={item.testId}
-								/>
-							{/if}
-						{/each}
-					</div>
-				</div>
-			{/if}
+			</div>
 		{/if}
 	</nav>
 {/snippet}
@@ -462,10 +375,22 @@
 		{@render header()}
 	{:else if collapsed}
 		<!-- Collapsed Rail Header -->
-		<div class="flex h-16 shrink-0 flex-col items-center justify-center border-b border-hairline px-2">
-			<a href="/dashboard" class="flex size-9 items-center justify-center rounded-xl transition-transform hover:scale-105" aria-label="actjom">
-				<Logo size={28} />
-			</a>
+		<div class="flex h-16 shrink-0 items-center justify-center border-b border-hairline px-2">
+			<Tooltip text={`${expandLabel} (⌘B)`} side="right">
+				<button
+					type="button"
+					onclick={handleToggle}
+					class="group relative flex size-10 items-center justify-center rounded-xl text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
+					aria-label={expandLabel}
+				>
+					<span class="transition-transform group-hover:scale-95 group-hover:opacity-0">
+						<Logo size={26} />
+					</span>
+					<span class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 text-primary">
+						<HugeiconsIcon icon={PanelLeftOpenIcon} size={20} strokeWidth={1.8} />
+					</span>
+				</button>
+			</Tooltip>
 		</div>
 	{:else}
 		<!-- Expanded Header -->
@@ -514,11 +439,6 @@
 				</button>
 			</Tooltip>
 		</div>
-	{/if}
-
-	<!-- REAL WORKING SEARCH INPUT (EXPANDED ONLY) -->
-	{#if !collapsed}
-		{@render searchInput(false)}
 	{/if}
 
 	<!-- PLATFORM ADMIN BANNER (IF APPLICABLE) -->
@@ -665,9 +585,6 @@
 				<HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={2} />
 			</button>
 		</div>
-
-		<!-- Mobile Search -->
-		{@render searchInput(true)}
 
 		<!-- Admin Mode Toggle -->
 		{#if isPlatformAdmin && onToggleAdminMode}

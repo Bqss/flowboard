@@ -21,6 +21,7 @@ import Timeline from './Timeline.svelte';
 import TreeView from './TreeView.svelte';
 import KanbanBoard from './KanbanBoard.svelte';
 import FileUploader from './FileUploader.svelte';
+import WorkflowStageEditor from './WorkflowStageEditor.svelte';
 
 // Overlay
 import Dialog from './Dialog.svelte';
@@ -90,6 +91,7 @@ export {
 	TreeView,
 	KanbanBoard,
 	FileUploader,
+	WorkflowStageEditor,
 	Dialog,
 	Sheet,
 	ConfirmDialog,

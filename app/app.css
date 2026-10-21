@@ -167,6 +167,18 @@ body {
   border: 3px solid var(--color-canvas);
 }
 
+/* Hide board scrollbars without disabling wheel, touch, or trackpad scrolling. */
+.kanban-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.kanban-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Focus ring follows the shared indigo action language. */
 :focus-visible {
   outline: 2px solid var(--focus);

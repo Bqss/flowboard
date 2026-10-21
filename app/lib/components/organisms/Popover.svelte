@@ -24,13 +24,19 @@
 		content,
 		...rest
 	}: Props = $props();
+  function handleFocusout(event: FocusEvent) {
+    const nextTarget = event.relatedTarget as Node | null;
+    const root = event.currentTarget as HTMLElement;
+    if (nextTarget && !root.contains(nextTarget)) open = false;
+  }
 </script>
 
 <div
-	bind:this={ref}
-	class={cn('relative inline-flex', className)}
-	use:dismissable={() => (open = false)}
-	{...rest}
+  bind:this={ref}
+  class={cn('relative inline-flex', className)}
+  use:dismissable={() => (open = false)}
+  onfocusout={handleFocusout}
+  {...rest}
 >
 	{@render trigger({ open, toggle: () => (open = !open) })}
 

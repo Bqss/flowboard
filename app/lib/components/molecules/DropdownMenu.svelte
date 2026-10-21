@@ -3,7 +3,7 @@
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import { Avatar } from '$lib/components/atoms/index.js';
 	import { HugeiconsIcon } from '@hugeicons/svelte';
-	import { ArrowRight01Icon } from '@hugeicons/core-free-icons';
+	import { ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 	import { dismissable, panelClass, panelItemClass, type MenuItem } from './shared.js';
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		items: MenuItem[];
@@ -38,8 +38,13 @@
 		activeSubmenu = null;
 	}
 
-	let activeSubmenu = $state<string | null>(null);
+  function handleFocusout(event: FocusEvent) {
+    const nextTarget = event.relatedTarget as Node | null;
+    const root = event.currentTarget as HTMLElement;
+    if (!nextTarget || !root.contains(nextTarget)) open = false;
+  }
 
+  let activeSubmenu = $state<string | null>(null);
 	$effect(() => {
 		if (!open) activeSubmenu = null;
 	});
@@ -63,10 +68,11 @@
 {/snippet}
 
 <div
-	bind:this={ref}
-	class={cn('relative inline-flex', className)}
-	use:dismissable={() => (open = false)}
-	{...rest}
+  bind:this={ref}
+  class={cn('relative inline-flex', className)}
+  use:dismissable={() => (open = false)}
+  onfocusout={handleFocusout}
+  {...rest}
 >
 	{@render trigger({ open, toggle: () => (open = !open) })}
 
@@ -89,31 +95,41 @@
 					<div
 						role="presentation"
 						class="group/submenu relative"
-						onmouseenter={() => (activeSubmenu = item.label)}
-						onfocusin={() => (activeSubmenu = item.label)}
-						onmouseleave={() => (activeSubmenu = null)}
+						onmouseenter={() => {
+							if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+								activeSubmenu = item.label;
+							}
+						}}
+						onmouseleave={() => {
+							if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+								activeSubmenu = null;
+							}
+						}}
 					>
 						<button
 							type="button"
 							role="menuitem"
 							aria-haspopup="menu"
 							aria-expanded={activeSubmenu === item.label}
-							onclick={() => run(item)}
+							onclick={(e) => {
+								e.stopPropagation();
+								activeSubmenu = activeSubmenu === item.label ? null : item.label;
+							}}
 							class={cn(panelItemClass, 'justify-between whitespace-nowrap')}
 						>
 							{@render menuItemContent(item)}
-							<HugeiconsIcon icon={ArrowRight01Icon} size={15} strokeWidth={1.8} class="shrink-0 text-mute" />
+							<HugeiconsIcon icon={ArrowRight01Icon} size={15} strokeWidth={1.8} class="shrink-0 text-mute transition-transform duration-150 {activeSubmenu === item.label ? 'rotate-90 sm:rotate-0' : ''}" />
 						</button>
 						{#if activeSubmenu === item.label}
 							<div
-								role="menu"
 								aria-label={item.label}
 								class={cn(
 									panelClass,
-									'absolute top-0 z-[60] min-w-[15rem]',
+									'z-[60] min-w-[15rem]',
+									'my-1 rounded-xl border border-hairline/80 bg-canvas-sunken/60 p-1 sm:my-0 sm:bg-card sm:border-hairline sm:shadow-popover sm:absolute sm:top-0',
 									align === 'end'
-										? 'right-[calc(100%+6px)]'
-										: 'left-[calc(100%+6px)]'
+										? 'sm:right-[calc(100%+6px)]'
+										: 'sm:left-[calc(100%+6px)]'
 								)}
 							>
 								{#each item.submenu as submenuItem, submenuIndex (submenuItem.label + submenuIndex)}
@@ -138,6 +154,9 @@
 										{#if submenuItem.shortcut}
 											<span class="ds-caption ds-mono pl-6 text-faint">{submenuItem.shortcut}</span>
 										{/if}
+										{#if submenuItem.active}
+											<HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} class="shrink-0 text-primary" />
+										{/if}
 									</button>
 								{/each}
 							</div>
@@ -161,6 +180,9 @@
 						{@render menuItemContent(item)}
 						{#if item.shortcut}
 							<span class="ds-caption ds-mono pl-6 text-faint">{item.shortcut}</span>
+						{/if}
+						{#if item.active}
+							<HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} class="shrink-0 text-primary" />
 						{/if}
 					</button>
 				{/if}

@@ -14,6 +14,7 @@
 		class?: string;
 		children?: import('svelte').Snippet;
 		footer?: import('svelte').Snippet;
+		headerActions?: import('svelte').Snippet;
 	};
 
 	let {
@@ -25,6 +26,7 @@
 		class: className,
 		children,
 		footer,
+		headerActions,
 		...rest
 	}: Props = $props();
 	const closeLabel = $derived(dashboardText($locale, 'common.close'));
@@ -51,18 +53,23 @@
 			)}
 			{...rest}
 		>
-			<div class="flex items-center justify-between border-b border-hairline px-5 py-4">
-				{#if title}
-					<h2 class="ds-section-title text-ink">{title}</h2>
-				{/if}
-				<button
-					type="button"
-					onclick={close}
-					aria-label={closeLabel}
-					class="grid size-8 place-items-center rounded-full text-mute hover:bg-lane hover:text-ink"
-				>
-					<XIcon class="size-4" />
-				</button>
+			<div class="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3.5">
+				<div class="min-w-0 flex-1">
+					{#if title}
+						<h2 class="ds-section-title truncate text-ink">{title}</h2>
+					{/if}
+				</div>
+				<div class="flex items-center gap-2 shrink-0">
+					{@render headerActions?.()}
+					<button
+						type="button"
+						onclick={close}
+						aria-label={closeLabel}
+						class="grid size-8 place-items-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink"
+					>
+						<XIcon class="size-4" />
+					</button>
+				</div>
 			</div>
 
 			<div class="flex-1 overflow-y-auto px-5 py-4">{@render children?.()}</div>

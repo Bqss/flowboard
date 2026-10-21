@@ -42,6 +42,9 @@ import FilterPill from './FilterPill.svelte';
 import PortalUserPicker, { type PortalUser } from './PortalUserPicker.svelte';
 import InternalPicPicker from './InternalPicPicker.svelte';
 import MultiSelectCombobox, { type MultiSelectOption } from './MultiSelectCombobox.svelte';
+import TaskPicPicker, { type TaskPicOption } from './TaskPicPicker.svelte';
+import RichTextEditor from './RichTextEditor.svelte';
+import RichTextContent from './RichTextContent.svelte';
 
 export type {
 	MenuItem,
@@ -52,7 +55,7 @@ export type {
 } from './shared.js';
 export type { FormFieldControl } from './FormField.svelte';
 export type { ToastItem, ToastTone };
-export type { MultiSelectOption };
+export type { MultiSelectOption, TaskPicOption };
 
 export {
 	FormField,
@@ -95,5 +98,8 @@ export {
 	PortalUserPicker,
 	type PortalUser,
 	InternalPicPicker,
-	MultiSelectCombobox
+	MultiSelectCombobox,
+	TaskPicPicker,
+	RichTextEditor,
+	RichTextContent
 };

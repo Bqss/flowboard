@@ -107,7 +107,6 @@
         { target: '[data-onboarding="stats-overview"]', title: tr('onboarding.tourDashStats'), body: tr('onboarding.tourDashStatsDesc'), placement: 'auto' },
         { target: '[data-onboarding="quick-create-workflow"]', title: tr('onboarding.tourDashCreate'), body: tr('onboarding.tourDashCreateDesc'), placement: 'auto' },
         { target: '[data-onboarding="workflows-section"]', title: tr('onboarding.tourDashWorkflows'), body: tr('onboarding.tourDashWorkflowsDesc'), placement: 'auto' },
-        { target: '[data-onboarding="workspaces-section"]', title: tr('onboarding.tourDashWorkspaces'), body: tr('onboarding.tourDashWorkspacesDesc'), placement: 'auto' },
         { target: '[data-onboarding="team-section"]', title: tr('onboarding.tourDashTeam'), body: tr('onboarding.tourDashTeamDesc'), placement: 'auto' },
         { target: '[data-onboarding="shortcuts-section"]', title: tr('onboarding.tourDashShortcuts'), body: tr('onboarding.tourDashShortcutsDesc'), placement: 'auto' },
         { target: '[data-onboarding="challenge-widget"]', title: tr('onboarding.tourDashChallenge'), body: tr('onboarding.tourDashChallengeDesc'), placement: 'top' },

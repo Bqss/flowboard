@@ -76,26 +76,37 @@ export type KanbanColumn = {
 	id: string;
 	title: string;
 	items: KanbanCard[];
+	color?: string;
+	count?: number;
+	hasMore?: boolean;
+	loadingMore?: boolean;
 };
 
 export type KanbanCard = {
 	id: string;
 	title: string;
 	subtitle?: string;
+	whatsapp?: string;
 	badge?: string;
 	badgeTone?: 'urgent' | 'progress' | 'done' | 'queued' | 'neutral';
+	labels?: string[];
+	labelColors?: Record<string, string>;
 	assignee?: string;
 	assigneeAvatar?: string;
 	progress?: string;
 	progressDone?: boolean;
+	canComplete?: boolean;
 	labelBarTone?: 'urgent' | 'progress' | 'done' | 'queued' | 'idle';
 	selected?: boolean;
 	waError?: boolean;
 	dueBadge?: { label: string; tone: 'urgent' | 'progress' };
 	dueDateText?: string;
+	recurrence?: 'daily' | 'weekly';
 	completed?: boolean;
-};
+	commentCount?: number;
+	attachmentCount?: number;
 
+};
 export type FeatureItem = {
 	title: string;
 	description: string;

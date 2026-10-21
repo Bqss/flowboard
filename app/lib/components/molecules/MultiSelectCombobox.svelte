@@ -275,7 +275,7 @@
         {/each}
       </div>
     {:else}
-      <span class="flex-1 px-2 text-xs text-faint select-none">
+      <span class="flex-1 px-2 text-sm text-mute select-none">
         {resolvedPlaceholder}
       </span>
     {/if}
@@ -307,7 +307,7 @@
       <!-- Backdrop dismiss layer -->
       <div
         data-floating
-        class="fixed inset-0 z-[105]"
+        class="fixed inset-0 z-[405]"
         onclick={close}
         role="button"
         tabindex="-1"
@@ -322,7 +322,7 @@
         aria-multiselectable="true"
         data-theme="app"
         class={cn(
-          'fixed z-[110] flex flex-col gap-2 overflow-hidden rounded-2xl border border-hairline bg-card p-2.5 shadow-popover'
+          'fixed z-[410] flex flex-col gap-2 overflow-hidden rounded-2xl border border-hairline bg-card p-2.5 shadow-popover'
         )}
         style={panelStyle}
       >
@@ -341,7 +341,7 @@
               onkeydown={(e) => {
                 if (e.key === 'Escape') close();
               }}
-              class="ds-body h-8.5 w-full rounded-xl border border-hairline bg-lane/80 pl-8.5 pr-3 text-xs text-ink placeholder:text-mute focus-visible:border-primary focus-visible:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
+              class="ds-body h-8.5 w-full rounded-xl border border-hairline bg-lane/80 pl-8.5 pr-3 text-sm text-ink placeholder:text-mute focus-visible:border-primary focus-visible:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
             />
           </div>
 

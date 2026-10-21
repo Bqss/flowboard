@@ -16,8 +16,11 @@
 		disabled?: boolean;
 		invalid?: boolean;
 		locale?: string;
+		inline?: boolean;
+		rangeStart?: string;
+		rangeEnd?: string;
+		showQuickActions?: boolean;
 		onchange?: (value: string) => void;
-		class?: string;
 	};
 
 	let {
@@ -30,6 +33,10 @@
 		disabled = false,
 		invalid = false,
 		locale = 'id-ID',
+		inline = false,
+		rangeStart,
+		rangeEnd,
+		showQuickActions = true,
 		onchange,
 		class: className,
 		'aria-describedby': ariaDescribedby,
@@ -81,6 +88,9 @@
 				day: date.getDate(),
 				outside: date.getMonth() !== cursor.getMonth(),
 				isToday: iso === toISO(today),
+				inRange: Boolean(rangeStart && rangeEnd && iso > rangeStart && iso < rangeEnd),
+				isRangeStart: Boolean(rangeStart && iso === rangeStart),
+				isRangeEnd: Boolean(rangeEnd && iso === rangeEnd),
 				disabled: (min && iso < min) || (max && iso > max) || false
 			};
 		});
@@ -103,7 +113,7 @@
 	function pick(iso: string) {
 		value = iso;
 		onchange?.(iso);
-		open = false;
+		if (!inline) open = false;
 	}
 </script>
 
@@ -113,32 +123,35 @@
 	use:dismissable={() => (open = false)}
 	{...rest}
 >
-	<button
-		{id}
-		type="button"
-		{disabled}
-		aria-describedby={ariaDescribedby}
-		onclick={() => (open = !open)}
-		aria-haspopup="dialog"
-		aria-expanded={open}
-		class={cn(
-			'ds-body flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
-			selectedDate ? 'text-ink' : 'text-faint',
-			invalid
-				? 'border-status-urgent'
-				: 'border-hairline hover:border-primary-border focus-visible:border-primary'
-		)}
-	>
-		<span class="truncate">{label}</span>
-		<CalendarIcon class="size-4 shrink-0 text-mute" />
-	</button>
+	{#if !inline}
+		<button
+			{id}
+			type="button"
+			{disabled}
+			aria-describedby={ariaDescribedby}
+			onclick={() => (open = !open)}
+			aria-haspopup="dialog"
+			aria-expanded={open}
+			class={cn(
+				'ds-body flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
+				selectedDate ? 'text-ink' : 'text-faint',
+				invalid
+					? 'border-status-urgent'
+					: 'border-hairline hover:border-primary-border focus-visible:border-primary'
+			)}
+		>
+			<span class="truncate">{label}</span>
+			<CalendarIcon class="size-4 shrink-0 text-mute" />
+		</button>
+	{/if}
 
-	{#if open}
+	{#if inline || open}
 		<div
 			role="dialog"
 			aria-label="Pilih tanggal"
-			class={cn(panelClass, 'absolute top-[calc(100%+6px)] left-0 w-[17.5rem] p-3')}
+			class={cn(panelClass, inline ? 'w-full p-3' : 'absolute top-[calc(100%+6px)] left-0 w-[17.5rem] p-3')}
 		>
+
 			<div class="mb-2 flex items-center justify-between">
 				<button
 					type="button"
@@ -174,6 +187,8 @@
 						class={cn(
 							'grid h-8 place-items-center rounded-sm text-[13px] transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:pointer-events-none disabled:text-faint/50',
 							day.outside ? 'text-faint' : 'text-ink',
+							day.inRange && 'bg-primary-soft',
+							(day.isRangeStart || day.isRangeEnd) && day.iso !== value && 'bg-primary-soft font-semibold text-primary',
 							day.iso === value
 								? 'bg-primary font-semibold text-on-primary hover:bg-primary'
 								: 'hover:bg-primary-soft',
@@ -185,6 +200,7 @@
 				{/each}
 			</div>
 
+			{#if showQuickActions}
 			<div class="mt-2 flex items-center justify-between border-t border-hairline pt-2">
 				<button
 					type="button"
@@ -201,6 +217,7 @@
 					Kosongkan
 				</button>
 			</div>
+			{/if}
 		</div>
 	{/if}
 </div>

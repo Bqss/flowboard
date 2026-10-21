@@ -201,8 +201,15 @@
     <ShowcaseSubnav items={subnav} />
   </div>
 
-  <ShowcaseSection id="board" title="KanbanBoard" description="Lane columns with status dots and card badges.">
-    <KanbanBoard columns={kanbanColumns} />
+  <ShowcaseSection id="board" title="KanbanBoard" description="Lane columns with status dots, header dropdown menus, bottom card additions, and ghost lane.">
+    <KanbanBoard
+      columns={kanbanColumns}
+      showAddColumn
+      onadd={() => {}}
+      onaddcolumn={() => {}}
+      oneditcolumn={() => {}}
+      ondeletecolumn={() => {}}
+    />
   </ShowcaseSection>
 
   <ShowcaseSection id="data" title="Data organisms" description="Cards, tables, charts, and hierarchical views.">
