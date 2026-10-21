@@ -2,6 +2,8 @@ import { type Ctx } from '@core';
 import { checklistTemplates, db } from '@db';
 import { eq } from 'drizzle-orm';
 import {
+  addChecklistItemToCard,
+  deleteChecklistItemFromCard,
   WorkflowError,
   canManageWorkflow,
   createCard,
@@ -46,6 +48,7 @@ type ReorderStagesBody = {
 type CreateWorkflowBody = {
   name: string;
   description?: string | null;
+  workspaceMemberGroupId?: string | null;
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
@@ -61,6 +64,7 @@ type CreateWorkflowBody = {
 type UpdateWorkflowBody = {
   name?: string;
   description?: string | null;
+  workspaceMemberGroupId?: string | null;
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
@@ -174,6 +178,7 @@ export async function list({ workspace, membership, set }: Ctx<unknown, Workspac
       id: row.id,
       name: row.name,
       description: row.description ?? null,
+      workspaceMemberGroupId: row.workspaceMemberGroupId,
       ownerId: row.ownerId,
       ownerName: row.ownerName,
       defaultAssigneeId: row.defaultAssigneeId,
@@ -206,6 +211,7 @@ export async function create({
   const { workflow, stages: createdStages } = await createWorkflow(workspace.id, {
     name: body.name,
     description: body.description,
+    workspaceMemberGroupId: body.workspaceMemberGroupId,
     ownerId: body.ownerId ?? user.id,
     defaultAssigneeId: body.defaultAssigneeId,
     defaultAssigneeIds: body.defaultAssigneeIds,
@@ -223,6 +229,7 @@ export async function create({
       id: workflow.id,
       name: workflow.name,
       description: workflow.description ?? null,
+      workspaceMemberGroupId: workflow.workspaceMemberGroupId,
       ownerId: workflow.ownerId,
       defaultAssigneeId: workflow.defaultAssigneeId,
       defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : []),
@@ -367,13 +374,25 @@ export async function setup({ workflow, membership, set }: Ctx<unknown, Workflow
   };
 }
 
-export async function board({ workflow, membership, set }: Ctx<unknown, WorkflowParams>) {
+export async function board({ workflow, membership, query, set }: Ctx<unknown, WorkflowParams>) {
   if (!workflow || !membership) {
     set.status = 404;
     return { error: 'Workflow not found' };
   }
 
-  const data = await getBoard(workflow.id);
+  const parseNumber = (value: string | undefined) => {
+    if (!value) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+  const data = await getBoard(workflow.id, {
+    stageId: query.stageId,
+    offset: parseNumber(query.offset),
+    limit: parseNumber(query.limit),
+    search: query.search,
+    assigneeId: query.assigneeId,
+    tag: query.tag
+  });
   return { board: data };
 }
 
@@ -804,6 +823,45 @@ export async function toggleItem({
   try {
     const item = await toggleChecklistItem(workflow.id, params.cardId, params.itemId, body.done);
     return { item };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
+}
+
+export async function addCardChecklistItem({
+  workflow,
+  membership,
+  params,
+  body,
+  set
+}: Ctx<{ label: string; required?: boolean }, CardParams>) {
+  if (!workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  try {
+    const item = await addChecklistItemToCard(workflow.id, params.cardId, body);
+    return { item };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
+}
+
+export async function deleteCardChecklistItem({
+  workflow,
+  membership,
+  params,
+  set
+}: Ctx<unknown, ItemParams>) {
+  if (!workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  try {
+    const ok = await deleteChecklistItemFromCard(workflow.id, params.cardId, params.itemId);
+    return { ok };
   } catch (error) {
     return handleWorkflowError(error, set);
   }

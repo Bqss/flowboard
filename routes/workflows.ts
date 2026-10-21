@@ -4,6 +4,7 @@ import { db, workflows } from '@db';
 import * as workflowHandlers from '@handlers/workflows';
 import { createRequireAuth } from '@middlewares';
 import { resolveWorkspaceMember } from '@middlewares/workspace';
+import { isWorkspaceMemberInGroup } from '@services/workspace';
 import {
   CreateCardSchema,
   CreateChecklistTemplateSchema,
@@ -12,6 +13,7 @@ import {
   ImportCardsSchema,
   MoveCardSchema,
   ReorderStagesSchema,
+  AddCardChecklistSchema,
   ToggleChecklistItemSchema,
   UpdateCardAssigneeSchema,
   UpdateChecklistTemplateSchema,
@@ -33,26 +35,33 @@ import * as aiWorkflowHandlers from '@handlers/ai-workflows';
 const resolveWorkflow = async (
   cookie: Record<string, { value?: unknown }>,
   workspaceId: string | undefined,
-  workflowId: string | undefined
+  workflowId: string | undefined,
+  request?: Request
 ) => {
-  const base = await resolveWorkspaceMember(cookie, workspaceId);
+  const base = await resolveWorkspaceMember(cookie, workspaceId, request);
   if (!base.workspace || !workflowId) {
     return { ...base, workflow: null };
   }
-
   const [workflow] = await db
     .select()
     .from(workflows)
     .where(and(eq(workflows.id, workflowId), eq(workflows.workspaceId, base.workspace.id)))
     .limit(1);
-
-  return { ...base, workflow: workflow ?? null };
+  if (
+    !workflow ||
+    (workflow.workspaceMemberGroupId &&
+      base.membership?.role === 'member' &&
+      (!base.user || !(await isWorkspaceMemberInGroup(base.workspace.id, workflow.workspaceMemberGroupId, base.user.id))))
+  ) {
+    return { ...base, workflow: null };
+  }
+  return { ...base, workflow };
 };
 
 export const createWorkflowsRoutes = () => {
   const workspaceWorkflowGuard = new Elysia()
-    .derive({ as: 'scoped' }, async ({ cookie, params }) =>
-      resolveWorkspaceMember(cookie, params.workspaceId)
+    .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+      resolveWorkspaceMember(cookie, params.workspaceId, request)
     )
     .onBeforeHandle({ as: 'scoped' }, (ctx) => {
       const { workspace, membership, set } = ctx as typeof ctx & {
@@ -64,10 +73,9 @@ export const createWorkflowsRoutes = () => {
         return { error: 'Forbidden' };
       }
     });
-
   const workflowGuard = new Elysia()
-    .derive({ as: 'scoped' }, async ({ cookie, params }) =>
-      resolveWorkflow(cookie, params.workspaceId, params.workflowId)
+    .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+      resolveWorkflow(cookie, params.workspaceId, params.workflowId, request)
     )
     .onBeforeHandle({ as: 'scoped' }, (ctx) => {
       const { workflow, set } = ctx as typeof ctx & { workflow: unknown };
@@ -105,9 +113,19 @@ export const createWorkflowsRoutes = () => {
           body: UpdateWorkflowSchema
         })
         .delete('/', workflowHandlers.remove, { params: WorkflowIdParam })
-        .get('/setup', workflowHandlers.setup, { params: WorkflowIdParam })
-        .get('/board', workflowHandlers.board, { params: WorkflowIdParam })
+        .get('/board', workflowHandlers.board, {
+          params: WorkflowIdParam,
+          query: t.Object({
+            stageId: t.Optional(t.String()),
+            offset: t.Optional(t.String()),
+            limit: t.Optional(t.String()),
+            search: t.Optional(t.String()),
+            assigneeId: t.Optional(t.String()),
+            tag: t.Optional(t.String())
+          })
+        })
         .get('/stats', workflowHandlers.workflowStats, { params: WorkflowIdParam, query: t.Object({ range: t.Optional(t.String()) }) })
+        .get('/setup', workflowHandlers.setup, { params: WorkflowIdParam })
         .post('/stages', workflowHandlers.createStageHandler, {
           params: WorkflowIdParam,
           body: CreateStageSchema
@@ -160,6 +178,13 @@ export const createWorkflowsRoutes = () => {
         .patch('/cards/:cardId/checklist/:itemId', workflowHandlers.toggleItem, {
           params: WorkflowCardItemParam,
           body: ToggleChecklistItemSchema
+        })
+        .post('/cards/:cardId/checklist', workflowHandlers.addCardChecklistItem, {
+          params: WorkflowCardParam,
+          body: AddCardChecklistSchema
+        })
+        .delete('/cards/:cardId/checklist/:itemId', workflowHandlers.deleteCardChecklistItem, {
+          params: WorkflowCardItemParam
         })
     );
 };

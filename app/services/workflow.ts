@@ -1,6 +1,7 @@
-import { and, asc, count, eq, inArray, isNotNull, isNull, lt, lte, gte, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, inArray, isNotNull, isNull, lt, lte, gte, or, sql } from 'drizzle-orm';
 import {
   cards,
+  chatConversations,
   checklistItems,
   checklistTemplates,
   customers,
@@ -10,6 +11,7 @@ import {
   workflows,
   type Workflow
 } from '@db';
+import { createScopedChatConversation } from './workspace';
 import { findOrCreateCustomer, normalizeWa } from './customer';
 import { parseCustomerCsv, type ColumnMapping } from '../lib/csv';
 import { createNotification, hasRecentNotification, resolveNotifyTarget } from './notification';
@@ -55,6 +57,7 @@ export const listWorkflows = async (workspaceId: string) =>
       id: workflows.id,
       name: workflows.name,
       description: workflows.description,
+      workspaceMemberGroupId: workflows.workspaceMemberGroupId,
       ownerId: workflows.ownerId,
       defaultAssigneeId: workflows.defaultAssigneeId,
       defaultAssigneeIds: workflows.defaultAssigneeIds,
@@ -79,6 +82,7 @@ export const createWorkflow = async (
   input: {
     name: string;
     description?: string | null;
+    workspaceMemberGroupId?: string | null;
     ownerId: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
@@ -107,6 +111,7 @@ export const createWorkflow = async (
     .insert(workflows)
     .values({
       workspaceId,
+      workspaceMemberGroupId: input.workspaceMemberGroupId ?? null,
       name: input.name.trim(),
       description: input.description ?? null,
       ownerId: input.ownerId,
@@ -122,6 +127,14 @@ export const createWorkflow = async (
     })
     .returning();
 
+  await createScopedChatConversation({
+    workspaceId,
+    createdById: input.ownerId,
+    contextType: 'workflow',
+    contextId: workflow.id,
+    groupId: input.workspaceMemberGroupId,
+    name: workflow.name
+  });
   const createdStages = await db
     .insert(stages)
     .values(
@@ -136,11 +149,11 @@ export const createWorkflow = async (
 
   return { workflow, stages: createdStages };
 };
-
 export const createWorkflowFromDraft = async (
   workspaceId: string,
   ownerId: string,
-  draftInput: WorkflowDraft
+  draftInput: WorkflowDraft,
+  workspaceMemberGroupId?: string | null
 ) => {
   const draft = normalizeWorkflowDraft(draftInput);
   if (draft.stages.length === 0) {
@@ -151,6 +164,7 @@ export const createWorkflowFromDraft = async (
     .insert(workflows)
     .values({
       workspaceId,
+      workspaceMemberGroupId: workspaceMemberGroupId ?? null,
       name: draft.name,
       ownerId,
       defaultAssigneeId: ownerId,
@@ -164,6 +178,15 @@ export const createWorkflowFromDraft = async (
       closureBy: draft.closureBy ?? 'initiator'
     })
     .returning();
+
+  await createScopedChatConversation({
+    workspaceId,
+    createdById: ownerId,
+    contextType: 'workflow',
+    contextId: workflow.id,
+    groupId: workspaceMemberGroupId,
+    name: workflow.name
+  });
 
   const createdStages = [];
 
@@ -211,6 +234,7 @@ export const updateWorkflow = async (
   input: {
     name?: string;
     description?: string | null;
+    workspaceMemberGroupId?: string | null;
     ownerId?: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
@@ -237,6 +261,9 @@ export const updateWorkflow = async (
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.workspaceMemberGroupId !== undefined
+        ? { workspaceMemberGroupId: input.workspaceMemberGroupId }
+        : {}),
       ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
       ...(defaultAssigneeId !== undefined ? { defaultAssigneeId } : {}),
       ...(defaultAssigneeIds !== undefined ? { defaultAssigneeIds } : {}),
@@ -251,6 +278,17 @@ export const updateWorkflow = async (
     })
     .where(eq(workflows.id, workflowId))
     .returning();
+
+  if (workflow && (input.name !== undefined || input.workspaceMemberGroupId !== undefined)) {
+    await db
+      .update(chatConversations)
+      .set({
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.workspaceMemberGroupId !== undefined ? { groupId: input.workspaceMemberGroupId } : {}),
+        updatedAt: new Date()
+      })
+      .where(and(eq(chatConversations.contextType, 'workflow'), eq(chatConversations.contextId, workflowId)));
+  }
 
   return workflow ?? null;
 };
@@ -702,20 +740,76 @@ export const advanceCardIfChecklistComplete = async (cardId: string) => {
 };
 
 
-export const getBoard = async (workflowId: string) => {
+export const getBoard = async (
+  workflowId: string,
+  options: {
+    stageId?: string;
+    offset?: number;
+    limit?: number;
+    search?: string;
+    assigneeId?: string;
+    tag?: string;
+  } = {}
+) => {
   const workflowStages = await listStages(workflowId);
-  const workflowCards = await db
-    .select({
-      card: cards,
-      assigneeName: users.name,
-      customerName: customers.name,
-      customerWa: customers.wa
+  const limit = Math.max(1, Math.min(50, Math.floor(options.limit ?? 12)));
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const requestedStages = options.stageId
+    ? workflowStages.filter((stage) => stage.id === options.stageId)
+    : workflowStages;
+  const searchTerm = options.search?.trim();
+  const searchPattern = searchTerm ? `%${searchTerm.replace(/[\\%_]/g, '\\$&')}%` : null;
+  const cardPages = await Promise.all(
+    requestedStages.map(async (stage) => {
+      const conditions = [eq(cards.workflowId, workflowId), eq(cards.stageId, stage.id)];
+      if (options.assigneeId === 'unassigned') conditions.push(isNull(cards.assigneeId));
+      else if (options.assigneeId && options.assigneeId !== 'all') {
+        conditions.push(eq(cards.assigneeId, options.assigneeId));
+      }
+      if (options.tag && options.tag !== 'all') conditions.push(eq(cards.tag, options.tag));
+      if (searchPattern) {
+        conditions.push(
+          or(
+            ilike(customers.name, searchPattern),
+            ilike(customers.wa, searchPattern),
+            ilike(cards.product, searchPattern),
+            ilike(cards.tag, searchPattern),
+            ilike(users.name, searchPattern)
+          )!
+        );
+      }
+      const [rows, countRows] = await Promise.all([
+        db
+          .select({
+            card: cards,
+            assigneeName: users.name,
+            customerName: customers.name,
+            customerWa: customers.wa
+          })
+          .from(cards)
+          .innerJoin(customers, eq(cards.customerId, customers.id))
+          .leftJoin(users, eq(cards.assigneeId, users.id))
+          .where(and(...conditions))
+          .orderBy(asc(cards.createdAt), asc(cards.id))
+          .limit(limit + 1)
+          .offset(options.stageId ? offset : 0),
+        db
+          .select({ value: count() })
+          .from(cards)
+          .innerJoin(customers, eq(cards.customerId, customers.id))
+          .leftJoin(users, eq(cards.assigneeId, users.id))
+          .where(and(...conditions))
+      ]);
+      const totalCount = Number(countRows[0]?.value ?? 0);
+      return {
+        stageId: stage.id,
+        cards: rows.slice(0, limit),
+        hasMore: offset + Math.min(rows.length, limit) < totalCount,
+        totalCount
+      };
     })
-    .from(cards)
-    .innerJoin(customers, eq(cards.customerId, customers.id))
-    .leftJoin(users, eq(cards.assigneeId, users.id))
-    .where(eq(cards.workflowId, workflowId))
-    .orderBy(asc(cards.createdAt));
+  );
+  const workflowCards = cardPages.flatMap((page) => page.cards);
 
   const cardIds = workflowCards.map((row) => row.card.id);
   const allItems =
@@ -735,17 +829,42 @@ export const getBoard = async (workflowId: string) => {
     itemsByCardStage.set(key, bucket);
   }
 
-  const columns = workflowStages.map((stage) => ({
-    id: stage.id,
-    name: stage.name,
-    color: stage.color,
-    position: stage.position,
-    cards: workflowCards
-      .filter((row) => row.card.stageId === stage.id)
-      .map((row) => {
+  const stageIds = workflowStages.map((stage) => stage.id);
+  const allTemplates =
+    stageIds.length === 0
+      ? []
+      : await db
+          .select()
+          .from(checklistTemplates)
+          .where(inArray(checklistTemplates.stageId, stageIds))
+          .orderBy(asc(checklistTemplates.position));
+  const tagRows = await db
+    .selectDistinct({ tag: cards.tag })
+    .from(cards)
+    .where(eq(cards.workflowId, workflowId));
+
+  const templatesByStage = new Map<string, typeof allTemplates>();
+  for (const template of allTemplates) {
+    const list = templatesByStage.get(template.stageId) ?? [];
+    list.push(template);
+    templatesByStage.set(template.stageId, list);
+  }
+
+  const pageByStage = new Map(cardPages.map((page) => [page.stageId, page]));
+  const columns = workflowStages.map((stage) => {
+    const templates = templatesByStage.get(stage.id) ?? [];
+    const page = pageByStage.get(stage.id);
+    return {
+      id: stage.id,
+      name: stage.name,
+      color: stage.color,
+      position: stage.position,
+      hasMore: page?.hasMore ?? false,
+      totalCount: page?.totalCount ?? 0,
+      cards: (page?.cards ?? []).map((row) => {
         const stageItems = itemsByCardStage.get(`${row.card.id}:${stage.id}`) ?? [];
-        const required = stageItems.filter((item) => item.required);
-        const done = required.filter((item) => item.done);
+        const total = stageItems.length > 0 ? stageItems.length : templates.length;
+        const done = stageItems.filter((item) => item.done).length;
 
         return {
           id: row.card.id,
@@ -756,17 +875,23 @@ export const getBoard = async (workflowId: string) => {
           assigneeId: row.card.assigneeId,
           assigneeName: row.assigneeName,
           stageId: row.card.stageId,
-          checklistDone: done.length,
-          checklistTotal: required.length,
+          checklistDone: done,
+          checklistTotal: total,
           waErrorFlag: row.card.waErrorFlag,
           dueAt: row.card.dueAt,
           completedAt: row.card.completedAt,
-          createdAt: row.card.createdAt
+          createdAt: row.card.createdAt,
+          stageEnteredAt: row.card.stageEnteredAt
         };
       })
-  }));
+    };
+  });
 
-  return { stages: workflowStages, columns };
+  return {
+    stages: workflowStages,
+    columns,
+    tags: tagRows.map((row) => row.tag).filter((tag): tag is string => Boolean(tag))
+  };
 };
 
 export const getCardDetail = async (workflowId: string, cardId: string) => {
@@ -784,7 +909,10 @@ export const getCardDetail = async (workflowId: string, cardId: string) => {
     : [];
 
   const stage = await getStageInWorkflow(workflowId, card.stageId);
-  const checklist = stage ? await getCardChecklistForStage(cardId, stage.id) : [];
+  let checklist = stage ? await getCardChecklistForStage(cardId, stage.id) : [];
+  if (checklist.length === 0 && stage) {
+    checklist = await copyChecklistTemplatesToCard(cardId, stage.id);
+  }
   const workflowStages = await listStages(workflowId);
   const stageIndex = workflowStages.findIndex((item) => item.id === card.stageId);
   const nextStage = stageIndex >= 0 ? workflowStages[stageIndex + 1] : undefined;
@@ -951,6 +1079,50 @@ export const toggleChecklistItem = async (
   return updated;
 };
 
+export const addChecklistItemToCard = async (
+  workflowId: string,
+  cardId: string,
+  input: { label: string; required?: boolean }
+) => {
+  const card = await getCardInWorkflow(workflowId, cardId);
+  if (!card) throw new WorkflowError('Card not found.', 'not_found');
+
+  const [lastItem] = await db
+    .select({ position: checklistItems.position })
+    .from(checklistItems)
+    .where(eq(checklistItems.cardId, cardId))
+    .orderBy(desc(checklistItems.position))
+    .limit(1);
+
+  const [item] = await db
+    .insert(checklistItems)
+    .values({
+      cardId,
+      stageId: card.stageId,
+      label: input.label.trim(),
+      required: input.required ?? false,
+      position: (lastItem?.position ?? -1) + 1
+    })
+    .returning();
+
+  return item;
+};
+
+export const deleteChecklistItemFromCard = async (
+  workflowId: string,
+  cardId: string,
+  itemId: string
+) => {
+  const card = await getCardInWorkflow(workflowId, cardId);
+  if (!card) throw new WorkflowError('Card not found.', 'not_found');
+
+  const [deleted] = await db
+    .delete(checklistItems)
+    .where(and(eq(checklistItems.id, itemId), eq(checklistItems.cardId, cardId)))
+    .returning({ id: checklistItems.id });
+
+  return Boolean(deleted);
+};
 export const moveCardToStage = async (
   workflowId: string,
   cardId: string,

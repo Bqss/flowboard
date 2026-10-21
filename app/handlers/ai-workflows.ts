@@ -8,6 +8,7 @@ type GenerateDraftBody = { prompt: string };
 
 type SaveDraftBody = {
   name: string;
+  workspaceMemberGroupId?: string | null;
   stages: Array<{
     name: string;
     color?: string;
@@ -74,12 +75,18 @@ export async function saveDraft({
   }
 
   try {
-    const { workflow, stages } = await createWorkflowFromDraft(workspace.id, user.id, body);
+    const { workflow, stages } = await createWorkflowFromDraft(
+      workspace.id,
+      user.id,
+      body,
+      body.workspaceMemberGroupId
+    );
 
     return {
       workflow: {
         id: workflow.id,
         name: workflow.name,
+        workspaceMemberGroupId: workflow.workspaceMemberGroupId,
         ownerId: workflow.ownerId,
         defaultAssigneeId: workflow.defaultAssigneeId,
         urgency: workflow.urgency,
