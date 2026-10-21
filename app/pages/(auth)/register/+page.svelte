@@ -28,7 +28,7 @@
   async function handleSubmit(payload: { name: string; email: string; phone: string; password: string }) {
     error = undefined;
     loading = true;
-    const dest = data.redirectTo || '/dashboard';
+    const dest = !data.redirectTo || data.redirectTo === '/dashboard' ? '/dashboard/chat' : data.redirectTo;
     try {
       await api.register(payload);
       await invalidateAll();

@@ -5,7 +5,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ parent, url }) => {
   const { user } = await parent();
   const addAccount = url.searchParams.get('addAccount') === '1';
-  const redirectTo = url.searchParams.get('redirect') || '/dashboard';
+  const redirectTo = url.searchParams.get('redirect') || '/dashboard/chat';
   const email = url.searchParams.get('email') || '';
   if (user && !addAccount) throw redirect(302, redirectTo);
   return { redirectTo, email };

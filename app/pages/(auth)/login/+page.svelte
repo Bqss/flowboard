@@ -26,7 +26,7 @@
   async function handleSubmit({ email: e, password: p }: { email: string; password: string; remember: boolean }) {
     error = undefined;
     loading = true;
-    const dest = data.redirectTo || '/dashboard';
+    const dest = !data.redirectTo || data.redirectTo === '/dashboard' ? '/dashboard/chat' : data.redirectTo;
     try {
       await api.login({ email: e, password: p });
       await invalidateAll();

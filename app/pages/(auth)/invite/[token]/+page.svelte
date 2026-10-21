@@ -23,7 +23,7 @@
     try {
       await api.acceptInvite(data.token);
       await invalidateAll();
-      await goto('/dashboard');
+      await goto('/dashboard/chat');
     } catch (err) {
       error = err instanceof ApiError ? err.message : 'Gagal menerima undangan.';
     } finally {
