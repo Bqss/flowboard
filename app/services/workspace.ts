@@ -1,5 +1,15 @@
-import { and, eq, gt, isNull } from 'drizzle-orm';
-import { db, users, workspaceInvites, workspaceMembers, workspaces } from '@db';
+import { and, eq, gt, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import {
+  db,
+  chatConversations,
+  chatParticipants,
+  users,
+  workspaceInvites,
+  workspaceMemberGroupMembers,
+  workspaceMemberGroups,
+  workspaceMembers,
+  workspaces
+} from '@db';
 import type { Workspace, WorkspaceRole } from '@db';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -320,6 +330,362 @@ export const getInviteById = async (workspaceId: string, inviteId: string) => {
   return row ?? null;
 };
 
+
+const validateGroupMembers = async (workspaceId: string, memberIds: string[]) => {
+  const uniqueIds = [...new Set(memberIds)];
+  if (uniqueIds.length === 0) throw new Error('A group must include at least one member.');
+
+  const rows = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), inArray(workspaceMembers.userId, uniqueIds)));
+
+  if (rows.length !== uniqueIds.length) {
+    throw new Error('All group members must belong to this workspace.');
+  }
+  return uniqueIds;
+};
+
+export const listWorkspaceMemberGroups = async (workspaceId: string, userId?: string) => {
+  const groups = await db
+    .select()
+    .from(workspaceMemberGroups)
+    .where(
+      userId
+        ? and(
+            eq(workspaceMemberGroups.workspaceId, workspaceId),
+            inArray(
+              workspaceMemberGroups.id,
+              db
+                .select({ groupId: workspaceMemberGroupMembers.groupId })
+                .from(workspaceMemberGroupMembers)
+                .where(eq(workspaceMemberGroupMembers.userId, userId))
+            )
+          )
+        : eq(workspaceMemberGroups.workspaceId, workspaceId)
+    )
+    .orderBy(workspaceMemberGroups.name);
+
+  if (groups.length === 0) return [];
+  const groupIds = groups.map((g) => g.id);
+
+  const channels = await db
+    .select({
+      id: chatConversations.id,
+      groupId: chatConversations.groupId,
+      name: chatConversations.name,
+      contextType: chatConversations.contextType,
+      contextId: chatConversations.contextId
+    })
+    .from(chatConversations)
+    .where(
+      and(
+        eq(chatConversations.workspaceId, workspaceId),
+        inArray(chatConversations.groupId, groupIds),
+        isNull(chatConversations.archivedAt)
+      )
+    )
+    .orderBy(chatConversations.createdAt);
+
+  const channelsByGroup = new Map<string, typeof channels>();
+  for (const channel of channels) {
+    if (!channel.groupId) continue;
+    const bucket = channelsByGroup.get(channel.groupId) ?? [];
+    bucket.push(channel);
+    channelsByGroup.set(channel.groupId, bucket);
+  }
+
+  const memberships = await db
+    .select({
+      groupId: workspaceMemberGroupMembers.groupId,
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      avatarUrl: users.avatarUrl
+    })
+    .from(workspaceMemberGroupMembers)
+    .innerJoin(users, eq(users.id, workspaceMemberGroupMembers.userId))
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.userId, workspaceMemberGroupMembers.userId),
+        eq(workspaceMembers.workspaceId, workspaceId)
+      )
+    )
+    .where(inArray(workspaceMemberGroupMembers.groupId, groupIds));
+
+  const membersByGroup = new Map<string, typeof memberships>();
+  for (const member of memberships) {
+    const bucket = membersByGroup.get(member.groupId) ?? [];
+    bucket.push(member);
+    membersByGroup.set(member.groupId, bucket);
+  }
+
+  return groups.map((group) => {
+    const groupChannels = channelsByGroup.get(group.id) ?? [];
+    return {
+      ...group,
+      chatConversationId: groupChannels[0]?.id ?? null,
+      channels: groupChannels,
+      members: membersByGroup.get(group.id) ?? []
+    };
+  });
+};
+
+export const createWorkspaceMemberGroup = async (
+  workspaceId: string,
+  createdById: string,
+  input: { name: string; memberIds: string[] }
+) => {
+  const name = input.name.trim();
+  if (!name) throw new Error('Nama kumpulan ahli wajib diisi.');
+
+  const [existing] = await db
+    .select({ id: workspaceMemberGroups.id })
+    .from(workspaceMemberGroups)
+    .where(
+      and(
+        eq(workspaceMemberGroups.workspaceId, workspaceId),
+        sql`LOWER(${workspaceMemberGroups.name}) = LOWER(${name})`
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    throw new Error(`Kumpulan ahli dengan nama "${name}" sudah ada.`);
+  }
+
+  const memberIds = await validateGroupMembers(workspaceId, [...input.memberIds, createdById]);
+  const created = await db.transaction(async (tx) => {
+    const [group] = await tx
+      .insert(workspaceMemberGroups)
+      .values({ workspaceId, name, createdById })
+      .returning({ id: workspaceMemberGroups.id });
+
+    await tx.insert(workspaceMemberGroupMembers).values(
+      memberIds.map((userId) => ({ groupId: group.id, userId }))
+    );
+
+    const [conversation] = await tx
+      .insert(chatConversations)
+      .values({
+        workspaceId,
+        kind: 'group',
+        contextType: 'group',
+        groupId: group.id,
+        name,
+        createdById
+      })
+      .returning({ id: chatConversations.id });
+
+    await tx.insert(chatParticipants).values(
+      memberIds.map((userId) => ({
+        conversationId: conversation.id,
+        workspaceId,
+        userId,
+        role: userId === createdById ? ('admin' as const) : ('member' as const)
+      }))
+    );
+
+    return { groupId: group.id };
+  });
+
+  return (await listWorkspaceMemberGroups(workspaceId)).find((item) => item.id === created.groupId) ?? null;
+};
+
+export const updateWorkspaceMemberGroup = async (
+  workspaceId: string,
+  groupId: string,
+  input: { name?: string; memberIds?: string[] }
+) => {
+  const [group] = await db
+    .select()
+    .from(workspaceMemberGroups)
+    .where(and(eq(workspaceMemberGroups.id, groupId), eq(workspaceMemberGroups.workspaceId, workspaceId)))
+    .limit(1);
+  if (!group) return null;
+
+  const memberIds = input.memberIds
+    ? await validateGroupMembers(workspaceId, [...input.memberIds, group.createdById])
+    : undefined;
+  const nextName = input.name?.trim();
+  if (input.name !== undefined && !nextName) throw new Error('Nama kumpulan ahli wajib diisi.');
+
+  if (nextName !== undefined) {
+    const [existing] = await db
+      .select({ id: workspaceMemberGroups.id })
+      .from(workspaceMemberGroups)
+      .where(
+        and(
+          eq(workspaceMemberGroups.workspaceId, workspaceId),
+          ne(workspaceMemberGroups.id, groupId),
+          sql`LOWER(${workspaceMemberGroups.name}) = LOWER(${nextName})`
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      throw new Error(`Kumpulan ahli dengan nama "${nextName}" sudah ada.`);
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    if (nextName !== undefined) {
+      await tx
+        .update(workspaceMemberGroups)
+        .set({ name: nextName, updatedAt: new Date() })
+        .where(eq(workspaceMemberGroups.id, groupId));
+      await tx
+        .update(chatConversations)
+        .set({ name: nextName, updatedAt: new Date() })
+        .where(eq(chatConversations.groupId, groupId));
+    }
+    const groupConversations = await tx
+      .select({ id: chatConversations.id })
+      .from(chatConversations)
+      .where(and(eq(chatConversations.groupId, groupId), isNull(chatConversations.archivedAt)));
+
+    if (groupConversations.length === 0) {
+      const [conversation] = await tx
+        .insert(chatConversations)
+        .values({
+          workspaceId,
+          kind: 'group',
+          contextType: 'group',
+          groupId,
+          name: nextName ?? group.name,
+          createdById: group.createdById
+        })
+        .returning({ id: chatConversations.id });
+      groupConversations.push(conversation);
+    }
+
+    if (memberIds) {
+      const now = new Date();
+      await tx.delete(workspaceMemberGroupMembers).where(eq(workspaceMemberGroupMembers.groupId, groupId));
+      await tx.insert(workspaceMemberGroupMembers).values(
+        memberIds.map((userId) => ({ groupId, userId }))
+      );
+
+      for (const conversation of groupConversations) {
+        await tx
+          .update(chatParticipants)
+          .set({ leftAt: now })
+          .where(
+            and(
+              eq(chatParticipants.conversationId, conversation.id),
+              notInArray(chatParticipants.userId, memberIds),
+              isNull(chatParticipants.leftAt)
+            )
+          );
+        await tx
+          .insert(chatParticipants)
+          .values(
+            memberIds.map((userId) => ({
+              conversationId: conversation.id,
+              workspaceId,
+              userId,
+              role: userId === group.createdById ? ('admin' as const) : ('member' as const)
+            }))
+          )
+          .onConflictDoUpdate({
+            target: [chatParticipants.conversationId, chatParticipants.userId],
+            set: { leftAt: null }
+          });
+      }
+    }
+  });
+
+  return (await listWorkspaceMemberGroups(workspaceId)).find((item) => item.id === groupId) ?? null;
+};
+
+export const deleteWorkspaceMemberGroup = async (workspaceId: string, groupId: string) => {
+  const [group] = await db
+    .select({ id: workspaceMemberGroups.id })
+    .from(workspaceMemberGroups)
+    .where(and(eq(workspaceMemberGroups.id, groupId), eq(workspaceMemberGroups.workspaceId, workspaceId)))
+    .limit(1);
+  if (!group) return false;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(chatConversations)
+      .set({ groupId: null, archivedAt: new Date(), updatedAt: new Date() })
+      .where(eq(chatConversations.groupId, groupId));
+    await tx
+      .delete(workspaceMemberGroups)
+      .where(and(eq(workspaceMemberGroups.id, groupId), eq(workspaceMemberGroups.workspaceId, workspaceId)));
+  });
+  return true;
+};
+export const createScopedChatConversation = async (input: {
+  workspaceId: string;
+  createdById: string;
+  contextType: 'taskboard' | 'workflow';
+  contextId: string;
+  name: string;
+  groupId?: string | null;
+}) => {
+  const memberRows = input.groupId
+    ? await db
+      .select({ userId: workspaceMemberGroupMembers.userId })
+      .from(workspaceMemberGroupMembers)
+      .innerJoin(
+        workspaceMemberGroups,
+        and(
+          eq(workspaceMemberGroups.id, workspaceMemberGroupMembers.groupId),
+          eq(workspaceMemberGroups.workspaceId, input.workspaceId)
+        )
+      )
+      .where(eq(workspaceMemberGroupMembers.groupId, input.groupId))
+    : await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, input.workspaceId));
+
+  if (input.groupId && memberRows.length === 0) {
+    throw new Error('Member group not found.');
+  }
+
+  const [conversation] = await db
+    .insert(chatConversations)
+    .values({
+      workspaceId: input.workspaceId,
+      kind: input.contextType,
+      contextType: input.contextType,
+      contextId: input.contextId,
+      groupId: input.groupId ?? null,
+      name: input.name.trim(),
+      createdById: input.createdById
+    })
+    .returning({ id: chatConversations.id });
+
+  const participantIds = [...new Set(memberRows.map((row) => row.userId).concat(input.createdById))];
+  await db.insert(chatParticipants).values(
+    participantIds.map((userId) => ({
+      conversationId: conversation.id,
+      workspaceId: input.workspaceId,
+      userId,
+      role: userId === input.createdById ? ('admin' as const) : ('member' as const)
+    }))
+  );
+
+  return conversation.id;
+};
+
+
+export const isWorkspaceMemberInGroup = async (workspaceId: string, groupId: string, userId: string) => {
+  const [row] = await db
+    .select({ id: workspaceMemberGroupMembers.id })
+    .from(workspaceMemberGroupMembers)
+    .innerJoin(workspaceMemberGroups, and(
+      eq(workspaceMemberGroups.id, workspaceMemberGroupMembers.groupId),
+      eq(workspaceMemberGroups.workspaceId, workspaceId)
+    ))
+    .where(and(eq(workspaceMemberGroupMembers.groupId, groupId), eq(workspaceMemberGroupMembers.userId, userId)))
+    .limit(1);
+  return Boolean(row);
+};
 export const extendInviteExpiry = async (inviteId: string) => {
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
   const [updated] = await db

@@ -2,20 +2,23 @@
   import {
     api,
     ApiError,
-    type ApiWorkspaceMember
+    type ApiWorkspaceMember,
+    type ApiWorkspaceMemberGroup
   } from '$lib/api/client';
   import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Avatar, Badge, Button, Input, Skeleton } from '$lib/components/atoms/index.js';
+  import { Avatar, Badge, Button, IconButton, Input, Skeleton, Tooltip } from '$lib/components/atoms/index.js';
   import {
     FormField,
     SearchInput,
     StatCard,
     EmptyStateBlock,
     Breadcrumb,
-    Tabs
+    Tabs,
+    MultiSelectCombobox,
+    type MultiSelectOption
   } from '$lib/components/molecules/index.js';
-  import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
+  import { ConfirmDialog, Dialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     UserGroupIcon,
@@ -24,6 +27,7 @@
     MailSend01Icon,
     Copy01Icon,
     Delete02Icon,
+    Edit02Icon,
     SentIcon,
     CheckmarkCircle02Icon,
     Alert02Icon
@@ -46,6 +50,14 @@
 
   let loadingData = $state(true);
   let members = $state<ApiWorkspaceMember[]>([]);
+  let groups = $state<ApiWorkspaceMemberGroup[]>([]);
+  let groupDialogOpen = $state(false);
+  let editingGroup = $state<ApiWorkspaceMemberGroup | null>(null);
+  let groupName = $state('');
+  let groupMemberIds = $state<string[]>([]);
+  let groupSaving = $state(false);
+  let groupError = $state<string | null>(null);
+  let groupToDelete = $state<ApiWorkspaceMemberGroup | null>(null);
   let invites = $state<InviteItem[]>([]);
 
   let searchQuery = $state('');
@@ -69,6 +81,77 @@
 
   const isOwner = $derived(data.workspace?.role === 'owner');
   const currentUserId = $derived(data.user?.id);
+  const groupMemberOptions = $derived.by<MultiSelectOption[]>(() => {
+    const options = members.map((member) => ({
+      value: member.id,
+      label: member.name,
+      description: member.email,
+      avatarUrl: member.avatarUrl ?? undefined
+    }));
+
+    if (data.user && !members.some((member) => member.id === data.user?.id)) {
+      options.unshift({
+        value: data.user.id,
+        label: data.user.name,
+        description: data.user.email,
+        avatarUrl: data.user.avatarUrl ?? undefined
+      });
+    }
+
+    return options;
+  });
+
+  function openGroupDialog(group?: ApiWorkspaceMemberGroup) {
+    editingGroup = group ?? null;
+    groupName = group?.name ?? '';
+    groupMemberIds = group?.members.map((member) => member.id) ?? [];
+    groupError = null;
+    groupDialogOpen = true;
+  }
+
+  async function saveGroup() {
+    if (!isOwner || !data.workspace?.id || !groupName.trim() || groupMemberIds.length === 0) return;
+    groupSaving = true;
+    groupError = null;
+    try {
+      if (editingGroup) {
+        const response = await api.updateWorkspaceMemberGroup(data.workspace.id, editingGroup.id, {
+          name: groupName.trim(),
+          memberIds: groupMemberIds
+        });
+        groups = groups.map((group) => (group.id === editingGroup?.id ? response.group : group));
+      } else {
+        const response = await api.createWorkspaceMemberGroup(data.workspace.id, {
+          name: groupName.trim(),
+          memberIds: groupMemberIds
+        });
+        groups = [...groups, response.group];
+      }
+      groupDialogOpen = false;
+    } catch (err) {
+      groupError = err instanceof ApiError ? err.message : tr('members.groupSaveError');
+    } finally {
+      groupSaving = false;
+    }
+  }
+
+  function triggerDeleteGroup(group: ApiWorkspaceMemberGroup) {
+    groupToDelete = group;
+  }
+
+  async function confirmDeleteGroup() {
+    if (!isOwner || !data.workspace?.id || !groupToDelete) return;
+    groupSaving = true;
+    try {
+      await api.deleteWorkspaceMemberGroup(data.workspace.id, groupToDelete.id);
+      groups = groups.filter((item) => item.id !== groupToDelete?.id);
+      groupToDelete = null;
+    } catch (err) {
+      groupError = err instanceof ApiError ? err.message : tr('members.groupDeleteError');
+    } finally {
+      groupSaving = false;
+    }
+  }
 
   const ownersCount = $derived(members.filter((m) => m.role === 'owner').length);
   const staffCount = $derived(members.filter((m) => m.role === 'member').length);
@@ -91,14 +174,16 @@
     if (!data.workspace?.id) return;
     loadingData = true;
     try {
-      const [membersRes, invitesRes] = await Promise.all([
+      const [membersRes, invitesRes, groupsRes] = await Promise.all([
         api.listWorkspaceMembers(data.workspace.id),
         data.workspace.role === 'owner'
           ? api.listWorkspaceInvites(data.workspace.id).catch(() => ({ invites: [] }))
-          : Promise.resolve({ invites: [] })
+          : Promise.resolve({ invites: [] }),
+        api.listWorkspaceMemberGroups(data.workspace.id).catch(() => ({ groups: [] }))
       ]);
       members = membersRes.members ?? [];
       invites = (invitesRes.invites as InviteItem[]) ?? [];
+      groups = groupsRes.groups ?? [];
     } catch (err) {
       console.error('Failed to load members data:', err);
     } finally {
@@ -388,6 +473,7 @@
                         {/if}
                       </p>
                     </div>
+
                   </div>
                 </td>
                 <td class="px-4 py-3 sm:px-6 sm:py-4 text-mute">
@@ -447,6 +533,79 @@
             {/each}
           </tbody>
         </table>
+      </div>
+    {/if}
+  </section>
+  <section class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="ds-section-title text-ink">{tr('members.groupsTitle')}</h2>
+        <p class="ds-caption text-mute">{tr('members.groupsDescription')}</p>
+      </div>
+      {#if isOwner}
+        <Button variant="secondary" size="sm" onclick={() => openGroupDialog()}>
+          <HugeiconsIcon icon={UserGroupIcon} size={15} strokeWidth={1.8} />
+          <span>{tr('members.createGroup')}</span>
+        </Button>
+      {/if}
+    </div>
+    {#if groups.length === 0}
+      <p class="text-sm text-mute">{tr('members.noGroups')}</p>
+    {:else}
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {#each groups as group (group.id)}
+          <article class="group rounded-2xl border border-hairline bg-card p-4 shadow-card transition-shadow hover:shadow-raised">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="grid size-8 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+                    <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
+                  </span>
+                  <div class="min-w-0">
+                    <h3 class="truncate text-sm font-bold text-ink">{group.name}</h3>
+                    <p class="mt-0.5 text-xs text-mute">{tr('members.groupMembers', { count: group.members.length })}</p>
+                  </div>
+                </div>
+              </div>
+              {#if isOwner}
+                <div class="flex shrink-0 items-center gap-0.5">
+                  <Tooltip text={tr('common.edit')} side="top">
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      label={tr('common.edit')}
+                      onclick={() => openGroupDialog(group)}
+                    >
+                      <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip text={tr('common.delete')} side="top">
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      label={tr('common.delete')}
+                      class="text-status-urgent-ink hover:bg-status-urgent-soft hover:text-status-urgent-strong"
+                      onclick={() => triggerDeleteGroup(group)}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                    </IconButton>
+                  </Tooltip>
+                </div>
+              {/if}
+            </div>
+            <div class="mt-4 space-y-2 border-t border-hairline pt-3">
+              {#each group.members as member (member.id)}
+                <div class="flex min-w-0 items-center gap-2.5 rounded-xl bg-canvas-sunken/55 px-2.5 py-2">
+                  <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={28} />
+                  <div class="min-w-0">
+                    <p class="truncate text-xs font-semibold text-ink">{member.name}</p>
+                    <p class="truncate text-[11px] text-mute">{member.email}</p>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </article>
+        {/each}
       </div>
     {/if}
   </section>
@@ -600,6 +759,62 @@
     </div>
   </form>
 </Dialog>
+
+<Dialog
+  bind:open={groupDialogOpen}
+  title={editingGroup ? tr('members.editGroup') : tr('members.createGroup')}
+  description={tr('members.groupDialogDescription')}
+>
+  <form
+    class="space-y-4"
+    onsubmit={(event) => {
+      event.preventDefault();
+      saveGroup();
+    }}
+  >
+    <FormField label={tr('members.groupName')} required>
+      {#snippet control(args)}
+        <Input {...args} bind:value={groupName} placeholder={tr('members.groupNamePlaceholder')} required />
+      {/snippet}
+    </FormField>
+    <FormField label={tr('members.groupMembersLabel')} required>
+      {#snippet control()}
+        <MultiSelectCombobox
+          options={groupMemberOptions}
+          bind:values={groupMemberIds}
+          placeholder={tr('members.groupMembersPlaceholder')}
+        />
+      {/snippet}
+    </FormField>
+    {#if groupError}
+      <p class="text-sm text-status-urgent-ink">{groupError}</p>
+    {/if}
+    <div class="mt-6 flex justify-end gap-2 border-t border-hairline pt-4">
+      <Button variant="secondary" type="button" onclick={() => (groupDialogOpen = false)}>{tr('common.cancel')}</Button>
+      <Button
+        type="submit"
+        variant="primary"
+        loading={groupSaving}
+        disabled={groupSaving || !groupName.trim() || groupMemberIds.length === 0}
+      >
+        {tr('common.save')}
+      </Button>
+    </div>
+  </form>
+</Dialog>
+
+<!-- Confirm Dialog: Hapus Kumpulan -->
+<ConfirmDialog
+  open={groupToDelete !== null}
+  title={tr('members.deleteGroupTitle')}
+  description={groupToDelete ? tr('members.deleteGroupDescription', { name: groupToDelete.name }) : ''}
+  confirmLabel={tr('common.delete')}
+  cancelLabel={tr('common.cancel')}
+  destructive
+  loading={groupSaving}
+  onconfirm={confirmDeleteGroup}
+  oncancel={() => (groupToDelete = null)}
+/>
 
 <!-- Confirm Dialog: Hapus Anggota -->
 <ConfirmDialog

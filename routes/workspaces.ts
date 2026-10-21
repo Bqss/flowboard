@@ -6,12 +6,15 @@ import { resolveWorkspaceMember } from '@middlewares/workspace';
 import {
   WorkspaceIdParam,
   WorkspaceMemberParam,
+  WorkspaceMemberGroupParam,
   UpdateWorkspaceSchema,
   CreateInviteSchema,
   CreateWorkspaceSchema,
   AcceptInviteSchema,
   InviteTokenParam,
   InviteIdParam,
+  CreateWorkspaceMemberGroupSchema,
+  UpdateWorkspaceMemberGroupSchema,
   CreateApiKeySchema,
   ApiKeyParam,
   UpdateApiKeySchema,
@@ -21,8 +24,8 @@ import {
 
 export const createWorkspacesRoutes = () => {
   const workspaceMemberGuard = new Elysia()
-    .derive({ as: 'scoped' }, async ({ cookie, params }) =>
-      resolveWorkspaceMember(cookie, params.workspaceId)
+    .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+      resolveWorkspaceMember(cookie, params.workspaceId, request)
     )
     .onBeforeHandle({ as: 'scoped' }, (ctx) => {
       const { workspace, membership, set } = ctx as typeof ctx & {
@@ -50,6 +53,26 @@ export const createWorkspacesRoutes = () => {
         .patch('/', workspaces.update, { params: WorkspaceIdParam, body: UpdateWorkspaceSchema })
         .post('/switch', workspaces.switchActive, { params: WorkspaceIdParam })
         .get('/members', workspaces.members, { params: WorkspaceIdParam })
+        .get('/groups', workspaces.groups, { params: WorkspaceIdParam })
+        .get('/member-groups', workspaces.groups, { params: WorkspaceIdParam })
+        .post('/groups', workspaces.createGroup, {
+          params: WorkspaceIdParam,
+          body: CreateWorkspaceMemberGroupSchema
+        })
+        .post('/member-groups', workspaces.createGroup, {
+          params: WorkspaceIdParam,
+          body: CreateWorkspaceMemberGroupSchema
+        })
+        .patch('/groups/:groupId', workspaces.updateGroup, {
+          params: WorkspaceMemberGroupParam,
+          body: UpdateWorkspaceMemberGroupSchema
+        })
+        .patch('/member-groups/:groupId', workspaces.updateGroup, {
+          params: WorkspaceMemberGroupParam,
+          body: UpdateWorkspaceMemberGroupSchema
+        })
+        .delete('/groups/:groupId', workspaces.deleteGroup, { params: WorkspaceMemberGroupParam })
+        .delete('/member-groups/:groupId', workspaces.deleteGroup, { params: WorkspaceMemberGroupParam })
         .delete('/members/:userId', workspaces.removeMember, { params: WorkspaceMemberParam })
         .get('/invites', workspaces.invites, { params: WorkspaceIdParam })
         .post('/invites', workspaces.createInvite, {

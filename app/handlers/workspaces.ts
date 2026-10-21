@@ -6,7 +6,9 @@ import {
   countWorkspaceOwners,
   createWorkspaceForUser,
   createWorkspaceInvite,
+  createWorkspaceMemberGroup,
   deleteInvite,
+  deleteWorkspaceMemberGroup,
   extendInviteExpiry,
   getActiveWorkspaceContext,
   getInviteById,
@@ -14,11 +16,13 @@ import {
   getMembership,
   listPendingInvites,
   listPendingInvitesForEmail,
+  listWorkspaceMemberGroups,
   listWorkspaceMembers,
   listWorkspacesForUser,
   removeWorkspaceMember,
   setActiveWorkspace,
-  updateWorkspace
+  updateWorkspace,
+  updateWorkspaceMemberGroup
 } from '@services/workspace';
 
 type WorkspaceIdParams = { workspaceId: string };
@@ -26,6 +30,9 @@ type MemberParams = WorkspaceIdParams & { userId: string };
 type InviteParams = WorkspaceIdParams & { inviteId: string };
 type InviteBody = { email: string; role?: 'member' };
 type AcceptInviteBody = { token: string };
+type GroupParams = WorkspaceIdParams & { groupId: string };
+type CreateGroupBody = { name: string; memberIds: string[] };
+type UpdateGroupBody = { name?: string; memberIds?: string[] };
 type UpdateWorkspaceBody = { name: string };
 type TokenParams = { token: string };
 
@@ -110,8 +117,97 @@ export async function members({ workspace, membership, set }: Ctx<unknown, Works
     return { error: 'Forbidden' };
   }
 
+
   const rows = await listWorkspaceMembers(workspace.id);
   return { members: rows };
+}
+export async function groups({ user, workspace, membership, set }: Ctx<unknown, WorkspaceIdParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  return {
+    groups: await listWorkspaceMemberGroups(
+      workspace.id,
+      membership.role === 'member' ? user.id : undefined
+    )
+  };
+}
+
+export async function createGroup({
+  user,
+  workspace,
+  membership,
+  body,
+  set
+}: Ctx<CreateGroupBody, WorkspaceIdParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  if (membership.role !== 'owner') {
+    set.status = 403;
+    return { error: 'Owner access required' };
+  }
+
+  try {
+    const group = await createWorkspaceMemberGroup(workspace.id, user.id, body);
+    return { group };
+  } catch (error) {
+    set.status = 400;
+    return { error: error instanceof Error ? error.message : 'Could not create member group' };
+  }
+}
+
+export async function updateGroup({
+  workspace,
+  membership,
+  params,
+  body,
+  set
+}: Ctx<UpdateGroupBody, GroupParams>) {
+  if (!workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  if (membership.role !== 'owner') {
+    set.status = 403;
+    return { error: 'Owner access required' };
+  }
+
+  try {
+    const group = await updateWorkspaceMemberGroup(workspace.id, params.groupId, body);
+    if (!group) {
+      set.status = 404;
+      return { error: 'Member group not found' };
+    }
+    return { group };
+  } catch (error) {
+    set.status = 400;
+    return { error: error instanceof Error ? error.message : 'Could not update member group' };
+  }
+}
+
+export async function deleteGroup({
+  workspace,
+  membership,
+  params,
+  set
+}: Ctx<unknown, GroupParams>) {
+  if (!workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  if (membership.role !== 'owner') {
+    set.status = 403;
+    return { error: 'Owner access required' };
+  }
+  const deleted = await deleteWorkspaceMemberGroup(workspace.id, params.groupId);
+  if (!deleted) {
+    set.status = 404;
+    return { error: 'Member group not found' };
+  }
+  return { ok: true as const };
 }
 
 export async function invites({ workspace, membership, set }: Ctx<unknown, WorkspaceIdParams>) {
