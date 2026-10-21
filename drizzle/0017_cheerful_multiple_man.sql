@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS "task_labels" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "chat_conversations" DROP CONSTRAINT "chat_conversations_kind_check";--> statement-breakpoint
 ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "labels" text[] DEFAULT ARRAY[]::text[] NOT NULL;--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "task_labels" ADD CONSTRAINT "task_labels_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
@@ -17,5 +16,3 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "task_labels_workspace_name_idx" ON "task_labels" USING btree ("workspace_id","name");--> statement-breakpoint
-ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_kind_check" CHECK ((kind = 'direct' AND direct_key IS NOT NULL AND name IS NULL) OR (kind IN ('group', 'taskboard', 'workflow') AND name IS NOT NULL AND direct_key IS NULL));
