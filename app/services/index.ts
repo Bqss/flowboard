@@ -13,6 +13,16 @@ export {
 } from './auth';
 
 export {
+  createMobileSession,
+  getBearerToken,
+  getUserByMobileAccessToken,
+  revokeAllMobileSessions,
+  revokeMobileAccessToken,
+  rotateMobileSession,
+  type MobileTokenPair
+} from './mobile-auth';
+
+export {
   createWorkspaceForUser,
   getActiveWorkspaceContext,
   getMembership,
