@@ -4,6 +4,7 @@
     api,
     ApiError,
     type ApiWorkflow,
+    type ApiTaskBoard,
     type ApiDashboardStats,
     type ApiWorkspaceMember,
     type ApiWaitingActionCard
@@ -34,9 +35,7 @@
     Layers01Icon,
     ArrowRight01Icon,
     KanbanIcon,
-    UserCheck01Icon,
-    Building06Icon,
-    Tick02Icon
+    UserCheck01Icon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from './$types';
 
@@ -47,6 +46,7 @@
 
   let loadingData = $state(true);
   let workflows = $state<ApiWorkflow[]>([]);
+  let taskBoards = $state<ApiTaskBoard[]>([]);
   let stats = $state<ApiDashboardStats>({ pending: 0, progress: 0, waiting: 0, done: 0, totalCustomers: 0 });
   let members = $state<ApiWorkspaceMember[]>([]);
   let waitingCards = $state<ApiWaitingActionCard[]>([]);
@@ -59,25 +59,7 @@
     Array<{ id: string; token: string; workspaceName: string; role: string; expiresAt: string }>
   >([]);
   let acceptingInvite = $state(false);
-  let workspacesLoading = $state(true);
 
-  let workspaces = $state<
-    Array<{ id: string; name: string; slug: string; role: 'owner' | 'member'; joinedAt: string }>
-  >([]);
-  let switchingWorkspace = $state(false);
-
-  async function switchWorkspace(workspaceId: string) {
-    if (workspaceId === data.workspace?.id || switchingWorkspace) return;
-    switchingWorkspace = true;
-    try {
-      await api.switchWorkspace(workspaceId);
-      await goto('/dashboard');
-    } catch (err) {
-      console.error('Failed to switch workspace:', err);
-    } finally {
-      switchingWorkspace = false;
-    }
-  }
   async function acceptPendingInvite(token: string) {
     acceptingInvite = true;
     try {
@@ -92,18 +74,13 @@
 
   $effect(() => {
     if (!data.user) return;
-    Promise.all([
-      api.listWorkspaces(),
-      api.myInvites().catch(() => ({ invites: [] }))
-    ]).then(([wsRes, invRes]) => {
-      workspaces = wsRes.workspaces ?? [];
-      pendingInvites = invRes.invites ?? [];
-      workspacesLoading = false;
-    }).catch(() => {
-      workspaces = [];
-      pendingInvites = [];
-      workspacesLoading = false;
-    });
+    api.myInvites()
+      .then((invRes) => {
+        pendingInvites = invRes.invites ?? [];
+      })
+      .catch(() => {
+        pendingInvites = [];
+      });
   });
 
 
@@ -117,16 +94,18 @@
     if (!data.workspace?.id) return;
     loadingData = true;
     try {
-      const [{ workflows: wf }, { stats: st }, membersRes, waitingRes] = await Promise.all([
+      const [{ workflows: wf }, { stats: st }, membersRes, waitingRes, boardsRes] = await Promise.all([
         api.listWorkflows(data.workspace.id),
         api.getDashboardWorkflowStats(data.workspace.id),
         api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
-        api.listWaitingAction(data.workspace.id).catch(() => ({ cards: [] }))
+        api.listWaitingAction(data.workspace.id).catch(() => ({ cards: [] })),
+        api.listTaskBoards(data.workspace.id).catch(() => ({ boards: [] }))
       ]);
       workflows = wf;
       stats = st;
       members = membersRes.members ?? [];
       waitingCards = waitingRes.cards ?? [];
+      taskBoards = boardsRes.boards ?? [];
       selectedWaitingIds = [];
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -218,23 +197,10 @@
   <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
 {/snippet}
 <div class="space-y-6 sm:space-y-8">
-  <!-- Clean Header & Direct Actions -->
-  <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div class="space-y-1">
-      <h1 class="ds-page-title text-ink">{data.workspace?.name ?? tr('common.dashboard')}</h1>
-      <p class="ds-caption text-mute">{tr('home.description')}</p>
-    </div>
-
-    <div class="flex items-center gap-2 sm:gap-3">
-      <Button href="/dashboard/members" variant="secondary" size="sm">
-        <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
-        <span>{tr('home.teamButton')}</span>
-      </Button>
-      <Button variant="primary" size="sm" data-onboarding="quick-create-workflow" onclick={() => (createOpen = true)}>
-        <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
-        <span>{tr('home.createWorkflow')}</span>
-      </Button>
-    </div>
+  <!-- Clean Header -->
+  <header class="space-y-1">
+    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">{data.workspace?.name ?? tr('common.dashboard')}</h1>
+    <p class="ds-caption text-mute text-xs sm:text-sm">{tr('home.description')}</p>
   </header>
 
   <!-- Workspace Stats Grid (Clean & Direct) -->
@@ -250,30 +216,30 @@
         {/each}
       </div>
     {:else}
-      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div class="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
         <StatCard
           label={tr('home.totalCustomers')}
           value={String(stats.totalCustomers ?? totalCards)}
           icon={customersIcon}
-          class="p-5 rounded-2xl"
+          class="p-3.5 sm:p-5 rounded-2xl"
         />
         <StatCard
           label={tr('home.workflowCount')}
           value={String(workflows.length)}
           icon={workflowsIcon}
-          class="p-5 rounded-2xl"
+          class="p-3.5 sm:p-5 rounded-2xl"
         />
         <StatCard
           label={tr('home.teamMembers')}
           value={String(members.length)}
           icon={membersIcon}
-          class="p-5 rounded-2xl"
+          class="p-3.5 sm:p-5 rounded-2xl"
         />
         <StatCard
           label={tr('home.needsAction')}
           value={String(urgentCount)}
           icon={urgentIcon}
-          class="p-5 rounded-2xl"
+          class="p-3.5 sm:p-5 rounded-2xl"
         />
       </div>
     {/if}
@@ -396,66 +362,7 @@
     </section>
   {/if}
 
-  <section class="space-y-4" data-onboarding="workspaces-section">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="ds-section-title text-ink">{tr('home.workspaces')}</h2>
-        <p class="ds-caption text-mute">{tr('home.workspacesDescription')}</p>
-      </div>
-      <span class="ds-caption text-mute">{tr('home.workspaceCount', { count: workspaces.length })}</span>
-    </div>
-    {#if workspacesLoading}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each [1, 2, 3] as _i}
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
-            <Skeleton shape="rect" class="h-1 w-7 rounded-full" />
-            <Skeleton shape="rect" class="h-4 w-32 rounded-md" />
-            <Skeleton shape="rect" class="h-3 w-20 rounded-md" />
-            <div class="pt-2">
-              <Skeleton shape="rect" class="h-3 w-24 rounded-md" />
-            </div>
-          </div>
-        {/each}
-      </div>
-    {:else}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each workspaces as ws (ws.id)}
-          {@const isActive = ws.id === data.workspace?.id}
-          <article
-            class="flex flex-col justify-between rounded-2xl border p-5 shadow-card transition-all duration-200 {isActive ? 'border-primary bg-primary-soft' : 'border-hairline bg-card hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover'}"
-          >
-            <div>
-              <div class="mb-3 h-1 w-7 rounded-full {isActive ? 'bg-primary' : 'bg-hairline-strong'}"></div>
-              <h3 class="truncate text-sm font-bold text-ink">{ws.name}</h3>
-              <div class="mt-2 flex items-center gap-2">
-                <HugeiconsIcon icon={Building06Icon} size={14} strokeWidth={1.8} class="text-mute" />
-                <span class="ds-caption text-mute">{ws.role === 'owner' ? tr('common.owner') : tr('common.member')}</span>
-              </div>
-            </div>
-            <div class="mt-4 flex items-center justify-between border-t border-hairline pt-3.5">
-              {#if isActive}
-                <span class="flex items-center gap-1.5 text-xs font-semibold text-primary">
-                  <HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} />
-                  {tr('home.activeWorkspace')}
-                </span>
-              {:else}
-                <button
-                  type="button"
-                  disabled={switchingWorkspace}
-                  onclick={() => switchWorkspace(ws.id)}
-                  class="flex items-center gap-1.5 text-xs font-semibold text-primary transition-colors hover:text-primary-ink"
-                  aria-label={tr('home.switchTo', { name: ws.name })}
-                >
-                  {tr('home.switchTo', { name: ws.name })}
-                  <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={1.8} />
-                </button>
-              {/if}
-            </div>
-          </article>
-        {/each}
-      </div>
-    {/if}
-  </section>
+
   <!-- Workflows Section (Subtle description added) -->
   <section class="space-y-4" data-onboarding="workflows-section">
     <div class="flex items-center justify-between">
@@ -492,20 +399,26 @@
       />
     {:else}
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each workflows as workflow (workflow.id)}
-          <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
+        {#each workflows.slice(0, 3) as workflow (workflow.id)}
+          <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
             <div>
               <!-- 4px Signature Tag Strip -->
               <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
 
-              <h3 class="text-lg font-bold text-ink">{workflow.name}</h3>
-
+              <a
+                href="/dashboard/workflows/{workflow.id}"
+                class="block text-base sm:text-lg font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
+              >
+                {workflow.name}
+              </a>
+              {#if workflow.description}
+                <p class="ds-caption text-mute line-clamp-2 mt-1">{workflow.description}</p>
+              {/if}
               <div class="mt-3 flex items-center gap-2">
                 <Avatar name={workflow.ownerName ?? tr('common.pic')} size={22} />
                 <span class="ds-caption text-mute">{workflow.ownerName ?? tr('home.noAssignee')}</span>
               </div>
             </div>
-
             <div class="mt-5 flex items-center gap-2 border-t border-hairline pt-3.5">
               <Button href="/dashboard/workflows/{workflow.id}" variant="primary" size="sm" class="flex-1">
                 <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
@@ -520,113 +433,81 @@
       </div>
     {/if}
   </section>
+  <!-- Task Boards Section -->
+  <section class="space-y-4" data-onboarding="boards-section">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="ds-section-title text-ink">{tr('nav.boards') ?? 'Papan Tugas'}</h2>
+        <p class="ds-caption text-mute">{tr('taskboard.description') ?? 'Papan pengurusan tugas dan projek pasukan.'}</p>
+      </div>
+      <Button href="/dashboard/boards" variant="ghost" size="sm">
+        <span>{tr('taskboard.allBoards', { count: taskBoards.length }) ?? `Semua (${taskBoards.length})`}</span>
+        <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
+      </Button>
+    </div>
 
-  <!-- Team & Shortcuts (Subtle descriptions added) -->
-  <div class="grid gap-5 lg:grid-cols-2">
-    <section class="flex flex-col rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4" data-onboarding="team-section">
-      <div class="space-y-3">
-        <div class="space-y-1">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} class="text-primary" />
-              <h2 class="ds-section-title text-ink">{tr('home.teamTitle')}</h2>
+    {#if loadingData}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each [1, 2, 3] as _i}
+          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
+            <Skeleton shape="rect" class="h-1 w-7 rounded-full" />
+            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
+            <Skeleton shape="rect" class="h-4 w-24 rounded-md" />
+            <div class="flex gap-2 pt-2">
+              <Skeleton shape="rect" class="h-8 flex-1 rounded-full" />
             </div>
-            {#if loadingData}
-              <Skeleton shape="rect" class="h-4 w-16 rounded-md" />
-            {:else}
-              <span class="ds-caption text-mute">{tr('home.memberCount', { count: members.length })}</span>
-            {/if}
           </div>
-          <p class="ds-caption text-mute">{tr('home.teamDescription')}</p>
-        </div>
+        {/each}
+      </div>
+    {:else if taskBoards.length === 0}
+      <EmptyStateBlock
+        title={tr('taskboard.empty') ?? 'Tiada papan tugas'}
+        description={tr('taskboard.emptyDesc') ?? 'Cipta papan tugas pertama untuk mengurus kerja pasukan anda.'}
+        actionLabel={tr('taskboard.create') ?? 'Cipta papan'}
+        onaction={() => goto('/dashboard/boards')}
+      />
+    {:else}
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each taskBoards.slice(0, 3) as board (board.id)}
+          <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
+            <div>
+              <!-- 4px Signature Tag Strip (Sky/Cyan for Board) -->
+              <div class="mb-3 h-1 w-7 rounded-full bg-sky-500"></div>
 
-        {#if loadingData}
-          <div class="space-y-3 py-1">
-            {#each [1, 2, 3] as _i}
-              <div class="flex items-center justify-between gap-3 py-1.5">
-                <div class="flex items-center gap-2.5 min-w-0">
-                  <Skeleton shape="circle" class="size-8 rounded-full" />
-                  <div class="space-y-1.5 min-w-0">
-                    <Skeleton shape="rect" class="h-4 w-28 rounded-md" />
-                    <Skeleton shape="rect" class="h-3 w-36 rounded-md" />
-                  </div>
+              <a
+                href="/dashboard/boards/{board.id}"
+                class="block text-base sm:text-lg font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
+              >
+                {board.name}
+              </a>
+              {#if board.description}
+                <p class="ds-caption text-mute line-clamp-2 mt-1">{board.description}</p>
+              {/if}
+              <div class="mt-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <Avatar name={board.ownerName ?? tr('common.pic')} size={22} />
+                  <span class="ds-caption text-mute">{board.ownerName ?? tr('home.noAssignee')}</span>
                 </div>
-                <Skeleton shape="rect" class="h-5 w-12 rounded-full" />
+                {#if board.taskCount != null}
+                  <Badge tone="queued" variant="soft" class="text-[10px] px-2 py-0.5">
+                    {board.taskCount} {tr('taskboard.cardCount') ?? 'tugas'}
+                  </Badge>
+                {/if}
               </div>
-            {/each}
-          </div>
-        {:else if members.length === 0}
-          <p class="ds-body py-4 text-center text-mute">{tr('home.noOtherMembers')}</p>
-        {:else}
-          <ul class="divide-y divide-hairline">
-            {#each members.slice(0, 4) as member (member.id)}
-              <li class="flex items-center justify-between gap-3 py-2.5">
-                <div class="flex items-center gap-2.5 min-w-0">
-                  <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={30} />
-                  <div class="min-w-0">
-                    <p class="truncate text-base font-semibold text-ink">{member.name}</p>
-                    <p class="truncate text-[13px] text-mute">{member.email}</p>
-                  </div>
-                </div>
-                <Badge tone={member.role === 'owner' ? 'done' : 'idle'}>{member.role === 'owner' ? tr('common.owner') : tr('common.member')}</Badge>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
+            </div>
 
-      <div class="border-t border-hairline pt-3">
-        <Button href="/dashboard/members" variant="ghost" size="sm" class="w-full justify-center text-primary">
-          <span>{tr('home.manageTeam')}</span>
-        </Button>
+            <div class="mt-5 flex items-center gap-2 border-t border-hairline pt-3.5">
+              <Button href="/dashboard/boards/{board.id}" variant="primary" size="sm" class="flex-1">
+                <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
+                <span>{tr('home.openBoard')}</span>
+              </Button>
+            </div>
+          </article>
+        {/each}
       </div>
-    </section>
+    {/if}
+  </section>
 
-    <!-- Operational Shortcuts -->
-    <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card space-y-4" data-onboarding="shortcuts-section">
-      <div class="space-y-1">
-        <div class="flex items-center gap-2">
-          <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} class="text-primary" />
-          <h2 class="ds-section-title text-ink">{tr('home.shortcuts')}</h2>
-        </div>
-        <p class="ds-caption text-mute">{tr('home.shortcutsDescription')}</p>
-      </div>
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <a
-          href="/dashboard/workflows"
-          class="flex flex-col rounded-xl border border-hairline bg-lane p-4 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
-        >
-          <div class="flex size-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
-            <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
-          </div>
-          <span class="mt-2.5 text-base font-semibold text-ink leading-snug">{tr('home.stageSetup')}</span>
-          <p class="ds-caption mt-1 text-mute">{tr('home.stageSetupDescription')}</p>
-        </a>
-
-        <a
-          href="/dashboard/members"
-          class="flex flex-col rounded-xl border border-hairline bg-lane p-4 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
-        >
-          <div class="flex size-9 items-center justify-center rounded-lg bg-status-queued-soft text-status-queued-ink">
-            <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
-          </div>
-          <span class="mt-2.5 text-base font-semibold text-ink leading-snug">{tr('home.inviteStaff')}</span>
-          <p class="ds-caption mt-1 text-mute">{tr('home.inviteStaffDescription')}</p>
-        </a>
-
-        <a
-          href="/dashboard/settings"
-          class="flex flex-col rounded-xl border border-hairline bg-lane p-4 transition-all duration-150 hover:border-hairline-strong hover:bg-card hover:shadow-card"
-        >
-          <div class="flex size-9 items-center justify-center rounded-lg bg-status-done-soft text-status-done-ink">
-            <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
-          </div>
-          <span class="mt-2.5 text-base font-semibold text-ink leading-snug">{tr('home.settings')}</span>
-          <p class="ds-caption mt-1 text-mute">{tr('home.settingsDescription')}</p>
-        </a>
-      </div>
-    </section>
-  </div>
 </div>
 
 <!-- Modal Dialog: Buat Workflow Baru -->

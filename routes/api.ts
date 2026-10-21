@@ -13,6 +13,7 @@ import { createWajomRoutes } from './wajom';
  import { createGoogleSheetsRoutes } from './google-sheets';
 import { createOnboardingRoutes } from './onboarding';
 import { createAdminRoutes } from './admin';
+import { createMobileRoutes } from './mobile';
 
 /**
  * The API surface. `createApiApp()` provides the `/api` prefix plus shared
@@ -34,6 +35,7 @@ export const buildApi = () =>
      .use(createGoogleSheetsRoutes())
     .use(createOnboardingRoutes())
     .use(createAdminRoutes())
+    .use(createMobileRoutes())
 
 export type Api = ReturnType<typeof buildApi>;
 

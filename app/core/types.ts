@@ -27,6 +27,7 @@ export interface Ctx<Body = unknown, Params = Record<string, string>> {
   query: Record<string, string | undefined>;
   set: { status?: number | string; headers: Record<string, string | number> };
   cookie: Record<string, CookieJar>;
+  request?: Request;
   user?: User | null;
   workspace?: Workspace | null;
   membership?: WorkspaceMembership | null;

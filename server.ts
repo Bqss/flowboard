@@ -14,9 +14,10 @@
 import { join, normalize } from 'node:path';
 import { api } from '@routes/api';
 import { env } from '@config/env';
-import { startScheduler } from '@services/scheduler';
+import { getUserByMobileAccessToken } from '@services/mobile-auth';
 import { getUserBySession } from '@services/auth';
-import { subscribe, unsubscribe, type ChatSocket } from '@services/chatSocket';
+import { startScheduler } from '@services/scheduler';
+import { subscribe, unsubscribe, handleClientMessage, type ChatSocket } from '@services/chatSocket';
 
 // Resolved at runtime (after `vite build`). The computed specifier keeps tsc
 // from type-checking the generated file, which may not exist at check time.
@@ -30,7 +31,8 @@ const { getHandler } = (await import(handlerPath)) as {
 const { fetch: svelteFetch } = getHandler();
 
 const server = Bun.serve<{
-  sessionId: string;
+  sessionId?: string;
+  accessToken?: string;
   workspaceId: string;
 }>({
   port: env.port,
@@ -54,13 +56,17 @@ const server = Bun.serve<{
     if (pathname === '/api/chat/ws') {
       const cookieHeader = request.headers.get('cookie') ?? '';
       const sessionId = parseCookie(cookieHeader, env.sessionCookie);
+      const authorization = request.headers.get('authorization');
+      const accessToken = authorization?.startsWith('Bearer ')
+        ? authorization.slice(7).trim() || undefined
+        : searchParams.get('token') || undefined;
       const workspaceId = searchParams.get('workspaceId');
-      if (!sessionId || !workspaceId) {
+      if ((!sessionId && !accessToken) || !workspaceId) {
         return new Response('Missing auth', { status: 401 });
       }
       // Verify session asynchronously — Bun upgrade is sync, so we use the
       // promise-based approach: upgrade first, validate in `open`.
-      if (srv.upgrade(request, { data: { sessionId, workspaceId } })) {
+      if (srv.upgrade(request, { data: { sessionId, accessToken, workspaceId } })) {
         return new Response(null, { status: 101 });
       }
       return new Response('Upgrade failed', { status: 400 });
@@ -73,18 +79,20 @@ const server = Bun.serve<{
   },
   websocket: {
     async open(ws) {
-      const { sessionId, workspaceId } = ws.data;
-      const user = await getUserBySession(sessionId);
+      const { sessionId, accessToken, workspaceId } = ws.data;
+      const user = accessToken
+        ? await getUserByMobileAccessToken(accessToken)
+        : await getUserBySession(sessionId);
       if (!user) {
         ws.close(4001, 'Unauthorized');
         return;
       }
-      subscribe(ws as unknown as ChatSocket, workspaceId, user.id);
-      ws.send(JSON.stringify({ type: 'connected', userId: user.id }));
+      const { onlineUsers } = subscribe(ws as unknown as ChatSocket, workspaceId, user.id);
+      ws.send(JSON.stringify({ type: 'connected', userId: user.id, onlineUsers }));
+      ws.send(JSON.stringify({ type: 'presence:state', userIds: onlineUsers }));
     },
-    message(ws, message) {
-      // Client messages are ignored — all events are server-pushed
-      // Keep alive / ping handling is automatic via Bun
+    async message(ws, message) {
+      await handleClientMessage(ws as unknown as ChatSocket, message);
     },
     close(ws) {
       unsubscribe(ws as unknown as ChatSocket);

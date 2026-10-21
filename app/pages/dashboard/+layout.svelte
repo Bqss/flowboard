@@ -30,7 +30,9 @@
     Menu01Icon,
     SquareDashedKanbanIcon,
     UserSwitchIcon,
-    Add01Icon
+    Add01Icon,
+    BubbleChatIcon,
+    PanelLeftOpenIcon
   } from '@hugeicons/core-free-icons';
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
@@ -57,6 +59,102 @@
   let createWorkspaceOpen = $state(false);
   let newWorkspaceName = $state('');
   let createWorkspaceError = $state('');
+  let unreadMessageCount = $state(0);
+  let unreadRefreshSequence = 0;
+
+  async function loadUnreadMessages(workspaceId: string) {
+    const requestSequence = ++unreadRefreshSequence;
+    try {
+      const result = await api.getChatUnread(workspaceId);
+      if (requestSequence === unreadRefreshSequence) {
+        unreadMessageCount = result.unread;
+      }
+    } catch {
+      // Keep the last known count when the authoritative refresh fails.
+    }
+  }
+
+  $effect(() => {
+    const workspaceId = data.workspace?.id;
+    const userId = data.user?.id;
+
+    if (!workspaceId || !userId) {
+      unreadRefreshSequence += 1;
+      unreadMessageCount = 0;
+      return;
+    }
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryCount = 0;
+    const maxRetries = 5;
+
+    const scheduleReconnect = () => {
+      if (disposed || retryCount >= maxRetries) return;
+      retryCount += 1;
+      reconnectTimer = setTimeout(connect, 2500 * retryCount);
+    };
+
+    const connect = () => {
+      if (disposed) return;
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = import.meta.env.DEV ? `${window.location.hostname}:3001` : window.location.host;
+      const url = `${protocol}//${wsHost}/api/chat/ws?workspaceId=${encodeURIComponent(workspaceId)}`;
+
+      try {
+        socket = new WebSocket(url);
+      } catch {
+        scheduleReconnect();
+        return;
+      }
+
+      socket.onopen = () => {
+        retryCount = 0;
+        void loadUnreadMessages(workspaceId);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as {
+            type?: string;
+            userId?: string;
+            message?: { senderId?: string };
+          };
+
+          const senderId = payload.message?.senderId;
+          if (payload.type === 'message:new' && senderId && senderId !== userId) {
+            unreadMessageCount += 1;
+          } else if (payload.type === 'read' && payload.userId === userId) {
+            void loadUnreadMessages(workspaceId);
+          }
+        } catch {
+          // Ignore malformed socket payloads.
+        }
+      };
+
+      socket.onerror = () => {
+        socket?.close();
+      };
+
+      socket.onclose = () => {
+        if (!disposed) scheduleReconnect();
+      };
+    };
+
+    void loadUnreadMessages(workspaceId);
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+    };
+  });
 
   $effect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -110,6 +208,13 @@
       icon: homeIcon
     },
     {
+      href: '/dashboard/chat',
+      label: tr('nav.messages'),
+      active: $page.url.pathname.startsWith('/dashboard/chat'),
+      badge: unreadMessageCount > 0 ? unreadMessageCount : undefined,
+      icon: messagesIcon
+    },
+    {
       href: '/dashboard/workflows',
       label: tr('nav.workflows'),
       active: $page.url.pathname.startsWith('/dashboard/workflows'),
@@ -126,8 +231,21 @@
       label: tr('nav.members'),
       active: $page.url.pathname.startsWith('/dashboard/members'),
       icon: usersIcon
-    },
+    }
   ]);
+
+  const isChatPage = $derived($page.url.pathname.startsWith('/dashboard/chat'));
+  const isBoardDetailPage = $derived(
+    $page.url.pathname.startsWith('/dashboard/boards/') &&
+    $page.url.pathname !== '/dashboard/boards'
+  );
+  const isWorkflowDetailPage = $derived(
+    $page.url.pathname.startsWith('/dashboard/workflows/') &&
+    $page.url.pathname !== '/dashboard/workflows' &&
+    $page.url.pathname !== '/dashboard/workflows/new-ai' &&
+    !$page.url.pathname.endsWith('/stats') &&
+    !$page.url.pathname.endsWith('/settings')
+  );
 
   const settingsItems = $derived([
     {
@@ -230,7 +348,7 @@
     try {
       await api.switchWorkspace(workspaceId);
       await invalidateAll();
-      await goto('/dashboard');
+      await goto('/dashboard/chat');
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : tr('shell.switchWorkspace'));
     } finally {
@@ -369,6 +487,11 @@
       disabled: true
     },
     {
+      label: tr('shell.switchWorkspace') || 'Tukar ruang kerja',
+      icon: buildingIcon,
+      submenu: workspaceMenuItems
+    },
+    {
       label: tr('shell.switchAccount'),
       icon: userSwitchIcon,
       submenu: switchAccountMenuItems
@@ -414,6 +537,9 @@
 {/snippet}
 {#snippet boardsIcon()}
   <HugeiconsIcon icon={SquareDashedKanbanIcon} size={20} strokeWidth={1.8} />
+{/snippet}
+{#snippet messagesIcon()}
+  <HugeiconsIcon icon={BubbleChatIcon} size={20} strokeWidth={1.8} />
 {/snippet}
 
 {#snippet settingsIcon()}
@@ -479,13 +605,11 @@
       adminMode: tr('nav.adminMode'),
       exitAdmin: tr('nav.exitAdmin'),
       signOut: tr('shell.signOut'),
-      search: tr('shell.search'),
       addWorkspace: tr('shell.addWorkspace'),
-      noResults: tr('common.noResults')
     }}
   />
 
-  <div class="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
+  <div class="flex h-screen min-w-0 flex-1 flex-col {isChatPage || isBoardDetailPage || isWorkflowDetailPage ? 'overflow-hidden' : 'overflow-y-auto'} transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
     <Topbar
       title={data.workspace?.name ?? 'actjom'}
       showSearch={false}
@@ -504,26 +628,22 @@
             <HugeiconsIcon icon={Menu01Icon} size={20} strokeWidth={2} />
           </button>
 
-          {#if canSwitchWorkspace}
-            <DropdownMenu items={workspaceMenuItems} align="start" label={tr('shell.chooseWorkspace')}>
-              {#snippet trigger({ open, toggle })}
-                <button
-                  type="button"
-                  onclick={toggle}
-                  class="flex max-w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-                  aria-expanded={open}
-                  aria-label={tr('shell.switchWorkspace')}
-                  disabled={switchingWorkspace}
-                >
-                  <span class="truncate text-sm font-semibold text-ink sm:text-base sm:font-semibold">
-                    {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'actjom')}
-                  </span>
-                  <HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8} class="shrink-0 text-mute" />
-                </button>
-              {/snippet}
-            </DropdownMenu>
-          {:else}
-            <h2 class="truncate text-sm font-semibold text-ink sm:text-base sm:font-semibold">{data.workspace?.name ?? 'actjom'}</h2>
+          {#if sidebarCollapsed}
+            <button
+              type="button"
+              onclick={toggleSidebar}
+              class="hidden size-9 shrink-0 items-center justify-center rounded-lg text-mute transition-colors hover:bg-canvas-sunken hover:text-ink md:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
+              aria-label="Kembangkan sidebar"
+              title="Kembangkan sidebar (⌘B)"
+            >
+              <HugeiconsIcon icon={PanelLeftOpenIcon} size={18} strokeWidth={1.8} />
+            </button>
+          {/if}
+
+          {#if !isBoardDetailPage && !isWorkflowDetailPage}
+            <h2 class="truncate text-sm font-semibold text-ink sm:text-base sm:font-semibold">
+              {switchingWorkspace ? tr('shell.switchingWorkspace') : (data.workspace?.name ?? 'actjom')}
+            </h2>
           {/if}
         </div>
       {/snippet}
@@ -599,29 +719,57 @@
       {/snippet}
     </Topbar>
 
-    <main class="flex-1 bg-canvas px-4 pt-6 pb-8 sm:px-6 md:px-8 md:pt-16 md:pb-10">
-      <div class="mx-auto w-full max-w-[1280px]">
-        <OnboardingProvider>
-          {@render children()}
-        </OnboardingProvider>
+    {#if isChatPage}
+      <main class="flex min-h-0 flex-1 flex-col overflow-hidden bg-canvas p-0">
+        <div class="flex h-full w-full min-h-0 flex-1 flex-col">
+          <OnboardingProvider>
+            {@render children()}
+          </OnboardingProvider>
+        </div>
+      </main>
+    {:else if isBoardDetailPage || isWorkflowDetailPage}
+      <div class="flex min-h-0 flex-1 overflow-hidden">
+        <main class="flex-1 min-w-0 flex flex-col overflow-hidden bg-canvas p-0">
+          <div class="flex h-full w-full min-h-0 flex-1 flex-col">
+            <OnboardingProvider>
+              {@render children()}
+            </OnboardingProvider>
+          </div>
+        </main>
+
+        {#if data.workspace?.id && data.user}
+          <ChatDock
+            workspaceId={data.workspace.id}
+            userId={data.user.id}
+            userName={data.user.name}
+            userAvatarUrl={data.user.avatarUrl ?? null}
+          />
+        {/if}
       </div>
-    </main>
-  </div>
+    {:else}
+      <div class="flex min-h-0 flex-1 overflow-hidden">
+        <main class="flex-1 min-w-0 overflow-y-auto bg-canvas px-3.5 pt-4 pb-8 sm:px-6 md:px-8 md:pt-16 md:pb-10">
+          <div class="mx-auto w-full max-w-[1280px]">
+            <OnboardingProvider>
+              {@render children()}
+            </OnboardingProvider>
+          </div>
+        </main>
 
-
-  <div class="fixed bottom-4 right-4 z-[210] flex items-end gap-2 sm:bottom-6 sm:right-6">
-    {#if data.workspace?.id && data.user}
-      <ChatDock
-        workspaceId={data.workspace.id}
-        userId={data.user.id}
-        userName={data.user.name}
-        userAvatarUrl={data.user.avatarUrl ?? null}
-      />
-    {/if}
-    {#if challengeData}
-      <ChallengeWidget challenges={challengeData.challenges} labels={challengeData.labels} />
+        {#if data.workspace?.id && data.user}
+          <ChatDock
+            workspaceId={data.workspace.id}
+            userId={data.user.id}
+            userName={data.user.name}
+            userAvatarUrl={data.user.avatarUrl ?? null}
+          />
+        {/if}
+      </div>
     {/if}
   </div>
+  {#if challengeData && !isChatPage}
+    <ChallengeWidget challenges={challengeData.challenges} labels={challengeData.labels} />
+  {/if}
   <Toaster />
 
   <Dialog

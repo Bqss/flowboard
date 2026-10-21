@@ -20,6 +20,34 @@ export const LoginSchema = t.Object({
   password: t.String({ minLength: 1 })
 });
 
+export const MobileLoginSchema = t.Intersect([
+  LoginSchema,
+  t.Object({
+    deviceName: t.Optional(t.String({ maxLength: 120 })),
+    platform: t.Optional(t.String({ maxLength: 40 }))
+  })
+]);
+
+export const MobileRegisterSchema = t.Intersect([
+  RegisterSchema,
+  t.Object({
+    deviceName: t.Optional(t.String({ maxLength: 120 })),
+    platform: t.Optional(t.String({ maxLength: 40 }))
+  })
+]);
+
+export const MobileRefreshSchema = t.Object({
+  refreshToken: t.String({ minLength: 20, maxLength: 300 }),
+  deviceName: t.Optional(t.String({ maxLength: 120 })),
+  platform: t.Optional(t.String({ maxLength: 40 }))
+});
+
+export const MobileGoogleSchema = t.Object({
+  accessToken: t.String({ minLength: 1, maxLength: 4096 }),
+  deviceName: t.Optional(t.String({ maxLength: 120 })),
+  platform: t.Optional(t.String({ maxLength: 40 }))
+});
+
 export const ChangePasswordSchema = t.Object({
   currentPassword: t.String({ minLength: 1 }),
   newPassword: t.String({ minLength: 8 })
@@ -49,6 +77,21 @@ export const WorkspaceIdParam = t.Object({
 export const WorkspaceMemberParam = t.Object({
   workspaceId: t.String({ format: 'uuid' }),
   userId: t.String({ format: 'uuid' })
+});
+
+export const WorkspaceMemberGroupParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  groupId: t.String({ format: 'uuid' })
+});
+
+export const CreateWorkspaceMemberGroupSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  memberIds: t.Array(t.String({ format: 'uuid' }), { minItems: 1, maxItems: 100 })
+});
+
+export const UpdateWorkspaceMemberGroupSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+  memberIds: t.Optional(t.Array(t.String({ format: 'uuid' }), { minItems: 1, maxItems: 100 }))
 });
 
 export const ChatConversationParam = t.Object({
@@ -163,6 +206,7 @@ export const WorkflowCardItemParam = t.Object({
 export const CreateWorkflowSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
@@ -178,6 +222,7 @@ export const CreateWorkflowSchema = t.Object({
 export const UpdateWorkflowSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
@@ -234,6 +279,7 @@ const ChecklistActionDraftSchema = t.Object({
 
 export const WorkflowDraftSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
+  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   stages: t.Array(
     t.Object({
       name: t.String({ minLength: 1, maxLength: 120 }),
@@ -342,6 +388,10 @@ export const ToggleChecklistItemSchema = t.Object({
   done: t.Boolean()
 });
 
+export const AddCardChecklistSchema = t.Object({
+  label: t.String({ minLength: 1, maxLength: 500 }),
+  required: t.Optional(t.Boolean())
+});
 const WajomToolLiteral = t.Union([
   t.Literal('get_onboarding_status'),
   t.Literal('register_customer'),
@@ -623,6 +673,12 @@ export const TaskBoardTaskParam = t.Object({
   taskId: t.String({ format: 'uuid' })
 });
 
+export const TaskBoardLabelParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  boardId: t.String({ format: 'uuid' }),
+  labelId: t.String({ format: 'uuid' })
+});
+
 export const TaskBoardCommentParam = t.Object({
   workspaceId: t.String({ format: 'uuid' }),
   boardId: t.String({ format: 'uuid' }),
@@ -632,12 +688,14 @@ export const TaskBoardCommentParam = t.Object({
 
 export const CreateTaskBoardSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
-  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()]))
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()]))
 });
 
 export const UpdateTaskBoardSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
-  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()]))
+  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()]))
 });
 
 export const CreateTaskColumnSchema = t.Object({
@@ -650,27 +708,49 @@ export const UpdateTaskColumnSchema = t.Object({
   color: t.Optional(t.String({ minLength: 1, maxLength: 50 }))
 });
 
+export const CreateTaskLabelSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 50 }),
+  color: t.Optional(t.String({ minLength: 1, maxLength: 32 }))
+});
+
+export const UpdateTaskLabelSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+  color: t.Optional(t.String({ minLength: 1, maxLength: 32 }))
+});
+
 export const ReorderTaskColumnsSchema = t.Object({
   columnIds: t.Array(t.String({ format: 'uuid' }))
 });
-
+const TaskRecurrenceSchema = t.Union([t.Literal('never'), t.Literal('daily'), t.Literal('weekly')]);
+const TaskRecurrenceDaysSchema = t.Array(t.Integer({ minimum: 0, maximum: 6 }), { maxItems: 7 });
 export const CreateTaskSchema = t.Object({
   columnId: t.Optional(t.String({ format: 'uuid' })),
   title: t.String({ minLength: 1, maxLength: 500 }),
-  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  description: t.Optional(t.Union([t.String({ maxLength: 10000 }), t.Null()])),
   priority: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
+  labels: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 50 }), { maxItems: 20 })),
   assigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
-  dueAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()]))
+  startAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()])),
+  dueAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()])),
+  recurrence: t.Optional(TaskRecurrenceSchema),
+  recurrenceDays: t.Optional(TaskRecurrenceDaysSchema)
 });
 
 export const UpdateTaskSchema = t.Object({
   title: t.Optional(t.String({ minLength: 1, maxLength: 500 })),
-  description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  description: t.Optional(t.Union([t.String({ maxLength: 10000 }), t.Null()])),
   priority: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
+  labels: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 50 }), { maxItems: 20 })),
   assigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
-  dueAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()]))
+  startAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()])),
+  dueAt: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()])),
+  recurrence: t.Optional(TaskRecurrenceSchema),
+  recurrenceDays: t.Optional(TaskRecurrenceDaysSchema)
 });
 
+export const CompleteTaskSchema = t.Object({
+  completed: t.Boolean()
+});
 export const MoveTaskSchema = t.Object({
   columnId: t.String({ format: 'uuid' }),
   position: t.Optional(t.Integer({ minimum: 0 }))
@@ -682,6 +762,11 @@ export const CreateTaskCommentSchema = t.Object({
 
 export const TaskAttachmentSchema = t.Object({
   file: t.File()
+});
+
+export const TaskAttachmentLinkSchema = t.Object({
+  url: t.String({ minLength: 1, maxLength: 2000 }),
+  displayText: t.Optional(t.String({ maxLength: 200 }))
 });
 
 export const TaskBoardAttachmentParam = t.Object({

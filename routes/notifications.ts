@@ -6,8 +6,8 @@ import { NotificationIdParam, UpdateNotificationSettingsSchema, WorkspaceIdParam
 
 export const createNotificationsRoutes = () => {
   const workspaceMemberGuard = new Elysia()
-    .derive({ as: 'scoped' }, async ({ cookie, params }) =>
-      resolveWorkspaceMember(cookie, params.workspaceId)
+    .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+      resolveWorkspaceMember(cookie, params.workspaceId, request)
     )
     .onBeforeHandle({ as: 'scoped' }, (ctx) => {
       const { workspace, membership, set } = ctx as typeof ctx & {

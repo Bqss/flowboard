@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { cn } from '$lib/utils.js';
   import {
@@ -6,10 +7,9 @@
     ApiError,
     type ApiCardDetail,
     type ApiWorkflow,
-    type ApiDashboardStats,
     type ApiWorkspaceMember,
     type ApiBoardColumn,
-    type ApiWorkflowStats
+    type ApiWorkflowSetupStage
   } from '$lib/api/client';
   import { parseCsvHeader, autoDetectColumns } from '$lib/csv.js';
   import { dashboardText, dashboardIntlLocale } from '$lib/i18n/dashboard.js';
@@ -21,47 +21,53 @@
     Input,
     Skeleton,
     Avatar,
-    ProgressBar
+    ProgressBar,
+    Tooltip
   } from '$lib/components/atoms/index.js';
   import {
     FormField,
     EmptyStateBlock,
     Breadcrumb,
     SearchInput,
-    Tabs,
     CopyToClipboard,
-    DateRangePicker,
-    StatCard,
+    TaskPicPicker,
+    type TaskPicOption,
+    DropdownMenu,
     toast
   } from '$lib/components/molecules/index.js';
-  import { ConfirmDialog, Dialog, KanbanBoard, Sheet, DataTable } from '$lib/components/organisms/index.js';
+  import {
+    ConfirmDialog,
+    Dialog,
+    KanbanBoard,
+    Sheet,
+    WorkflowStageEditor
+  } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Add01Icon,
+    ArrowDown01Icon,
+    BubbleChatIcon,
     Upload04Icon,
-    Settings01Icon,
     Settings02Icon,
-    KanbanIcon,
+    Edit02Icon,
     DashboardSquare02Icon,
     CheckmarkCircle02Icon,
-    CheckListIcon,
+    ArrowLeft01Icon,
     ArrowRight01Icon,
     WhatsappIcon,
-    Layers01Icon,
     Delete02Icon,
-    AlertCircleIcon,
-    ClockAlertIcon,
-    UserGroupIcon,
-    Calendar03Icon,
-    Tick02Icon,
     Alert02Icon,
     Clock01Icon,
-    BarChartIcon,
-    SparklesIcon,
-    File02Icon
+    Tick02Icon,
+    File02Icon,
+    SmartPhone01Icon,
+    PackageIcon,
+    MoreHorizontalIcon,
+    Cancel01Icon
   } from '@hugeicons/core-free-icons';
   import type { KanbanColumn } from '$lib/components/organisms/shared.js';
   import type { LayoutData } from '../../$types';
+
   let { data }: { data: LayoutData } = $props();
 
   const tr = (key: string, values?: Record<string, string | number>) =>
@@ -72,70 +78,120 @@
   let loadingData = $state(true);
   let workflow = $state<ApiWorkflow | null>(null);
   let board = $state<ApiBoardColumn[]>([]);
-  const canManage = $derived(data.workspace?.role === 'owner' || workflow?.ownerId === data.user?.id);
-
+  let stages = $state<ApiWorkflowSetupStage[]>([]);
+  let allWorkflows = $state<ApiWorkflow[]>([]);
   let members = $state<ApiWorkspaceMember[]>([]);
+  let availableTags = $state<string[]>([]);
+  let loadingMoreStages = $state<Record<string, boolean>>({});
+  const boardPageSize = 12;
+  let boardRequestRevision = 0;
+  let lastBoardFilterKey: string | null = null;
 
-  // Workflow statistics
-  let stats = $state<ApiWorkflowStats | null>(null);
-  let activityFromDate = $state<string>('');
-  let activityToDate = $state<string>('');
-  let statsLoading = $state(false);
-  let activeTab = $state<'stats' | 'kanban' | 'table'>('stats');
+  const canManage = $derived(data.workspace?.role === 'owner' || workflow?.ownerId === data.user?.id);
+  const canManageCard = (card?: { assigneeId?: string | null } | null) =>
+    canManage || (card?.assigneeId != null && card.assigneeId === data.user?.id);
 
-  function toISO(date: Date) {
-    const m = `${date.getMonth() + 1}`.padStart(2, '0');
-    const d = `${date.getDate()}`.padStart(2, '0');
-    return `${date.getFullYear()}-${m}-${d}`;
+  // Edit Mode state (persediaan peringkat / pipeline editor)
+  let isEditMode = $state(false);
+  let openCreateStage = $state<() => void>();
+
+  function enterEditMode() {
+    isEditMode = true;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', 'edit');
+      window.history.replaceState({}, '', url.toString());
+    }
   }
 
-  function daysBetween(from: string, to: string) {
-    const f = new Date(from);
-    const t = new Date(to);
-    return Math.max(1, Math.ceil((t.getTime() - f.getTime()) / 86400000));
+  function exitEditMode() {
+    isEditMode = false;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('mode');
+      window.history.replaceState({}, '', url.toString());
+    }
+    loadWorkflowBoardData();
   }
-
-  // Initialize default range: last 30 days
-  const _today = new Date();
-  const _30ago = new Date();
-  _30ago.setDate(_30ago.getDate() - 29);
-  activityFromDate = toISO(_30ago);
-  activityToDate = toISO(_today);
-
-  function activityRangeDays() { return daysBetween(activityFromDate, activityToDate); }
 
   $effect(() => {
-    const urlTab = page.url.searchParams.get('tab');
-    if (urlTab === 'kanban') {
-      activeTab = 'kanban';
-    } else if (urlTab === 'table') {
-      activeTab = 'table';
-    } else if (urlTab === 'stats') {
-      activeTab = 'stats';
+    const mode = page.url.searchParams.get('mode');
+    if (mode === 'edit') {
+      isEditMode = true;
     }
-    // Notify onboarding that tab content is ready
+    // Notify onboarding that content is ready
     if (!loadingData) {
       requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
       });
     }
   });
+  const mobileMenuItems = $derived([
+    ...(canManage && !isEditMode
+      ? [
+          {
+            label: 'Mode Edit Peringkat',
+            icon: editIconSnippet,
+            onselect: enterEditMode
+          }
+        ]
+      : []),
+    {
+      label: tr('board.stats'),
+      icon: statsIconSnippet,
+      onselect: () => goto(`/dashboard/workflows/${workflowId}/stats`)
+    },
+    {
+      label: tr('setup.workflowSettings'),
+      icon: settingsIconSnippet,
+      onselect: () => goto(`/dashboard/workflows/${workflowId}/settings`)
+    },
+    {
+      label: tr('board.importCsv'),
+      icon: importIconSnippet,
+      separatorBefore: true,
+      onselect: () => (importOpen = true)
+    }
+  ]);
+
+
+  // Filter state for Kanban Board
   let searchQuery = $state('');
   let selectedMemberFilter = $state<string>('all');
   let selectedTagFilter = $state<string>('all');
+
+  const boardFilterKey = () =>
+    JSON.stringify([searchQuery.trim(), selectedMemberFilter, selectedTagFilter]);
+  const boardRequestOptions = (stageId?: string, offset?: number) => ({
+    limit: boardPageSize,
+    ...(stageId ? { stageId, offset } : {}),
+    search: searchQuery.trim() || undefined,
+    assigneeId: selectedMemberFilter,
+    tag: selectedTagFilter
+  });
+
   // Sheet / Card detail state
   let selectedCardId = $state<string | null>(null);
   let isSheetOpen = $derived(selectedCardId !== null);
   let cardDetail = $state<ApiCardDetail | null>(null);
+  const canManageCurrentCard = $derived(canManageCard(cardDetail?.card));
   let detailLoading = $state(false);
   let detailError = $state<string | null>(null);
-  let moveLoading = $state(false);
   let relayLoading = $state(false);
   let assigneeLoading = $state(false);
-  let boardMoveLoading = $state(false);
   let deleteLoading = $state(false);
   let cardToDelete = $state<{ id: string; name: string } | null>(null);
-
+  let picPickerOpen = $state(false);
+  const assignedMember = $derived(
+    members.find((m) => m.id === cardDetail?.card.assigneeId)
+  );
+  const picOptions = $derived<TaskPicOption[]>(
+    members.map((m) => ({
+      value: m.id,
+      label: m.name,
+      avatarUrl: m.avatarUrl ?? undefined
+    }))
+  );
 
   // Modal: Tambah Pelanggan state
   let createOpen = $state(false);
@@ -162,38 +218,111 @@
   });
   let importMode = $state<'skip' | 'update'>('skip');
   let importResult = $state<{
-    created: number;
+    total: number;
+    inserted: number;
     skipped: number;
     updated: number;
     errors: Array<{ row: number; reason: string }>;
   } | null>(null);
 
-  // Table pagination & sort state
-  let tablePage = $state(1);
-
   async function loadWorkflowBoardData() {
     if (!data.workspace?.id || !workflowId) return;
     loadingData = true;
+    const requestRevision = ++boardRequestRevision;
+    loadingMoreStages = {};
+    const options = boardRequestOptions();
+    lastBoardFilterKey = boardFilterKey();
     try {
-      const [boardRes, workflowsRes, membersRes, statsRes] = await Promise.all([
-        api.getWorkflowBoard(data.workspace.id, workflowId),
+      const [boardRes, workflowsRes, membersRes, setupRes] = await Promise.all([
+        api.getWorkflowBoard(data.workspace.id, workflowId, options),
         api.listWorkflows(data.workspace.id),
         api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
-        api.getWorkflowStats(data.workspace.id, workflowId, activityRangeDays()).catch(() => ({ stats: null }))
+        api.getWorkflowSetup(data.workspace.id, workflowId).catch(() => ({ stages: [] }))
       ]);
+      if (requestRevision !== boardRequestRevision) return;
       board = boardRes.board?.columns ?? [];
+      availableTags = boardRes.board?.tags ?? [];
+      allWorkflows = workflowsRes.workflows ?? [];
       workflow = workflowsRes.workflows?.find((w) => w.id === workflowId) ?? null;
       members = membersRes.members ?? [];
-      stats = statsRes.stats ?? null;
+      stages = setupRes.stages ?? [];
     } catch (err) {
       console.error('Failed to load workflow board data:', err);
     } finally {
-      loadingData = false;
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
-      });
+      if (requestRevision === boardRequestRevision) {
+        loadingData = false;
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+        });
+      }
     }
   }
+
+  async function reloadBoardForFilters() {
+    if (!data.workspace?.id || !workflowId) return;
+    const requestRevision = ++boardRequestRevision;
+    loadingMoreStages = {};
+    const options = boardRequestOptions();
+    lastBoardFilterKey = boardFilterKey();
+    try {
+      const boardRes = await api.getWorkflowBoard(data.workspace.id, workflowId, options);
+      if (requestRevision !== boardRequestRevision) return;
+      board = boardRes.board?.columns ?? [];
+      availableTags = boardRes.board?.tags ?? [];
+    } catch (err) {
+      console.error('Failed to filter workflow board:', err);
+    }
+  }
+
+  async function loadMoreCards(stageId: string) {
+    const column = board.find((item) => item.id === stageId);
+    if (!data.workspace?.id || !workflowId || !column?.hasMore || loadingMoreStages[stageId]) return;
+    const requestRevision = boardRequestRevision;
+    loadingMoreStages = { ...loadingMoreStages, [stageId]: true };
+    try {
+      const boardRes = await api.getWorkflowBoard(
+        data.workspace.id,
+        workflowId,
+        boardRequestOptions(stageId, column.cards.length)
+      );
+      if (requestRevision !== boardRequestRevision) return;
+      const nextPage = boardRes.board?.columns.find((item) => item.id === stageId);
+      if (!nextPage) return;
+      board = board.map((item) =>
+        item.id === stageId
+          ? {
+              ...item,
+              cards: [
+                ...item.cards,
+                ...nextPage.cards.filter((card) => !item.cards.some((loaded) => loaded.id === card.id))
+              ],
+              hasMore: nextPage.hasMore
+            }
+          : item
+      );
+    } catch (err) {
+      console.error('Failed to load more workflow cards:', err);
+    } finally {
+      if (requestRevision === boardRequestRevision) {
+        const nextLoading = { ...loadingMoreStages };
+        delete nextLoading[stageId];
+        loadingMoreStages = nextLoading;
+      }
+    }
+  }
+
+  $effect(() => {
+    const filterKey = boardFilterKey();
+    if (!data.workspace?.id || !workflowId || loadingData) return;
+    if (lastBoardFilterKey === null) {
+      lastBoardFilterKey = filterKey;
+      return;
+    }
+    if (filterKey === lastBoardFilterKey) return;
+    lastBoardFilterKey = filterKey;
+    const timer = window.setTimeout(() => void reloadBoardForFilters(), 250);
+    return () => window.clearTimeout(timer);
+  });
 
   $effect(() => {
     if (data.workspace?.id && workflowId) {
@@ -201,55 +330,68 @@
     }
   });
 
-  async function refetchStats() {
+  async function refreshBoard() {
     if (!data.workspace?.id || !workflowId) return;
-    statsLoading = true;
+    const requestRevision = ++boardRequestRevision;
+    loadingMoreStages = {};
     try {
-      const res = await api.getWorkflowStats(data.workspace.id, workflowId, activityRangeDays());
-      stats = res.stats ?? null;
-    } catch {
-      /* keep existing stats */
-    } finally {
-      statsLoading = false;
+      const boardRes = await api.getWorkflowBoard(
+        data.workspace.id,
+        workflowId,
+        boardRequestOptions()
+      );
+      if (requestRevision !== boardRequestRevision) return;
+      board = boardRes.board?.columns ?? [];
+      availableTags = boardRes.board?.tags ?? [];
+      if (selectedCardId) {
+        const { detail } = await api.getCardDetail(data.workspace.id, workflowId, selectedCardId);
+        cardDetail = detail;
+      }
+    } catch (err) {
+      console.error('Failed to refresh board:', err);
     }
   }
 
-  // Refetch stats when date range changes
-  let lastFromDate = $state('');
-  let lastToDate = $state('');
-  $effect(() => {
-    if (
-      data.workspace?.id &&
-      workflowId &&
-      (activityFromDate !== lastFromDate || activityToDate !== lastToDate)
-    ) {
-      lastFromDate = activityFromDate;
-      lastToDate = activityToDate;
-      refetchStats();
+  // Due date & card visual helpers
+  const isCardOverdue = (card: {
+    dueAt?: string | null;
+    completedAt?: string | null;
+    createdAt?: string | null;
+    stageEnteredAt?: string | null;
+    stageId?: string;
+  }) => {
+    if (card.completedAt) return false;
+    // 1. Explicit dueAt in the past
+    if (card.dueAt && new Date(card.dueAt).getTime() < Date.now()) {
+      return true;
     }
-  });
-
-
-  function cleanPhone(phone?: string | null) {
-    if (!phone) return '';
-    return phone.replace(/\D/g, '');
-  }
-
-  function resolveTone(tag?: string | null): 'urgent' | 'progress' | 'done' | 'queued' | 'neutral' {
-    if (!tag) return 'neutral';
-    const lower = tag.toLowerCase();
-    if (lower.includes('urgent') || lower.includes('darurat') || lower.includes('vip')) return 'urgent';
-    if (lower.includes('progress') || lower.includes('proses') || lower.includes('follow')) return 'progress';
-    if (lower.includes('done') || lower.includes('selesai') || lower.includes('closing')) return 'done';
-    if (lower.includes('queued') || lower.includes('pending') || lower.includes('baru')) return 'queued';
-    return 'neutral';
-  }
-
-  // --- Due date helpers ---
-  const isOverdue = (dueAt: string | null | undefined, completedAt: string | null | undefined) => {
-    if (!dueAt || completedAt) return false;
-    return new Date(dueAt).getTime() < Date.now();
+    // 2. Stage overdue reminder hours
+    const stage = stages.find((s) => s.id === card.stageId);
+    if (stage?.overdueReminderHours && stage.overdueReminderHours > 0) {
+      const entered = card.stageEnteredAt || card.createdAt;
+      if (entered && new Date(entered).getTime() + stage.overdueReminderHours * 3600 * 1000 < Date.now()) {
+        return true;
+      }
+    }
+    // 3. Workflow deadline
+    if (workflow?.deadlineValue && workflow.deadlineValue > 0 && card.createdAt) {
+      const ms = workflow.deadlineUnit === 'hours'
+        ? workflow.deadlineValue * 3600 * 1000
+        : workflow.deadlineValue * 86400 * 1000;
+      if (new Date(card.createdAt).getTime() + ms < Date.now()) return true;
+    }
+    // 4. Cards waiting in non-done stages for > 24 hours
+    const stageName = stage?.name?.toLowerCase() ?? '';
+    const isDoneStage = stageName.includes('done') || stageName.includes('selesai');
+    if (!isDoneStage && card.createdAt) {
+      const ageHours = (Date.now() - new Date(card.createdAt).getTime()) / (3600 * 1000);
+      if (ageHours >= 24) return true;
+    }
+    return false;
   };
+
+  const isOverdue = (dueAt: string | null | undefined, completedAt: string | null | undefined) =>
+    !dueAt || completedAt ? false : new Date(dueAt).getTime() < Date.now();
 
   const isDueSoon = (dueAt: string | null | undefined, completedAt: string | null | undefined) => {
     if (!dueAt || completedAt) return false;
@@ -257,7 +399,6 @@
     const now = Date.now();
     return due >= now && due - now <= 24 * 60 * 60 * 1000;
   };
-
   const formatDueDate = (dueAt: string) => {
     return new Date(dueAt).toLocaleDateString(dashboardIntlLocale($locale), {
       day: 'numeric',
@@ -271,42 +412,17 @@
   const formatDueDateShort = (dueAt: string) => {
     return new Date(dueAt).toLocaleDateString(dashboardIntlLocale($locale), {
       day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
+      month: 'short'
     });
   };
 
-  // All cards flat array
-  const allCards = $derived(
-    board.flatMap((column) =>
-      column.cards.map((c) => ({
-        ...c,
-        stageId: column.id,
-        stageName: column.name,
-        stageColor: column.color
-      }))
-    )
-  );
-
+  // Card & Kanban helpers
+  const allCards = $derived(board.flatMap((col) => col.cards));
   const totalCards = $derived(allCards.length);
 
-  // Unique tags for filter pill list
-  const availableTags = $derived(
-    Array.from(
-      new Set(
-        allCards
-          .map((c) => c.tag?.trim())
-          .filter((t): t is string => Boolean(t && t.length > 0))
-      )
-    )
-  );
-
-  // Filtered Kanban Columns
   const filteredColumns = $derived<KanbanColumn[]>(
-    board.map((column) => {
-      const filtered = column.cards.filter((card) => {
-        // Search filter
+    board.map((col) => {
+      const filtered = col.cards.filter((card) => {
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchesName = card.customerName.toLowerCase().includes(q);
@@ -314,31 +430,26 @@
           const matchesProduct = (card.product ?? '').toLowerCase().includes(q);
           const matchesTag = (card.tag ?? '').toLowerCase().includes(q);
           const matchesPic = (card.assigneeName ?? '').toLowerCase().includes(q);
-          if (!matchesName && !matchesWa && !matchesProduct && !matchesTag && !matchesPic) {
-            return false;
-          }
+          if (!matchesName && !matchesWa && !matchesProduct && !matchesTag && !matchesPic) return false;
         }
-        // Member filter
-        if (selectedMemberFilter !== 'all') {
-          if (selectedMemberFilter === 'unassigned') {
-            if (card.assigneeId) return false;
-          } else {
-            if (card.assigneeId !== selectedMemberFilter) return false;
-          }
-        }
-        // Tag filter
-        if (selectedTagFilter !== 'all') {
-          if (card.tag !== selectedTagFilter) return false;
-        }
+        if (selectedMemberFilter === 'unassigned' && card.assigneeId) return false;
+        if (selectedMemberFilter !== 'all' && selectedMemberFilter !== 'unassigned' && card.assigneeId !== selectedMemberFilter) return false;
+        if (selectedTagFilter !== 'all' && card.tag !== selectedTagFilter) return false;
         return true;
       });
 
       return {
-        id: column.id,
-        title: column.name,
+        id: col.id,
+        title: col.name,
+        color: col.color,
+        count: col.totalCount,
+        hasMore: col.hasMore,
+        loadingMore: Boolean(loadingMoreStages[col.id]),
+        order: col.position,
         items: filtered.map((card) => {
           const isDone = card.checklistTotal > 0 && card.checklistDone === card.checklistTotal;
-          const dueBadge = isOverdue(card.dueAt, card.completedAt)
+          const isLate = isCardOverdue(card);
+          const dueBadge = isLate
             ? { label: tr('board.overdue'), tone: 'urgent' as const }
             : isDueSoon(card.dueAt, card.completedAt)
               ? { label: tr('board.dueSoon'), tone: 'progress' as const }
@@ -350,12 +461,13 @@
           return {
             id: card.id,
             title: card.customerName,
-            subtitle: card.product ? `${card.product} · ${card.customerWa}` : card.customerWa,
+            subtitle: card.product ?? undefined,
+            whatsapp: card.customerWa,
             badge: card.tag ?? undefined,
             badgeTone: resolveTone(card.tag),
             assignee: card.assigneeName ?? undefined,
             progress:
-              card.checklistTotal > 0 ? `${card.checklistDone}/${card.checklistTotal} ${tr('board.progressDone')}` : undefined,
+              card.checklistTotal > 0 ? `${card.checklistDone}/${card.checklistTotal} Selesai` : undefined,
             progressDone: isDone,
             selected: selectedCardId === card.id,
             waError: card.waErrorFlag === true,
@@ -382,49 +494,6 @@
     selectedTagFilter = 'all';
   }
 
-  // Flat cards for Table View
-  const tableRows = $derived(
-    allCards.filter((card) => {
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = card.customerName.toLowerCase().includes(q);
-        const matchesWa = card.customerWa.toLowerCase().includes(q);
-        const matchesProduct = (card.product ?? '').toLowerCase().includes(q);
-        const matchesTag = (card.tag ?? '').toLowerCase().includes(q);
-        const matchesPic = (card.assigneeName ?? '').toLowerCase().includes(q);
-        if (!matchesName && !matchesWa && !matchesProduct && !matchesTag && !matchesPic) {
-          return false;
-        }
-      }
-      if (selectedMemberFilter !== 'all') {
-        if (selectedMemberFilter === 'unassigned') {
-          if (card.assigneeId) return false;
-        } else {
-          if (card.assigneeId !== selectedMemberFilter) return false;
-        }
-      }
-      if (selectedTagFilter !== 'all') {
-        if (card.tag !== selectedTagFilter) return false;
-      }
-      return true;
-    })
-  );
-
-  const tableColumns = $derived([
-    { key: 'customerName', label: tr('board.customers'), sortable: true },
-    { key: 'customerWa', label: tr('common.whatsapp'), sortable: true },
-    { key: 'product', label: tr('board.productSource') },
-    { key: 'tag', label: tr('board.tagLabel') },
-    { key: 'stageName', label: tr('board.currentStage'), sortable: true },
-    { key: 'assigneeName', label: tr('common.pic') },
-    {
-      key: 'checklist',
-      label: tr('common.checklist'),
-      render: (row: (typeof tableRows)[number]) =>
-        row.checklistTotal > 0 ? `${row.checklistDone}/${row.checklistTotal}` : '—'
-    }
-  ]);
-
   async function openCard(_columnId: string, cardId: string) {
     if (!data.workspace || !workflowId) return;
     selectedCardId = cardId;
@@ -434,8 +503,7 @@
       const { detail } = await api.getCardDetail(data.workspace.id, workflowId, cardId);
       cardDetail = detail;
     } catch (err) {
-      detailError = err instanceof ApiError ? err.message : tr('board.detailLoadError');
-      cardDetail = null;
+      detailError = err instanceof ApiError ? err.message : tr('board.loadCardError');
     } finally {
       detailLoading = false;
     }
@@ -445,78 +513,39 @@
     selectedCardId = null;
     cardDetail = null;
     detailError = null;
-  }
-
-  function requestDeleteCard() {
-    if (!canManage || !cardDetail) return;
-    cardToDelete = {
-      id: cardDetail.card.id,
-      name: cardDetail.customer?.name ?? tr('board.cardDetail')
-    };
-  }
-
-  async function deleteCardConfirmed() {
-    if (!cardToDelete || !data.workspace?.id || !workflowId) return;
-    const card = cardToDelete;
-    deleteLoading = true;
-    try {
-      await api.deleteCard(data.workspace.id, workflowId, card.id);
-      cardToDelete = null;
-      closeSheet();
-      await loadWorkflowBoardData();
-      toast.success(tr('board.customerDeleted', { name: card.name }));
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : tr('board.deleteCustomerError'));
-    } finally {
-      deleteLoading = false;
-    }
+    picPickerOpen = false;
   }
 
 
-  async function refreshBoard() {
-    await loadWorkflowBoardData();
-    if (selectedCardId) {
-      await openCard('', selectedCardId);
-    }
-  }
 
-  async function toggleItem(itemId: string, done: boolean) {
+  async function toggleChecklistItem(itemId: string, currentDone: boolean) {
     if (!selectedCardId || !data.workspace || !workflowId) return;
+    if (!canManageCurrentCard) {
+      toast.error('Hanya PIC atau Admin/Owner yang dapat menandai checklist.');
+      return;
+    }
     try {
-      // Optimistic update in cardDetail
-      if (cardDetail) {
-        cardDetail.checklist = cardDetail.checklist.map((item) =>
-          item.id === itemId ? { ...item, done } : item
-        );
-      }
-
-      await api.toggleChecklistItem(
+      const res = await api.toggleChecklistItem(
         data.workspace.id,
         workflowId,
         selectedCardId,
         itemId,
-        { done }
+        { done: !currentDone }
       );
-      await loadWorkflowBoardData();
-    } catch (err) {
-      detailError = err instanceof ApiError ? err.message : tr('board.checklistError');
+      if (cardDetail) {
+        const item = cardDetail.checklist.find((i) => i.id === itemId);
+        if (item) {
+          item.done = res.item.done;
+        }
+      }
       await refreshBoard();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('board.checklistError'));
     }
   }
 
-  async function moveStage(toStageId: string) {
-    if (!selectedCardId || !data.workspace || !workflowId) return;
-    moveLoading = true;
-    detailError = null;
-    try {
-      await api.moveCard(data.workspace.id, workflowId, selectedCardId, { stageId: toStageId });
-      await refreshBoard();
-    } catch (err) {
-      detailError = err instanceof ApiError ? err.message : tr('board.moveError');
-    } finally {
-      moveLoading = false;
-    }
-  }
+
+
 
   async function relayToNextWorkflow() {
     if (!selectedCardId || !data.workspace || !workflowId || !cardDetail?.nextWorkflow) return;
@@ -534,53 +563,82 @@
     }
   }
 
-  async function handleCardMove(cardId: string, _fromColumnId: string, toColumnId: string) {
-    if (!data.workspace || !workflowId || boardMoveLoading) return;
-    boardMoveLoading = true;
-    try {
-      await api.moveCard(data.workspace.id, workflowId, cardId, { stageId: toColumnId });
-      if (selectedCardId === cardId) {
-        await openCard('', cardId);
-      }
-      await loadWorkflowBoardData();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : tr('board.moveError'));
-    } finally {
-      boardMoveLoading = false;
-    }
-  }
-
-  async function updateAssignee(userId: string | null) {
+  async function updateAssignee(newAssigneeId: string | null) {
     if (!selectedCardId || !data.workspace || !workflowId) return;
+    if (!canManage) {
+      toast.error('Hanya Admin atau Owner yang dapat mengalihkan PIC kartu ini.');
+      return;
+    }
     assigneeLoading = true;
-    detailError = null;
     try {
-      await api.updateCardAssignee(
-        data.workspace.id,
-        workflowId,
-        selectedCardId,
-        { assigneeId: userId }
-      );
-      await refreshBoard();
+      const res = await api.updateCardAssignee(data.workspace.id, workflowId, selectedCardId, {
+        assigneeId: newAssigneeId
+      });
+      if (cardDetail) {
+        cardDetail.card.assigneeId = res.card.assigneeId;
+        const m = members.find((x) => x.id === res.card.assigneeId);
+        cardDetail.assigneeName = m?.name ?? null;
+      }
+      toast.success(tr('board.assigneeUpdated'));
     } catch (err) {
-      detailError = err instanceof ApiError ? err.message : tr('board.assigneeError');
+      toast.error(err instanceof ApiError ? err.message : tr('board.assigneeError'));
     } finally {
       assigneeLoading = false;
     }
   }
 
+  async function handleCardMove(cardId: string, _fromCol: string, toCol: string) {
+    if (!data.workspace || !workflowId) return;
+    const card = allCards.find((c) => c.id === cardId);
+    if (!canManageCard(card)) {
+      toast.error('Hanya PIC yang ditugaskan atau Admin yang dapat memindahkan kartu ini.');
+      await loadWorkflowBoardData();
+      return;
+    }
+    try {
+      await api.moveCard(data.workspace.id, workflowId, cardId, { stageId: toCol });
+      await refreshBoard();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('board.cardMoveError'));
+      await loadWorkflowBoardData();
+    }
+  }
+
+  function promptDeleteCard(card: { id: string; name: string }) {
+    cardToDelete = card;
+  }
+
+  async function deleteCardConfirmed() {
+    if (!cardToDelete || !data.workspace || !workflowId) return;
+    deleteLoading = true;
+    try {
+      await api.deleteCard(data.workspace.id, workflowId, cardToDelete.id);
+      toast.success(tr('board.cardDeleted'));
+      if (selectedCardId === cardToDelete.id) {
+        closeSheet();
+      }
+      cardToDelete = null;
+      await loadWorkflowBoardData();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('board.deleteCardError'));
+    } finally {
+      deleteLoading = false;
+    }
+  }
+
+  // Create Card Modal
   function openCreateModal() {
+    createOpen = true;
+    createError = null;
     customerName = '';
     customerWa = '';
     product = '';
     tag = '';
     createAssigneeId = '';
-    createError = null;
-    createOpen = true;
   }
 
   async function createCard() {
-    if (!customerName.trim() || !customerWa.trim() || !data.workspace || !workflowId) return;
+    if (!data.workspace || !workflowId || !customerName.trim() || !customerWa.trim()) return;
     createLoading = true;
     createError = null;
     try {
@@ -589,46 +647,76 @@
         wa: customerWa.trim(),
         product: product.trim() || undefined,
         tag: tag.trim() || undefined,
-        assigneeId: createAssigneeId || undefined
+        assigneeId: createAssigneeId ? createAssigneeId : undefined
       });
-      window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'add_customer' }));
       createOpen = false;
-      customerName = '';
-      customerWa = '';
-      product = '';
-      tag = '';
-      createAssigneeId = '';
-      await refreshBoard();
       toast.success(tr('board.customerAdded'));
+      await loadWorkflowBoardData();
     } catch (err) {
-      createError = err instanceof ApiError ? err.message : tr('board.createError');
-      toast.error(err instanceof ApiError ? err.message : tr('board.createError'));
+      createError = err instanceof ApiError ? err.message : tr('board.addCustomerError');
     } finally {
       createLoading = false;
     }
   }
 
+  // Import CSV Modal
+  function detectColumnsFromCsv(csvText: string) {
+    const header = parseCsvHeader(csvText);
+    if (header && header.length > 0) {
+      importColumns = header;
+      const detected = autoDetectColumns(header);
+      if (detected) {
+        importMapping = {
+          name: detected.name,
+          wa: detected.wa,
+          product: detected.product ?? 2,
+          tag: detected.tag ?? 3
+        };
+      }
+    } else {
+      importColumns = [];
+    }
+  }
+
+  function handleFileUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    importFileName = file.name;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = (ev.target?.result as string) || '';
+      importCsv = text;
+      detectColumnsFromCsv(text);
+    };
+    reader.readAsText(file);
+  }
+
+  function clearImportFile() {
+    importFileName = null;
+    importCsv = '';
+    importColumns = [];
+  }
+
   async function importCustomers() {
-    if (!importCsv.trim() || !data.workspace || !workflowId) return;
+    if (!data.workspace || !workflowId || !importCsv.trim()) return;
     importLoading = true;
     importError = null;
     importResult = null;
-
     try {
       const res = await api.importCardsCsv(data.workspace.id, workflowId, {
-        csv: importCsv.trim(),
+        csv: importCsv,
         mode: importMode,
-        columnMapping: {
-          name: importMapping.name,
-          wa: importMapping.wa,
-          ...(importMapping.product >= 0 && { product: importMapping.product }),
-          ...(importMapping.tag >= 0 && { tag: importMapping.tag })
-        }
+        columnMapping: importColumns.length > 0 ? importMapping : undefined
       });
-      importResult = res.result;
-      if (res.result.created > 0 || res.result.updated > 0) {
-        await refreshBoard();
-      }
+      importResult = {
+        total: (res.result.created ?? 0) + (res.result.skipped ?? 0) + (res.result.updated ?? 0),
+        inserted: res.result.created ?? 0,
+        skipped: res.result.skipped ?? 0,
+        updated: res.result.updated ?? 0,
+        errors: res.result.errors ?? []
+      };
+      toast.success(tr('board.importSuccess', { count: res.result.created }));
     } catch (err) {
       importError = err instanceof ApiError ? err.message : tr('board.importError');
     } finally {
@@ -636,56 +724,27 @@
     }
   }
 
-  function detectColumnsFromCsv(text: string) {
-    const header = parseCsvHeader(text);
-    if (header.length === 0) return;
-    importColumns = header;
-    const auto = autoDetectColumns(header);
-    if (auto) {
-      importMapping = {
-        name: auto.name,
-        wa: auto.wa,
-        product: auto.product ?? -1,
-        tag: auto.tag ?? -1
-      };
-    } else {
-      // Fallback: first 4 columns in order
-      importMapping = {
-        name: 0,
-        wa: Math.min(1, header.length - 1),
-        product: header.length > 2 ? 2 : -1,
-        tag: header.length > 3 ? 3 : -1
-      };
+  function openWorkflowChat() {
+    if (typeof window !== 'undefined' && workflowId) {
+      window.dispatchEvent(
+        new CustomEvent('flowboard:open-chat', {
+          detail: { contextType: 'workflow', contextId: workflowId }
+        })
+      );
     }
   }
 
-  function handleFileUpload(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result ?? '').trim();
-      if (text) {
-        importCsv = text;
-        importFileName = file.name;
-        importError = null;
-        detectColumnsFromCsv(text);
-      }
-    };
-    reader.onerror = () => {
-      importError = tr('board.importError');
-    };
-    reader.readAsText(file);
-  }
+  const cleanPhone = (phone?: string) => (phone ?? '').replace(/[^0-9]/g, '');
 
-  function clearImportFile() {
-    importCsv = '';
-    importFileName = null;
-    importColumns = [];
-  }
+  const resolveTone = (t?: string | null): 'urgent' | 'progress' | 'done' | 'queued' | 'neutral' => {
+    if (!t) return 'neutral';
+    const l = t.toLowerCase();
+    if (l === 'vip' || l === 'urgent') return 'urgent';
+    if (l === 'progress' || l === 'pending') return 'progress';
+    if (l === 'done' || l === 'closing') return 'done';
+    return 'queued';
+  };
 
-  // Checklist statistics for active sheet card
   const sheetChecklistDone = $derived(
     cardDetail?.checklist.filter((i) => i.done).length ?? 0
   );
@@ -693,668 +752,329 @@
   const sheetChecklistPct = $derived(
     sheetChecklistTotal > 0 ? Math.round((sheetChecklistDone / sheetChecklistTotal) * 100) : 0
   );
-
-  // Line chart path builder for activity-over-time
- const buildLinePath = (data: number[], w: number, h: number, pad = 8) => {
-   if (!data.length) return { line: '', area: '' };
-   const min = Math.min(...data, 0);
-   const max = Math.max(...data, 1);
-   const range = max - min || 1;
-   const pts = data.map((v, i) => {
-     const x = pad + (i / Math.max(data.length - 1, 1)) * (w - pad * 2);
-     const y = pad + (1 - (v - min) / range) * (h - pad * 2);
-     return `${x},${y}`;
-   });
-   return {
-     line: `M ${pts.join(' L ')}`,
-     area: `M ${pts.join(' L ')} L ${w - pad},${h - pad} L ${pad},${h - pad} Z`
-   };
- };
-
- // Donut chart builder — returns SVG circle segments using stroke-dasharray
- const buildDonutSegments = (items: Array<{ label: string; value: number; color: string }>, size: number, stroke: number) => {
-   const total = items.reduce((s, i) => s + i.value, 0);
-   if (total === 0) return { segments: [] as Array<{ label: string; value: number; color: string; dash: string; offset: number }>, total };
-   const radius = (size - stroke) / 2;
-   const circumference = 2 * Math.PI * radius;
-   let offset = 0;
-   const segments = items.map((item) => {
-     const fraction = item.value / total;
-     const dash = fraction * circumference;
-     const seg = { label: item.label, value: item.value, color: item.color, dash: `${dash} ${circumference - dash}`, offset: -offset };
-     offset += dash;
-     return seg;
-   });
-   return { segments, total, radius, circumference };
- };
 </script>
+
+{#snippet memberAvatar(member: ApiWorkspaceMember, _index: number)}
+  <div title={member.name} class="shrink-0">
+    <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={32} class="ring-2 ring-card shadow-xs shrink-0" />
+  </div>
+{/snippet}
+
+{#snippet statsIconSnippet()}
+  <HugeiconsIcon icon={DashboardSquare02Icon} size={15} strokeWidth={1.8} />
+{/snippet}
+
+{#snippet settingsIconSnippet()}
+  <HugeiconsIcon icon={Settings02Icon} size={15} strokeWidth={1.8} />
+{/snippet}
+
+{#snippet editIconSnippet()}
+  <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
+{/snippet}
+
+{#snippet importIconSnippet()}
+  <HugeiconsIcon icon={Upload04Icon} size={15} strokeWidth={1.8} />
+{/snippet}
 
 <svelte:head>
   <title>{workflow?.name ?? tr('board.title')} — actjom</title>
 </svelte:head>
 
-<div class="space-y-5 sm:space-y-6">
-  <!-- Top Navigation & Header Bar -->
-  <header class="space-y-3">
-    <Breadcrumb
-      items={[
-        { label: tr('common.workflows'), href: '/dashboard/workflows' },
-        { label: workflow?.name ?? tr('board.title') }
-      ]}
-      showHomeIcon
-    />
-
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div class="space-y-1">
-        <h1 class="ds-page-title text-ink tracking-tight">
-          {workflow?.name ?? tr('board.title')}
-        </h1>
-        <p class="ds-caption text-mute">
-          {tr('board.description')}{#if workflow?.ownerName} · {tr('common.pic')}: <span class="font-medium text-ink-soft">{workflow.ownerName}</span>{/if}
-        </p>
-      </div>
-
-      <!-- Action Buttons Cluster -->
-      <div class="flex flex-wrap items-center gap-2.5">
-        <Button variant="secondary" size="sm" onclick={() => (importOpen = true)} data-onboarding="import-csv-btn">
-          <HugeiconsIcon icon={Upload04Icon} size={16} strokeWidth={1.8} />
-          <span>{tr('board.importCsv')}</span>
-        </Button>
-
-        <Button variant="primary" size="md" onclick={openCreateModal} class="shadow-primary font-bold ring-2 ring-primary/20" data-onboarding="add-customer-btn">
-          <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2.2} />
-          <span>{tr('board.addCustomer')}</span>
-        </Button>
+<div class="flex h-full w-full min-h-0 flex-1 flex-col overflow-hidden">
+  {#if loadingData}
+    <div class="flex w-full shrink-0 items-center justify-between border-b border-hairline bg-card px-3.5 sm:px-6 py-2 sm:py-2.5 shadow-xs">
+      <Skeleton shape="rect" class="h-8 w-36 sm:w-44 rounded-lg" />
+      <div class="flex items-center gap-2">
+        <Skeleton shape="rect" class="h-8 w-8 rounded-full hidden md:block" />
+        <Skeleton shape="rect" class="h-8 w-8 rounded-full hidden md:block" />
+        <Skeleton shape="rect" class="h-8 w-20 sm:w-28 rounded-xl" />
       </div>
     </div>
-  </header>
+  {:else}
+    <header class="flex w-full shrink-0 items-center justify-between border-b border-hairline bg-card px-3.5 sm:px-6 py-2 sm:py-2.5 shadow-xs gap-2">
+      <!-- Left: Back Button + Title -->
+      <div class="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+        <Button
+          href="/dashboard/workflows"
+          variant="ghost"
+          size="sm"
+          class="size-8 p-0 text-mute hover:text-ink rounded-lg shrink-0"
+          title="Kembali ke Senarai Aliran Kerja"
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={2} />
+        </Button>
 
-  <div class="flex items-center justify-between">
-    <div class="flex items-center gap-1 -mb-px overflow-x-auto" data-onboarding="workflow-tabs">
-      <!-- Tab 1: Statistik (Default) -->
-      <button
-        type="button"
-        onclick={() => {
-          activeTab = 'stats';
-          if (typeof window !== 'undefined') {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('tab');
-            window.history.replaceState({}, '', url.toString());
-          }
-        }}
-        class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
-          activeTab === 'stats'
-            ? 'border-primary text-primary'
-            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
-        )}
-      >
-        <HugeiconsIcon icon={DashboardSquare02Icon} size={16} strokeWidth={1.8} />
-        <span>{tr('board.stats')}</span>
-      </button>
-
-      <!-- Tab 2: Kanban Board -->
-      <button
-        type="button"
-        onclick={() => {
-          activeTab = 'kanban';
-          if (typeof window !== 'undefined') {
-            const url = new URL(window.location.href);
-            url.searchParams.set('tab', 'kanban');
-            window.history.replaceState({}, '', url.toString());
-          }
-        }}
-        class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
-          activeTab === 'kanban'
-            ? 'border-primary text-primary'
-            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
-        )}
-      >
-        <HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} />
-        <span>{tr('board.kanban')}</span>
-        {#if totalCards > 0}
-          <span class={cn('rounded-full px-2 py-0.5 text-[13px] font-bold', activeTab === 'kanban' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
-            {totalCards}
-          </span>
-        {/if}
-      </button>
-
-      <!-- Tab 3: Table List -->
-      <button
-        type="button"
-        onclick={() => {
-          activeTab = 'table';
-          if (typeof window !== 'undefined') {
-            const url = new URL(window.location.href);
-            url.searchParams.set('tab', 'table');
-            window.history.replaceState({}, '', url.toString());
-          }
-        }}
-        class={cn(
-          'flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap',
-          activeTab === 'table'
-            ? 'border-primary text-primary'
-            : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'
-        )}
-      >
-        <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
-        <span>{tr('board.table')}</span>
-        {#if totalCards > 0}
-          <span class={cn('rounded-full px-2 py-0.5 text-[13px] font-bold', activeTab === 'table' ? 'bg-primary-soft text-primary' : 'bg-lane text-mute')}>
-            {totalCards}
-          </span>
-        {/if}
-      </button>
-
-      <!-- Tab 4: Setup Stages -->
-      <a
-        href="/dashboard/workflows/{workflowId}/setup"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
-      >
-        <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
-        <span>{tr('board.setupStages')}</span>
-      </a>
-
-      <!-- Tab 5: Workflow Settings -->
-      <a
-        href="/dashboard/workflows/{workflowId}/setup?tab=settings"
-        class="flex items-center gap-2 px-4 py-2.5 text-sm sm:text-base font-semibold border-b-2 border-transparent text-mute hover:text-ink hover:border-hairline-strong transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] whitespace-nowrap"
-      >
-        <HugeiconsIcon icon={Settings02Icon} size={16} strokeWidth={1.8} />
-        <span>{tr('setup.workflowSettings')}</span>
-      </a>
-    </div>
-  </div>
-
-  <!-- TAB CONTENT -->
-  {#if activeTab === 'stats'}
-    {#if stats && !loadingData}
-      {@const totalActive = stats.totals.active ?? 0}
-      {@const totalDone = stats.totals.done ?? 0}
-      {@const totalAll = totalActive + totalDone}
-      {@const stageColors = ['#6366f1', '#f59e0b', '#22c55e', '#ec4899', '#06b6d4', '#8b5cf6', '#f43f5e', '#14b8a6']}
-      {@const donutData = stats.byStage.map((s, i) => ({ label: s.stageName, value: s.total, color: stageColors[i % stageColors.length] }))}
-      {@const donutSize = 160}
-      {@const donutStroke = 28}
-      {@const createdData = stats.byTime.map((b) => b.created)}
-      {@const completedData = stats.byTime.map((b) => b.completed)}
-      {@const chartW = 800}
-      {@const chartH = 200}
-      {@const createdPath = buildLinePath(createdData, chartW, chartH)}
-      {@const completedPath = buildLinePath(completedData, chartW, chartH)}
-      {@const maxChartVal = Math.max(...createdData, ...completedData, 1)}
-      {@const tickCount = 4}
-      {@const dateLabels = stats.byTime.map((b) => {
-        const d = new Date(b.date);
-        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      })}
-      {@const labelStep = Math.max(1, Math.ceil(dateLabels.length / 8))}
-      {@const donutResult = buildDonutSegments(donutData, donutSize, donutStroke)}
-      <section class="space-y-6 pt-2" data-onboarding="stats-content">
-        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsActive')}</span>
-              <div class="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
-              </div>
-            </div>
-            <div>
-              <p class="ds-stat text-ink">{stats.totals.active}</p>
-              <p class="ds-caption text-mute mt-1">{tr('board.activeInPipeline') || 'Pelanggan aktif dalam alur kerja'}</p>
-            </div>
-          </div>
-
-          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsWaiting')}</span>
-              <div class="flex size-9 items-center justify-center rounded-xl bg-status-progress-soft text-status-progress-ink">
-                <HugeiconsIcon icon={Clock01Icon} size={18} strokeWidth={1.8} />
-              </div>
-            </div>
-            <div>
-              <p class="ds-stat text-ink">{stats.totals.waiting}</p>
-              <p class="ds-caption text-mute mt-1">{tr('board.waitingActionDesc') || 'Menunggu maklum balas / semakan'}</p>
-            </div>
-          </div>
-
-          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsOverdue')}</span>
-              <div class="flex size-9 items-center justify-center rounded-xl bg-status-urgent-soft text-status-urgent-ink">
-                <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
-              </div>
-            </div>
-            <div>
-              <p class="ds-stat text-ink">{stats.totals.overdue}</p>
-              <p class="ds-caption text-mute mt-1">{tr('board.overdueDesc') || 'Melebihi had masa tindak balas'}</p>
-            </div>
-          </div>
-
-          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsDone')}</span>
-              <div class="flex size-9 items-center justify-center rounded-xl bg-status-done-soft text-status-done-ink">
-                <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
-              </div>
-            </div>
-            <div>
-              <p class="ds-stat text-ink">{stats.totals.done}</p>
-              <p class="ds-caption text-mute mt-1">
-                {#if totalAll > 0}
-                  {Math.round((totalDone / totalAll) * 100)}% {tr('board.completionRate') || 'kadar selesai'}
-                {:else}
-                  {tr('board.completedDesc') || 'Berjaya diselesaikan'}
-                {/if}
-              </p>
-            </div>
-          </div>
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+          <h1 class="text-sm font-bold tracking-tight text-ink sm:text-base select-none truncate">
+            {workflow?.name ?? tr('board.title')}
+          </h1>
+          {#if workflow?.ownerName}
+            <span class="text-xs text-mute hidden md:inline truncate shrink-0">
+              · {tr('common.pic')}: <span class="font-medium text-ink-soft">{workflow.ownerName}</span>
+            </span>
+          {/if}
         </div>
+      </div>
 
-        <!-- Middle Grid: Donut by Stage & Team Workload -->
-        <div class="grid gap-5 lg:grid-cols-2">
-          <!-- Donut Chart: Distribution by Stage -->
-          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-4">
-            <div class="flex items-center justify-between">
-              <h3 class="ds-section-title text-ink">{tr('board.statsByStage')}</h3>
-              <span class="ds-caption text-mute">{stats.byStage.length} peringkat</span>
-            </div>
-
-            {#if stats.byStage.length === 0 || donutResult.total === 0}
-              <p class="ds-body text-mute py-8 text-center">{tr('board.noStages')}</p>
-            {:else}
-              <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6 pt-2">
-                <!-- Donut SVG -->
-                <div class="relative shrink-0" style="width: {donutSize}px; height: {donutSize}px">
-                  <svg width={donutSize} height={donutSize} viewBox="0 0 {donutSize} {donutSize}" style="transform: rotate(-90deg)">
-                    <circle cx={donutSize / 2} cy={donutSize / 2} r={donutResult.radius} fill="none" stroke="var(--color-lane, #e8edf4)" stroke-width={donutStroke} />
-                    {#each donutResult.segments as seg}
-                      <circle cx={donutSize / 2} cy={donutSize / 2} r={donutResult.radius} fill="none" stroke={seg.color} stroke-width={donutStroke} stroke-dasharray={seg.dash} stroke-dashoffset={seg.offset} />
-                    {/each}
-                  </svg>
-                  <div class="absolute inset-0 flex flex-col items-center justify-center">
-                    <span class="ds-stat text-ink text-xl sm:text-2xl">{donutResult.total}</span>
-                    <span class="ds-caption text-mute text-[11px]">total</span>
-                  </div>
-                </div>
-
-                <!-- Legend -->
-                <div class="flex-1 space-y-2 min-w-0">
-                  {#each donutResult.segments as seg, i}
-                    {@const stage = stats.byStage[i]}
-                    {@const pct = donutResult.total > 0 ? Math.round((seg.value / donutResult.total) * 100) : 0}
-                    <div class="flex items-center gap-2.5">
-                      <span class="size-3 rounded-full shrink-0" style="background: {seg.color}"></span>
-                      <span class="ds-label text-ink truncate flex-1">{seg.label}</span>
-                      {#if stage?.overdue > 0}
-                        <span class="inline-flex items-center rounded-full bg-status-urgent-soft text-status-urgent-ink px-1.5 py-0.2 text-[12px] font-semibold shrink-0">
-                          {stage.overdue} {tr('board.statsOverdue').toLowerCase()}
-                        </span>
-                      {/if}
-                      <span class="ds-label text-ink font-medium shrink-0">{seg.value}</span>
-                      <span class="ds-caption text-mute shrink-0 w-10 text-right">({pct}%)</span>
-                    </div>
-                  {/each}
-                </div>
+      <!-- Right: Member Avatars & Actions -->
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <!-- Member Avatars (hidden on mobile to prioritize title visibility) -->
+        {#if members.length > 0}
+          <div class="hidden md:flex items-center -space-x-2 overflow-hidden" title="Ahli Workspace">
+            {#each members.slice(0, 4) as member, idx (member.id)}
+              {@render memberAvatar(member, idx)}
+            {/each}
+            {#if members.length > 4}
+              <div class="grid size-8 place-items-center rounded-full bg-slate-800 text-white ring-2 ring-card text-xs font-bold shadow-sm">
+                +{members.length - 4}
               </div>
             {/if}
           </div>
+        {/if}
 
-          <!-- Team Workload -->
-          <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-4">
-            <div class="flex items-center justify-between">
-              <h3 class="ds-section-title text-ink">{tr('board.statsByAssignee')}</h3>
-              <span class="ds-caption text-mute">{stats.byAssignee.length} PIC</span>
-            </div>
+        <!-- Desktop Action Cluster -->
+        <div class="hidden sm:flex items-center gap-0.5 rounded-xl border border-hairline bg-canvas-sunken/70 p-1 shadow-xs" data-onboarding="workflow-tabs">
+          {#if !isEditMode}
+            <Tooltip text="Chat Workflow" side="bottom">
+              <button
+                type="button"
+                onclick={openWorkflowChat}
+                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                aria-label="Chat Workflow"
+              >
+                <HugeiconsIcon icon={BubbleChatIcon} size={18} strokeWidth={1.8} />
+              </button>
+            </Tooltip>
 
-            <div class="space-y-2.5 pt-1">
-              {#if stats.byAssignee.length === 0}
-                <p class="ds-body text-mute py-8 text-center">{tr('board.unassigned')}</p>
-              {:else}
-                {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
-                  <div class="flex items-center justify-between gap-3 rounded-xl bg-canvas-sunken/50 p-3 transition-colors hover:bg-canvas-sunken">
-                    <div class="flex items-center gap-2.5 min-w-0">
-                      <Avatar name={assignee.assigneeName ?? tr('board.statsUnassigned')} size={30} />
-                      <div class="min-w-0">
-                        <p class="ds-label text-ink truncate">
-                          {assignee.assigneeName ?? tr('board.statsUnassigned')}
-                        </p>
-                        <p class="ds-caption text-mute truncate">{assignee.active} {tr('board.statsActive').toLowerCase()}</p>
-                      </div>
-                    </div>
+            <Tooltip text={tr('board.stats')} side="bottom">
+              <a
+                href="/dashboard/workflows/{workflowId}/stats"
+                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                aria-label={tr('board.stats')}
+              >
+                <HugeiconsIcon icon={DashboardSquare02Icon} size={18} strokeWidth={1.8} />
+              </a>
+            </Tooltip>
 
-                    <div class="flex flex-wrap items-center gap-1.5 shrink-0">
-                      <Badge tone="queued" variant="soft" class="text-[12px] font-semibold">
-                        {assignee.active} {tr('board.statsActive').toLowerCase()}
-                      </Badge>
-                      {#if assignee.waiting > 0}
-                        <Badge tone="progress" variant="soft" class="text-[12px] font-semibold">
-                          {assignee.waiting} {tr('board.statsWaiting').toLowerCase()}
-                        </Badge>
-                      {/if}
-                      {#if assignee.overdue > 0}
-                        <Badge tone="urgent" variant="soft" class="text-[12px] font-semibold">
-                          {assignee.overdue} {tr('board.statsOverdue').toLowerCase()}
-                        </Badge>
-                      {/if}
-                      {#if assignee.done > 0}
-                        <Badge tone="done" variant="soft" class="text-[12px] font-semibold">
-                          {assignee.done} {tr('board.statsDone').toLowerCase()}
-                        </Badge>
-                      {/if}
-                    </div>
-                  </div>
-                {/each}
-              {/if}
-            </div>
-          </div>
-        </div>
+            <Tooltip text={tr('setup.workflowSettings')} side="bottom">
+              <a
+                href="/dashboard/workflows/{workflowId}/settings"
+                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                aria-label={tr('setup.workflowSettings')}
+              >
+                <HugeiconsIcon icon={Settings02Icon} size={18} strokeWidth={1.8} />
+              </a>
+            </Tooltip>
 
-        <!-- Line Chart: Activity Over Time with Date Range Picker -->
-        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-5">
-          <div class="flex items-center justify-between flex-wrap gap-3">
-            <h3 class="ds-section-title text-ink">{tr('board.statsByTime')}</h3>
-            <div class="flex flex-wrap items-center gap-3 sm:gap-4">
-              <!-- Date Range Picker -->
-              <div class="w-full sm:w-[200px]">
-                <DateRangePicker
-                  bind:start={activityFromDate}
-                  bind:end={activityToDate}
-                  placeholder="Rentang tanggal"
-                />
-              </div>
-              <div class="flex items-center gap-1.5">
-                <span class="size-2.5 rounded-full bg-primary"></span>
-                <span class="ds-caption text-mute">{tr('board.statsCreated')}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <span class="size-2.5 rounded-full bg-status-done"></span>
-                <span class="ds-caption text-mute">{tr('board.statsCompleted')}</span>
-              </div>
-            </div>
-          </div>
+            {#if canManage}
+              <Tooltip text="Mode Edit Peringkat" side="bottom">
+                <button
+                  type="button"
+                  onclick={enterEditMode}
+                  class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                  aria-label="Mode Edit"
+                >
+                  <HugeiconsIcon icon={Edit02Icon} size={18} strokeWidth={1.8} />
+                </button>
+              </Tooltip>
+            {/if}
 
-          {#if statsLoading}
-            <div class="flex items-center justify-center py-12">
-              <Skeleton shape="rect" class="h-48 w-full rounded-xl" />
-            </div>
-          {:else if stats.byTime.length === 0}
-            <p class="ds-body text-mute py-8 text-center">Tiada data aktiviti</p>
+            <div class="h-4 w-px bg-hairline mx-0.5"></div>
+
+            <Tooltip text={tr('board.importCsv')} side="bottom">
+              <button
+                type="button"
+                onclick={() => (importOpen = true)}
+                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                aria-label={tr('board.importCsv')}
+                data-onboarding="import-csv-btn"
+              >
+                <HugeiconsIcon icon={Upload04Icon} size={18} strokeWidth={1.8} />
+              </button>
+            </Tooltip>
           {:else}
-            <div class="relative">
-              <svg viewBox="0 0 {chartW} {chartH}" class="w-full" style="height: {chartH}px" preserveAspectRatio="none">
-                <!-- Grid lines + Y-axis labels -->
-                {#each Array(tickCount + 1) as _, i}
-                  {@const ratio = i / tickCount}
-                  {@const yVal = Math.round(maxChartVal * (1 - ratio))}
-                  <line
-                    x1="0" y1={chartH * ratio} x2={chartW} y2={chartH * ratio}
-                    stroke="var(--color-hairline, #e2e8f0)" stroke-width="1" stroke-dasharray="4 4"
-                  />
-                {/each}
-                <!-- Created line (indigo) -->
-                {#if createdPath.line}
-                  <path d={createdPath.area} fill="rgba(79, 70, 229, 0.06)" />
-                  <path
-                    d={createdPath.line} fill="none"
-                    stroke="var(--color-primary, #4f46e5)" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round"
-                  />
-                  {#each createdData as val, i}
-                    {@const x = 8 + (i / Math.max(createdData.length - 1, 1)) * (chartW - 16)}
-                    {@const min = 0}
-                    {@const max = maxChartVal}
-                    {@const range = max - min || 1}
-                    {@const y = 8 + (1 - (val - min) / range) * (chartH - 16)}
-                    <circle cx={x} cy={y} r="3" fill="var(--color-primary, #4f46e5)" />
-                  {/each}
-                {/if}
-                <!-- Completed line (green) -->
-                {#if completedPath.line}
-                  <path d={completedPath.area} fill="rgba(34, 197, 94, 0.06)" />
-                  <path
-                    d={completedPath.line} fill="none"
-                    stroke="var(--color-status-done, #22c55e)" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round"
-                  />
-                  {#each completedData as val, i}
-                    {@const x = 8 + (i / Math.max(completedData.length - 1, 1)) * (chartW - 16)}
-                    {@const min = 0}
-                    {@const max = maxChartVal}
-                    {@const range = max - min || 1}
-                    {@const y = 8 + (1 - (val - min) / range) * (chartH - 16)}
-                    <circle cx={x} cy={y} r="3" fill="var(--color-status-done, #22c55e)" />
-                  {/each}
-                {/if}
-              </svg>
-            </div>
-
-            <!-- X-axis date labels (sparse) -->
-            <div class="flex justify-between px-1">
-              {#each dateLabels as label, i}
-                {#if i % labelStep === 0 || i === dateLabels.length - 1}
-                  <span class="ds-caption text-mute">{label}</span>
-                {/if}
-              {/each}
-            </div>
+            <Button variant="ghost" size="sm" onclick={exitEditMode} class="h-8 gap-1.5 text-xs font-semibold text-primary hover:bg-card">
+              <HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} />
+              <span>Selesai Edit</span>
+            </Button>
           {/if}
         </div>
-      </section>
-    {:else}
-      <!-- Skeleton Loading -->
-      <div class="space-y-6 pt-2">
-        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {#each [1, 2, 3, 4] as _i}
-            <div class="rounded-2xl bg-card p-5 space-y-3 shadow-card">
-              <div class="flex justify-between items-center">
-                <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
-                <Skeleton shape="rect" class="h-9 w-9 rounded-xl" />
-              </div>
-              <Skeleton shape="rect" class="h-8 w-16 rounded-md" />
-              <Skeleton shape="rect" class="h-3 w-32 rounded-md" />
+
+        <!-- Mobile Action Cluster -->
+        <div class="flex sm:hidden items-center gap-1">
+          {#if !isEditMode}
+            <div class="flex items-center gap-0.5 rounded-xl border border-hairline bg-canvas-sunken/70 p-1 shadow-xs">
+              <button
+                type="button"
+                onclick={openWorkflowChat}
+                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                aria-label="Chat Workflow"
+              >
+                <HugeiconsIcon icon={BubbleChatIcon} size={18} strokeWidth={1.8} />
+              </button>
+
+              <DropdownMenu items={mobileMenuItems} align="end">
+                {#snippet trigger({ open, toggle })}
+                  <button
+                    type="button"
+                    class={cn(
+                      "flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer",
+                      open && "bg-card text-ink shadow-xs"
+                    )}
+                    onclick={toggle}
+                    aria-label="Pilihan lanjut"
+                  >
+                    <HugeiconsIcon icon={MoreHorizontalIcon} size={18} strokeWidth={1.8} />
+                  </button>
+                {/snippet}
+              </DropdownMenu>
             </div>
-          {/each}
-        </div>
-        <div class="grid gap-5 lg:grid-cols-2">
-          <div class="rounded-2xl bg-card p-5 space-y-4 shadow-card">
-            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
-            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
-            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
-          </div>
-          <div class="rounded-2xl bg-card p-5 space-y-4 shadow-card">
-            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
-            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
-            <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
-          </div>
+          {:else}
+            <Button variant="primary" size="sm" onclick={exitEditMode} class="h-8 px-2.5 gap-1 text-xs font-semibold shadow-xs">
+              <HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} />
+              <span>Selesai</span>
+            </Button>
+          {/if}
         </div>
       </div>
-    {/if}
-  {:else}
-    <!-- TAB 2 (KANBAN) OR TAB 3 (TABLE): FILTER BAR -->
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3" data-onboarding="board-filter-bar">
-      <!-- Search & Filters -->
-      <div class="flex flex-wrap items-center gap-2">
-        <div class="w-full sm:w-72">
-          <SearchInput
-            bind:value={searchQuery}
-            placeholder={tr('board.searchPlaceholder')}
-            size="sm"
-          />
-        </div>
+    </header>
+  {/if}
 
-        <!-- Member Filter Pill -->
-        {#if members.length > 0}
+  <!-- Filter Bar: exact matching Image #1 -->
+  {#if !isEditMode}
+    <div
+      class="flex flex-col gap-2 sm:gap-2.5 sm:flex-row sm:items-center sm:justify-between px-3.5 sm:px-6 py-2 sm:py-2.5 border-b border-hairline bg-card/60 shrink-0"
+      data-onboarding="board-filter-bar"
+    >
+      <!-- Search Input on Left -->
+      <div class="w-full sm:w-[360px] lg:w-[420px] sm:flex-none">
+        <SearchInput
+          bind:value={searchQuery}
+          placeholder={tr('board.searchPlaceholder')}
+          submit={false}
+          size="sm"
+        />
+      </div>
+
+      <!-- Select Menus (PIC & Status) -->
+      <div class="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center sm:gap-2.5">
+        <div class="relative w-full sm:w-auto">
           <select
             bind:value={selectedMemberFilter}
-            class="h-9 rounded-lg bg-card px-2.5 text-base text-ink border border-hairline transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-            aria-label={tr('board.filterMember')}
+            class="h-8.5 sm:h-9 w-full sm:w-auto appearance-none rounded-xl sm:rounded-full border border-hairline bg-card pl-3 pr-8 sm:pl-4 sm:pr-9 text-xs sm:text-[13px] font-medium text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all shadow-xs truncate"
           >
-            <option value="all">{tr('board.allMembers')}</option>
-            <option value="unassigned">{tr('common.unassigned')}</option>
+            <option value="all">Semua PIC</option>
+            <option value="unassigned">{tr('board.unassigned')}</option>
             {#each members as member (member.id)}
               <option value={member.id}>{member.name}</option>
             {/each}
           </select>
-        {/if}
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            size={15}
+            strokeWidth={1.8}
+            class="pointer-events-none absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-mute"
+          />
+        </div>
 
-        <!-- Tag / WhatsApp Error Status Filter Pill -->
-        <select
-          bind:value={selectedTagFilter}
-          class="h-9 rounded-lg bg-card px-2.5 text-base text-ink border border-hairline transition-colors hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-          aria-label={tr('board.filterStatus')}
-        >
-          <option value="all">{tr('board.allStatus')}</option>
-          <option value="needs_attention">{tr('home.needsAction')}</option>
-          <option value="wa_error">{tr('board.waError')}</option>
-          <option value="followup_stopped">{tr('board.followupStopped')}</option>
-          <option value="healthy">{tr('board.healthy')}</option>
-        </select>
+        <div class="relative w-full sm:w-auto">
+          <select
+            bind:value={selectedTagFilter}
+            class="h-8.5 sm:h-9 w-full sm:w-auto appearance-none rounded-xl sm:rounded-full border border-hairline bg-card pl-3 pr-8 sm:pl-4 sm:pr-9 text-xs sm:text-[13px] font-medium text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all shadow-xs truncate"
+          >
+            <option value="all">All status</option>
+            {#each availableTags as tagOpt (tagOpt)}
+              <option value={tagOpt}>{tagOpt}</option>
+            {/each}
+          </select>
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            size={15}
+            strokeWidth={1.8}
+            class="pointer-events-none absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-mute"
+          />
+        </div>
+
+        {#if isFilterActive}
+          <Button
+            variant="ghost"
+            size="sm"
+            onclick={resetFilters}
+            class="col-span-2 sm:col-span-1 h-7 text-xs text-mute hover:text-ink justify-center sm:justify-start"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} size={13} strokeWidth={2} class="mr-1" />
+            <span>{tr('board.resetFilter')}</span>
+          </Button>
+        {/if}
       </div>
     </div>
+  {/if}
 
-    <!-- Filter Active Summary notice -->
-    {#if isFilterActive}
-      <div class="flex items-center justify-between px-1 text-[13px] text-mute">
-        <span>
-          {tr('board.showingFiltered', { filtered: totalFilteredCount, total: totalCards })}
-        </span>
-        <button
-          type="button"
-          onclick={resetFilters}
-          class="text-primary hover:underline font-medium"
-        >
-          {tr('board.resetFilter')}
-        </button>
-      </div>
-    {/if}
-
-    <!-- Main View Area: Board vs Table -->
-    {#if loadingData}
-      <div class="flex gap-4 overflow-x-auto pb-4">
-        {#each [1, 2, 3] as _i}
-          <div class="w-80 shrink-0 rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-3">
-            <Skeleton shape="rect" class="h-5 w-24 rounded-md" />
-            <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
-            <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
-          </div>
-        {/each}
-      </div>
-    {:else if board.length === 0}
-      <EmptyStateBlock
-        title={tr('board.empty')}
-        description={tr('board.emptyDescription')}
-        actionLabel={tr('board.setupStages')}
-        onaction={() => (window.location.href = `/dashboard/workflows/${workflowId}/setup`)}
-      />
-    {:else if activeTab === 'kanban'}
-      <!-- Kanban Board View -->
-      {#if isFilterActive && totalFilteredCount === 0}
-        <div class="rounded-2xl border border-hairline bg-card p-12 text-center shadow-card">
-          <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
-          <p class="ds-caption mt-1 text-mute">{tr('board.noFilterResults')}</p>
-          <Button variant="secondary" size="sm" class="mt-4" onclick={resetFilters}>
-            {tr('board.resetFilter')}
-          </Button>
+  <!-- Main Canvas: fills remaining height, flex-1 min-h-0 overflow-hidden -->
+  <div class="flex-1 min-h-0 w-full overflow-hidden flex flex-col p-3 sm:p-5">
+    {#if isEditMode}
+      <div class="h-full w-full overflow-y-auto space-y-4">
+        <div class="flex items-center gap-2.5 rounded-xl bg-primary-soft/60 px-4 py-2.5 border border-primary/20 text-ink shrink-0">
+          <Badge tone="progress" variant="solid" class="font-bold">Mode Edit</Badge>
+          <span class="text-sm font-medium">Susun peringkat, urutan kolum dan senarai semak aliran kerja ini.</span>
         </div>
+
+        <WorkflowStageEditor
+          workspaceId={data.workspace?.id ?? ''}
+          {workflowId}
+          bind:stages
+          {allWorkflows}
+          {canManage}
+          bind:openCreateStageModal={openCreateStage}
+          onchange={loadWorkflowBoardData}
+        />
+      </div>
+    {:else}
+      {#if loadingData}
+        <div class="flex gap-4 overflow-hidden h-full">
+          {#each [1, 2, 3] as _i}
+            <div class="w-lane shrink-0 rounded-2xl border border-hairline bg-canvas-sunken p-3.5 space-y-3 h-full">
+              <Skeleton shape="rect" class="h-5 w-24 rounded-md" />
+              <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
+              <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
+            </div>
+          {/each}
+        </div>
+      {:else if board.length === 0}
+        <EmptyStateBlock
+          title={tr('board.empty')}
+          description={tr('board.emptyDescription')}
+          actionLabel={canManage ? tr('board.setupStages') : undefined}
+          onaction={enterEditMode}
+        />
       {:else}
-        <div class="w-full" data-onboarding="kanban-board">
+        {#if isFilterActive && totalFilteredCount === 0}
+          <div class="m-auto rounded-2xl border border-hairline bg-card p-12 text-center shadow-card max-w-md">
+            <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
+            <p class="ds-caption mt-1 text-mute">{tr('board.noFilterResults')}</p>
+            <Button variant="secondary" size="sm" class="mt-4" onclick={resetFilters}>
+              {tr('board.resetFilter')}
+            </Button>
+          </div>
+        {:else}
           <KanbanBoard
             columns={filteredColumns}
-            oncardmove={handleCardMove}
-            oncardclick={openCard}
+            class="h-full"
+            addButtonPosition="top"
             onadd={() => openCreateModal()}
             onaddcard={() => openCreateModal()}
-            addLabel={tr('board.addCard')}
+            addLabel={tr('board.addCustomer')}
+            onloadmore={loadMoreCards}
+            oncardmove={handleCardMove}
+            oncardclick={openCard}
             emptyTitle={tr('board.noCustomersInStage')}
             emptyDropHint={tr('board.dropCardHere')}
             waErrorLabel={tr('board.waError')}
-            class="min-h-[500px]"
           />
-        </div>
-      {/if}
-    {:else if activeTab === 'table'}
-      <div class="rounded-2xl bg-card shadow-card border border-hairline overflow-hidden" data-onboarding="table-view">
-        {#if tableRows.length === 0}
-          <div class="p-12 text-center">
-            <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
-            <p class="ds-caption mt-1 text-mute">{tr('board.noFilterResults')}</p>
-          </div>
-        {:else}
-          <div class="overflow-x-auto">
-            <table class="w-full border-collapse text-left text-base">
-              <thead class="border-b border-hairline bg-canvas-sunken text-[13px] font-semibold text-mute">
-                <tr>
-                  <th class="px-5 py-3">{tr('common.customer')}</th>
-                  <th class="px-5 py-3">{tr('common.whatsapp')}</th>
-                  <th class="px-5 py-3">{tr('common.stage')}</th>
-                  <th class="px-5 py-3">{tr('common.pic')}</th>
-                  <th class="px-5 py-3">{tr('common.checklist')}</th>
-                  <th class="px-5 py-3">{tr('common.status')}</th>
-                  <th class="px-5 py-3 text-right">{tr('common.actions')}</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-hairline">
-                {#each tableRows as row, ri (row.id)}
-                  {@const isDone = row.checklistTotal > 0 && row.checklistDone === row.checklistTotal}
-                  <tr class="transition-colors hover:bg-canvas-sunken/60" {...ri === 0 ? { 'data-onboarding': 'table-row' } : {}}>
-                    <td class="px-5 py-3.5 font-medium text-ink">
-                      {row.customerName}
-                      {#if row.product}
-                        <span class="block text-[13px] text-mute font-normal">{row.product}</span>
-                      {/if}
-                    </td>
-                    <td class="px-5 py-3.5 text-mute">{row.customerWa}</td>
-                    <td class="px-5 py-3.5">
-                      <Badge tone={row.stageColor === 'emerald' ? 'done' : row.stageColor === 'amber' ? 'progress' : row.stageColor === 'rose' ? 'urgent' : 'queued'}>
-                        {row.stageName}
-                      </Badge>
-                    </td>
-                    <td class="px-5 py-3.5 text-mute">
-                      {#if row.assigneeName}
-                        <div class="flex items-center gap-1.5">
-                          <Avatar name={row.assigneeName} size={18} />
-                          <span class="text-[13px] font-medium">{row.assigneeName}</span>
-                        </div>
-                      {:else}
-                        <span class="text-[13px] text-mute">{tr('board.unassigned')}</span>
-                      {/if}
-                    </td>
-                    <td class="px-5 py-3.5 text-mute">
-                      {#if row.checklistTotal > 0}
-                        <span class="ds-caption font-semibold {isDone ? 'text-status-done-ink' : 'text-ink'}">
-                          {row.checklistDone} / {row.checklistTotal} {isDone ? '✓' : ''}
-                        </span>
-                      {:else}
-                        <span class="text-mute">—</span>
-                      {/if}
-                    </td>
-                    <td class="px-5 py-3.5">
-                      {#if row.waErrorFlag}
-                        <Badge tone="urgent">{tr('board.waError')}</Badge>
-                      {:else}
-                        <Badge tone="done">{tr('board.healthy')}</Badge>
-                      {/if}
-                    </td>
-                    <td class="px-5 py-3.5 text-right">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onclick={() => openCard(row.stageId, row.id)}
-                        {...ri === 0 ? { 'data-onboarding': 'table-detail-btn' } : {}}
-                      >
-                        {tr('board.detail')}
-                      </Button>
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
         {/if}
-      </div>
+      {/if}
     {/if}
-  {/if}
+  </div>
 </div>
 
 <!-- Customer Detail Drawer (Sheet) -->
@@ -1363,6 +1083,20 @@
   onclose={closeSheet}
   title={cardDetail?.customer?.name ?? tr('board.cardDetail')}
 >
+  {#snippet headerActions()}
+    {#if canManage && cardDetail}
+      <button
+        type="button"
+        onclick={() => promptDeleteCard({ id: cardDetail!.card.id, name: cardDetail!.customer?.name ?? '' })}
+        class="inline-flex items-center gap-1.5 rounded-lg border border-status-urgent/30 bg-status-urgent-soft px-2.5 py-1 text-xs font-semibold text-status-urgent-ink transition hover:bg-status-urgent/20"
+        title="Hapus Kad Pelanggan"
+      >
+        <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
+        <span>Hapus Kad</span>
+      </button>
+    {/if}
+  {/snippet}
+
   {#if detailLoading}
     <div class="space-y-4 py-4">
       <Skeleton shape="rect" class="h-6 w-32 rounded-md" />
@@ -1371,7 +1105,6 @@
     </div>
   {:else if cardDetail}
     <div class="space-y-5 pb-6">
-      <!-- WhatsApp Alert Banner -->
       {#if cardDetail.waErrorFlag || cardDetail.waFollowupsStopped}
         <div class="rounded-xl border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-[13px] space-y-1 shadow-xs">
           <div class="flex items-center gap-1.5 font-bold text-status-urgent-ink">
@@ -1396,235 +1129,234 @@
         </div>
       {/if}
 
-      <!-- Customer Hero Profile Card -->
-      <section class="rounded-2xl border border-hairline bg-card p-4 shadow-card space-y-3">
-        <div class="flex items-start justify-between gap-3">
-          <div class="flex items-center gap-3 min-w-0">
-            <Avatar name={cardDetail.customer?.name} size={46} class="shrink-0 ring-2 ring-hairline shadow-xs" />
-            <div class="min-w-0">
-              <h2 class="text-base font-bold text-ink truncate leading-tight">
-                {cardDetail.customer?.name ?? tr('board.cardDetail')}
-              </h2>
-              <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                {#if cardDetail.stage}
-                  <Badge
-                    tone={cardDetail.stage.color === 'emerald' ? 'done' : cardDetail.stage.color === 'amber' ? 'progress' : cardDetail.stage.color === 'rose' ? 'urgent' : 'queued'}
-                    variant="soft"
-                    class="text-[12px] font-semibold px-2 py-0.2"
-                  >
-                    {cardDetail.stage.name}
-                  </Badge>
-                {/if}
-                {#if cardDetail.card.tag}
-                  <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft" class="text-[12px] font-semibold px-2 py-0.2">
-                    {cardDetail.card.tag}
-                  </Badge>
-                {/if}
+      <!-- Customer Information -->
+      <section class="space-y-4 rounded-2xl border border-hairline bg-card p-4 shadow-card">
+        <div class="flex items-start gap-3.5">
+          <Avatar
+            name={cardDetail.customer?.name}
+            size={48}
+            class="shrink-0 ring-2 ring-hairline/80 shadow-xs"
+          />
+          <div class="min-w-0 flex-1 space-y-1">
+            <h2 class="truncate text-base font-bold leading-tight text-ink">
+              {cardDetail.customer?.name ?? tr('board.cardDetail')}
+            </h2>
+            <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+              {#if cardDetail.stage?.name}
+                <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                  {cardDetail.stage.name}
+                </Badge>
+              {/if}
+              {#if cardDetail.card.tag}
+                <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                  {cardDetail.card.tag}
+                </Badge>
+              {/if}
+              {#if cardDetail.card.completedAt}
+                <Badge tone="done" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                  {tr('board.completed')}
+                </Badge>
+              {:else if isCardOverdue(cardDetail.card)}
+                <Badge tone="urgent" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                  {tr('board.overdue')}
+                </Badge>
+              {:else if isDueSoon(cardDetail.card.dueAt, cardDetail.card.completedAt)}
+                <Badge tone="progress" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                  {tr('board.dueSoon')}
+                </Badge>
+              {/if}
+              {#if cardDetail.waErrorFlag}
+                <Badge tone="urgent" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">Ralat WA</Badge>
+              {/if}
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-3.5 rounded-xl border border-hairline/80 bg-lane/40 p-3.5">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-2.5">
+              <span class="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline/70 bg-card text-mute shadow-xs">
+                <HugeiconsIcon icon={SmartPhone01Icon} size={15} strokeWidth={1.8} />
+              </span>
+              <div class="min-w-0">
+                <p class="text-[11px] font-medium leading-none text-mute">No. Handphone</p>
+                <p class="mt-0.5 truncate text-sm font-semibold text-ink">{cardDetail.customer?.wa || '-'}</p>
               </div>
             </div>
+            {#if cardDetail.customer?.wa}
+              <a
+                href="https://wa.me/{cleanPhone(cardDetail.customer.wa)}"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-status-done px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-opacity hover:opacity-90"
+                title="Buka WhatsApp"
+              >
+                <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={2} />
+                <span>WhatsApp</span>
+              </a>
+            {/if}
           </div>
 
-          {#if cardDetail.customer?.wa}
-            <a
-              href="https://wa.me/{cleanPhone(cardDetail.customer.wa)}"
-              target="_blank"
-              rel="noreferrer"
-              class="flex items-center gap-1.5 rounded-full bg-[#25D366] hover:bg-[#20bd5a] text-white px-3.5 py-1.5 text-[13px] font-bold shadow-xs transition-all active:scale-95 shrink-0"
-            >
-              <HugeiconsIcon icon={WhatsappIcon} size={15} strokeWidth={2} />
-              <span>{tr('board.chatWhatsApp')}</span>
-            </a>
+          <div class="h-px bg-hairline/70"></div>
+
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-2.5">
+              <span class="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline/70 bg-card text-mute shadow-xs">
+                <HugeiconsIcon icon={PackageIcon} size={15} strokeWidth={1.8} />
+              </span>
+              <div class="min-w-0">
+                <p class="text-[11px] font-medium leading-none text-mute">Paket yang Dibeli</p>
+                <p class="mt-0.5 truncate text-sm font-semibold text-ink">{cardDetail.card.product || '-'}</p>
+              </div>
+            </div>
+            {#if cardDetail.card.product}
+              <Badge tone="queued" variant="soft" class="shrink-0 px-2 py-0.5 text-[11px] font-semibold">Paket</Badge>
+            {/if}
+          </div>
+
+          {#if cardDetail.card.completedAt || cardDetail.card.dueAt}
+            <div class="h-px bg-hairline/70"></div>
+            <div class="flex items-center gap-2.5">
+              <span class="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline/70 bg-card text-mute shadow-xs">
+                {#if cardDetail.card.completedAt}
+                  <HugeiconsIcon icon={CheckmarkCircle02Icon} size={15} strokeWidth={1.8} class="text-status-done-ink" />
+                {:else}
+                  <HugeiconsIcon icon={Clock01Icon} size={15} strokeWidth={1.8} />
+                {/if}
+              </span>
+              <div class="min-w-0">
+                <p class="text-[11px] font-medium leading-none text-mute">
+                  {cardDetail.card.completedAt ? tr('board.completedOn') : tr('board.dueDate')}
+                </p>
+                <p class="mt-0.5 text-xs font-semibold text-ink">
+                  {formatDueDate(cardDetail.card.completedAt ?? cardDetail.card.dueAt ?? cardDetail.card.createdAt)}
+                </p>
+              </div>
+            </div>
           {/if}
         </div>
       </section>
 
-      <!-- Customer Details Grid Card -->
-      <section class="rounded-2xl border border-hairline bg-canvas-sunken/70 p-3.5 space-y-2.5 text-sm shadow-xs">
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-mute font-medium">{tr('board.customerNumber')}</span>
-          {#if cardDetail.customer?.wa}
-            <CopyToClipboard value={cardDetail.customer.wa} size="sm" />
+      <!-- PIC Assignment -->
+      <section class="space-y-2 border-b border-hairline pb-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-mute">{tr('common.pic')}</h3>
+        <div class="flex items-center gap-2.5">
+          {#if assignedMember}
+            <button
+              type="button"
+              class="group flex items-center gap-2 rounded-full border border-hairline bg-card py-1 pl-1 pr-3 shadow-xs transition hover:border-primary/40 hover:bg-lane/40 disabled:cursor-default disabled:opacity-100"
+              title={assignedMember.name}
+              onclick={() => {
+                if (canManage) picPickerOpen = true;
+              }}
+              disabled={!canManage}
+            >
+              <Avatar name={assignedMember.name} src={assignedMember.avatarUrl ?? undefined} size={32} />
+              <span class="text-sm font-medium text-ink transition-colors group-hover:text-primary">{assignedMember.name}</span>
+            </button>
           {:else}
-            <span class="text-mute">—</span>
+            <span class="text-xs italic text-mute">{tr('home.noAssignee')}</span>
+          {/if}
+
+          {#if canManage}
+            <TaskPicPicker
+              values={cardDetail.card.assigneeId ? [cardDetail.card.assigneeId] : []}
+              bind:open={picPickerOpen}
+              options={picOptions}
+              disabled={assigneeLoading}
+              onchange={(values) => {
+                const current = cardDetail?.card.assigneeId;
+                const next = values.find((value) => value !== current) ?? (current && values.includes(current) ? current : null);
+                picPickerOpen = false;
+                void updateAssignee(next ?? null);
+              }}
+            >
+              {#snippet trigger({ open, toggle })}
+                <button
+                  type="button"
+                  class={cn(
+                    'grid size-8 place-items-center rounded-full border border-hairline bg-card text-xl leading-none text-mute transition hover:border-primary hover:text-primary',
+                    open && 'border-primary text-primary'
+                  )}
+                  onclick={toggle}
+                  aria-haspopup="listbox"
+                  aria-expanded={open}
+                  aria-label={assignedMember ? 'Tukar PIC' : 'Tugaskan PIC'}
+                  title={assignedMember ? 'Tukar PIC' : 'Tugaskan PIC'}
+                >
+                  +
+                </button>
+              {/snippet}
+            </TaskPicPicker>
           {/if}
         </div>
+      </section>
 
-        {#if cardDetail.card.product}
-          <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
-            <span class="text-mute font-medium">{tr('board.productService')}</span>
-            <span class="font-semibold text-ink">{cardDetail.card.product}</span>
-          </div>
-        {/if}
-
-        <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
-          <span class="text-mute font-medium">{tr('board.assigneeCustomer')}</span>
-          <div class="flex items-center gap-2">
-            <select
-              id="assignee-select"
-              disabled={assigneeLoading}
-              value={cardDetail.card.assigneeId ?? ''}
-              onchange={(e) => {
-                const val = (e.target as HTMLSelectElement).value;
-                updateAssignee(val || null);
-              }}
-              class="h-9 rounded-lg border border-hairline bg-card px-2.5 text-sm font-semibold text-ink shadow-xs outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15 cursor-pointer"
-            >
-              <option value="">{tr('board.unassigned')}</option>
-              {#each members as member (member.id)}
-                <option value={member.id}>{member.name}</option>
-              {/each}
-            </select>
-          </div>
-        </div>
-
-        {#if cardDetail.card.completedAt}
-          <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
-            <span class="text-mute font-medium inline-flex items-center gap-1.5">
-              <HugeiconsIcon icon={CheckmarkCircle02Icon} size={14} strokeWidth={1.8} class="text-status-done-ink" />
-              {tr('board.completedOn')}
-            </span>
-            <span class="font-semibold text-status-done-ink">{formatDueDate(cardDetail.card.completedAt)}</span>
-          </div>
-        {:else if cardDetail.card.dueAt}
-          <div class="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
-            <span class="text-mute font-medium inline-flex items-center gap-1.5">
-              <HugeiconsIcon icon={Clock01Icon} size={14} strokeWidth={1.8} class="text-mute" />
-              {tr('board.dueDate')}
-            </span>
+      <!-- Checklist -->
+      <section class="space-y-3.5 rounded-2xl border border-hairline bg-card p-4 shadow-card">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-              {#if isOverdue(cardDetail.card.dueAt, cardDetail.card.completedAt)}
-                <Badge tone="urgent" variant="soft" class="text-[12px] font-semibold px-2 py-0.2">{tr('board.overdue')}</Badge>
-              {:else if isDueSoon(cardDetail.card.dueAt, cardDetail.card.completedAt)}
-                <Badge tone="progress" variant="soft" class="text-[12px] font-semibold px-2 py-0.2">{tr('board.dueSoon')}</Badge>
-              {/if}
-              <span class="font-semibold {isOverdue(cardDetail.card.dueAt, cardDetail.card.completedAt) ? 'text-status-urgent-ink' : 'text-ink'}">
-                {formatDueDate(cardDetail.card.dueAt)}
+              <h3 class="ds-section-title text-ink">{tr('common.checklist')}</h3>
+              <span class="rounded-full bg-lane px-2 py-0.5 text-xs font-semibold text-mute">
+                {sheetChecklistDone} / {sheetChecklistTotal}
               </span>
             </div>
+            <span class={cn('text-xs font-bold', sheetChecklistPct === 100 ? 'text-status-done-ink' : 'text-primary')}>
+              {sheetChecklistPct}%
+            </span>
           </div>
-        {/if}
-      </section>
-
-      <!-- Interactive Stage Checklist Section -->
-      <section class="space-y-3 rounded-2xl border border-hairline bg-card p-4 shadow-card">
-        <div class="flex items-center justify-between gap-2">
-          <div class="space-y-0.5">
-            <div class="flex items-center gap-1.5">
-              <HugeiconsIcon icon={CheckListIcon} size={16} strokeWidth={2} class="text-primary" />
-              <h3 class="text-sm font-bold text-ink uppercase tracking-wider">
-                {tr('board.checklistStage', { stage: cardDetail.stage?.name ?? '' })}
-              </h3>
-            <p class="text-[13px] text-mute">
-              {tr('board.checklistHint')}
-            </p>
-          </div>
-          <span class="rounded-full border border-hairline bg-lane px-2.5 py-0.5 text-[13px] font-bold text-ink-soft shrink-0">
-            {sheetChecklistDone}/{sheetChecklistTotal}
-          </span>
+          <ProgressBar value={sheetChecklistPct} max={100} class="h-2 rounded-full" />
         </div>
 
-        {#if sheetChecklistTotal > 0}
-          <div class="h-2 w-full rounded-full bg-lane overflow-hidden border border-hairline/50">
+        <div class="space-y-2 pt-1">
+          {#each cardDetail.checklist as item (item.id)}
             <div
-              class="h-full rounded-full transition-all duration-300 {sheetChecklistPct === 100 ? 'bg-status-done' : 'bg-primary'}"
-              style="width: {sheetChecklistPct}%;"
-            ></div>
-          </div>
-        {/if}
-
-        {#if cardDetail.checklist.length === 0}
-          <div class="rounded-xl border border-dashed border-hairline bg-canvas-sunken/50 p-4 text-center">
-            <p class="text-[13px] text-mute font-medium">{tr('board.noChecklist')}</p>
-          </div>
-        {:else}
-          <ul class="space-y-2 pt-1">
-            {#each cardDetail.checklist as item (item.id)}
-              <li class="flex items-start gap-3 rounded-xl border border-hairline bg-canvas-sunken/40 hover:bg-card p-3 shadow-xs transition-all">
+              class={cn(
+                'flex items-center justify-between gap-3 rounded-xl border p-3 transition-colors',
+                item.done ? 'border-status-done/25 bg-status-done-soft/40' : 'border-hairline bg-lane/30 hover:bg-lane/60'
+              )}
+            >
+              <label class="flex min-w-0 flex-1 cursor-pointer select-none items-center gap-3">
                 <Checkbox
                   checked={item.done}
-                  onchange={(e) => toggleItem(item.id, e.currentTarget.checked)}
-                  class="mt-0.5"
+                  onchange={() => toggleChecklistItem(item.id, item.done)}
+                  disabled={!canManageCurrentCard}
                 />
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-semibold text-ink transition-colors {item.done ? 'line-through text-mute' : ''}">
-                    {item.label}
-                  </p>
-                  {#if item.required}
-                    <span class="inline-block mt-0.5 text-[12px] font-semibold text-primary-ink bg-primary-soft border border-primary-border/40 px-1.5 py-0.2 rounded-md">
-                      {tr('board.requiredItem')}
-                    </span>
-                  {/if}
-                </div>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
-
-      <!-- Stage Progression / Movement Section -->
-      <section class="space-y-3 rounded-2xl border border-hairline bg-card p-4 shadow-card">
-        <span class="text-sm font-bold text-ink uppercase tracking-wider block">{tr('board.moveToStage')}</span>
-        <div class="flex flex-wrap gap-2 pt-0.5">
-          {#each board as col (col.id)}
-            {@const isCurrent = col.id === cardDetail.stage?.id}
-            <Button
-              variant={isCurrent ? 'primary' : 'secondary'}
-              size="md"
-              disabled={isCurrent || moveLoading}
-              onclick={() => moveStage(col.id)}
-              class="rounded-xl text-sm font-semibold shadow-xs {isCurrent ? 'opacity-90 cursor-default' : ''}"
-            >
-              <span>{col.name}</span>
-              {#if !isCurrent}
-                <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2} />
+                <span class={cn('truncate text-sm font-medium transition-colors', item.done ? 'text-mute line-through' : 'text-ink')}>
+                  {item.label}
+                </span>
+              </label>
+              {#if item.required}
+                <Badge tone="progress" variant="soft" class="shrink-0 px-1.5 py-0.2 text-[10px] font-semibold">Wajib</Badge>
               {/if}
-            </Button>
+            </div>
+          {:else}
+            <div class="rounded-xl border border-dashed border-hairline p-4 text-center text-xs text-mute">
+              Tiada item senarai semak untuk peringkat ini.
+            </div>
           {/each}
         </div>
       </section>
 
-      <!-- Next Workflow Handoff Section -->
       {#if cardDetail.nextWorkflow}
-        <section class="rounded-2xl border border-primary-border/70 bg-primary-soft/40 p-4 shadow-card space-y-2.5">
-          <div class="flex items-center gap-1.5 text-primary-ink font-bold text-[13px]">
-            <HugeiconsIcon icon={Layers01Icon} size={15} strokeWidth={2} />
-            <span>{tr('board.handoffNext')}</span>
+        <section class="space-y-2.5 rounded-2xl border border-primary/30 bg-primary-soft/40 p-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-primary">Alur Kerja Seterusnya</span>
+            <Button variant="primary" size="sm" onclick={relayToNextWorkflow} loading={relayLoading}>
+              Hantar ke {cardDetail.nextWorkflow.name}
+            </Button>
           </div>
-          <p class="text-[13px] text-mute">
-            {tr('board.handoffDescription')}
+          <p class="text-xs leading-relaxed text-mute">
+            Pindahkan kad pelanggan ini ke aliran kerja seterusnya mengikut tetapan auto-relay.
           </p>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={relayLoading}
-            onclick={relayToNextWorkflow}
-            class="w-full justify-center shadow-xs"
-          >
-            <HugeiconsIcon icon={Layers01Icon} size={15} strokeWidth={1.8} />
-            <span>{tr('board.continueTo', { name: cardDetail.nextWorkflow.name })}</span>
-          </Button>
-        </section>
-      {/if}
-
-      <!-- Danger Action Section -->
-      {#if canManage}
-        <section class="pt-2">
-          <Button
-            variant="destructive"
-            size="sm"
-            loading={deleteLoading}
-            onclick={requestDeleteCard}
-            class="w-full justify-center shadow-xs"
-          >
-            <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
-            <span>{tr('board.deleteCard')}</span>
-          </Button>
         </section>
       {/if}
     </div>
   {/if}
 </Sheet>
 
+<!-- Modal: Confirm Delete Card -->
 <ConfirmDialog
   open={cardToDelete !== null}
   title={tr('board.deleteCardTitle', { name: cardToDelete?.name ?? '' })}
@@ -1731,7 +1463,6 @@
   description={tr('board.importDescription')}
 >
   <div class="space-y-4">
-    <!-- Format Sample Box -->
     <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-1.5 text-[13px] text-mute">
       <p class="font-semibold text-ink">{tr('board.rowFormat')}</p>
       <code class="block rounded-lg border border-hairline bg-card p-2 font-mono text-[12px] text-ink">
@@ -1742,7 +1473,6 @@
       </p>
     </div>
 
-    <!-- Mode Selector -->
     <FormField label={tr('board.duplicateOption')}>
       {#snippet control(args)}
         <select
@@ -1756,11 +1486,9 @@
       {/snippet}
     </FormField>
 
-    <!-- File Upload + CSV Input Area -->
     <FormField label={tr('board.csvData')} required>
       {#snippet control(args)}
         <div class="space-y-2.5">
-          <!-- File dropzone -->
           <label
             class="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-3 transition-all hover:border-primary hover:bg-primary-soft/30"
           >
@@ -1780,7 +1508,7 @@
               <button
                 type="button"
                 onclick={(e) => { e.preventDefault(); clearImportFile(); }}
-                class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent"
+                class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent cursor-pointer"
               >
                 {tr('common.clear')}
               </button>
@@ -1793,7 +1521,6 @@
             />
           </label>
 
-          <!-- Textarea for paste/edit -->
           <textarea
             {...args}
             bind:value={importCsv}
@@ -1806,7 +1533,6 @@
       {/snippet}
     </FormField>
 
-    <!-- Column Mapping -->
     {#if importColumns.length > 0}
       <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-3">
         <div class="flex items-center gap-2">
@@ -1823,6 +1549,7 @@
               {/each}
             </select>
           </label>
+
           <label class="space-y-1.5">
             <span class="text-xs font-semibold text-ink">{tr('board.mapWa')} <span class="text-status-urgent">*</span></span>
             <select bind:value={importMapping.wa} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
@@ -1831,19 +1558,21 @@
               {/each}
             </select>
           </label>
+
           <label class="space-y-1.5">
             <span class="text-xs font-semibold text-ink">{tr('board.mapProduct')}</span>
             <select bind:value={importMapping.product} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
-              <option value={-1}>— {tr('common.none')} —</option>
+              <option value={-1}>{tr('board.ignoreColumn')}</option>
               {#each importColumns as col, idx}
                 <option value={idx}>{col || `Column ${idx + 1}`}</option>
               {/each}
             </select>
           </label>
+
           <label class="space-y-1.5">
             <span class="text-xs font-semibold text-ink">{tr('board.mapTag')}</span>
             <select bind:value={importMapping.tag} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
-              <option value={-1}>— {tr('common.none')} —</option>
+              <option value={-1}>{tr('board.ignoreColumn')}</option>
               {#each importColumns as col, idx}
                 <option value={idx}>{col || `Column ${idx + 1}`}</option>
               {/each}
@@ -1859,25 +1588,30 @@
       </div>
     {/if}
 
-    <!-- Result Box -->
     {#if importResult}
       <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 text-[13px] space-y-2">
-        <p class="font-bold text-ink">{tr('board.importReport')}</p>
-        <div class="flex flex-wrap gap-3">
-          <span class="rounded-full bg-status-done-soft px-3 py-1 font-semibold text-status-done-ink">
-            ✓ {tr('board.created')}: {importResult.created}
-          </span>
-          <span class="rounded-full bg-status-progress-soft px-3 py-1 font-semibold text-status-progress-ink">
-            ↻ {tr('board.updated')}: {importResult.updated}
-          </span>
-          <span class="rounded-full bg-status-idle-soft px-3 py-1 font-semibold text-status-idle-ink">
-            {tr('board.skipped')}: {importResult.skipped}
-          </span>
+        <p class="font-bold text-ink">{tr('board.importResult')}</p>
+        <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div class="rounded-lg bg-card p-2 border border-hairline">
+            <span class="text-mute block">{tr('board.totalProcessed')}</span>
+            <span class="text-sm font-bold text-ink">{importResult.total}</span>
+          </div>
+          <div class="rounded-lg bg-card p-2 border border-hairline">
+            <span class="text-mute block">{tr('board.inserted')}</span>
+            <span class="text-sm font-bold text-status-done-ink">{importResult.inserted}</span>
+          </div>
+          <div class="rounded-lg bg-card p-2 border border-hairline">
+            <span class="text-mute block">{tr('board.updated')}</span>
+            <span class="text-sm font-bold text-primary">{importResult.updated}</span>
+          </div>
+          <div class="rounded-lg bg-card p-2 border border-hairline">
+            <span class="text-mute block">{tr('board.skipped')}</span>
+            <span class="text-sm font-bold text-mute">{importResult.skipped}</span>
+          </div>
         </div>
-
         {#if importResult.errors.length > 0}
           <div class="mt-2 rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3">
-            <p class="font-bold text-status-urgent-ink">{tr('board.errors', { count: importResult.errors.length })}</p>
+            <p class="font-semibold text-status-urgent-ink">{tr('board.rowErrors')}</p>
             <ul class="mt-1 list-disc pl-4 space-y-0.5 text-status-urgent-ink">
               {#each importResult.errors as err}
                 <li>{tr('board.row', { row: err.row, reason: err.reason })}</li>
@@ -1900,13 +1634,3 @@
     </div>
   {/snippet}
 </Dialog>
-
-<!-- Snippets for View Tabs -->
-{#snippet kanbanIconSnippet()}
-  <HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} />
-{/snippet}
-
-{#snippet tableIconSnippet()}
-  <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
-{/snippet}
-

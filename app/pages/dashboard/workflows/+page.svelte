@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, ApiError, type ApiWorkflow, type ApiWorkflowDraft, type ApiWorkspaceMember } from '$lib/api/client';
+  import { api, ApiError, type ApiWorkflow, type ApiWorkflowDraft, type ApiWorkspaceMember, type ApiWorkspaceMemberGroup } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Avatar, Badge, Button, Input, Skeleton, Tooltip } from '$lib/components/atoms/index.js';
@@ -22,7 +22,6 @@
     Edit02Icon,
     Delete02Icon,
     Copy01Icon,
-    Settings01Icon,
     ArrowRight01Icon,
     UserGroupIcon,
     Search01Icon,
@@ -107,10 +106,17 @@
   let editAssigneeIds = $state<string[]>([]);
   let editPrimaryAssigneeId = $state<string | null>(null);
   let savingWorkflow = $state(false);
+  let groups = $state<ApiWorkspaceMemberGroup[]>([]);
+  let manualGroupId = $state<string>('');
+  let editWorkflowGroupId = $state<string>('');
 
   let workflowToDelete = $state<ApiWorkflow | null>(null);
   let deletingWorkflow = $state(false);
 
+  const groupOptions = $derived([
+    { value: '', label: 'Semua Pegawai (Publik Bisnis)' },
+    ...groups.map((g) => ({ value: g.id, label: `Departemen: ${g.name}` }))
+  ]);
   const memberOptions = $derived<MultiSelectOption[]>(
     members.map((member) => ({
       value: member.id,
@@ -143,12 +149,14 @@
     if (!data.workspace?.id) return;
     loadingData = true;
     try {
-      const [wfRes, membersRes] = await Promise.all([
+      const [wfRes, membersRes, groupsRes] = await Promise.all([
         api.listWorkflows(data.workspace.id),
-        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] }))
+        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] })),
+        api.listWorkspaceMemberGroups(data.workspace.id).catch(() => ({ groups: [] }))
       ]);
       workflows = wfRes.workflows ?? [];
       members = membersRes.members ?? [];
+      groups = groupsRes.groups ?? [];
     } catch (err) {
       console.error('Failed to load workflows:', err);
     } finally {
@@ -186,6 +194,7 @@
     name = '';
     manualUrgency = 'medium';
     manualAssigneeIds = [];
+    manualGroupId = '';
     manualDeadlineValue = '';
     manualDeadlineUnit = 'days';
     manualRepeatRule = 'none';
@@ -224,6 +233,7 @@
       const deadlineVal = rawDeadline ? Number(rawDeadline) : null;
       const { workflow } = await api.createWorkflow(data.workspace.id, {
         name: name.trim(),
+        workspaceMemberGroupId: manualGroupId ? manualGroupId : null,
         defaultAssigneeIds: manualAssigneeIds,
         urgency: manualUrgency,
         deadlineValue: deadlineVal && deadlineVal > 0 ? deadlineVal : null,
@@ -254,6 +264,7 @@
     editWorkflowName = workflow.name;
     editAssigneeIds = assigneeIds;
     editPrimaryAssigneeId = workflow.defaultAssigneeId ?? assigneeIds[0] ?? null;
+    editWorkflowGroupId = workflow.workspaceMemberGroupId ?? '';
     editWorkflowOpen = true;
   }
 
@@ -268,6 +279,7 @@
           : editAssigneeIds[0] ?? null;
       const response = await api.updateWorkflow(data.workspace.id, workflowId, {
         name: editWorkflowName.trim(),
+        workspaceMemberGroupId: editWorkflowGroupId ? editWorkflowGroupId : null,
         defaultAssigneeIds: editAssigneeIds,
         defaultAssigneeId
       });
@@ -319,20 +331,22 @@
 
 <div class="space-y-5 sm:space-y-6">
   <!-- PAGE HEADER -->
-  <header class="space-y-3">
-    <Breadcrumb
-      items={[
-        { label: tr('common.dashboard'), href: '/dashboard' },
-        { label: tr('common.workflows') }
-      ]}
-      showHomeIcon
-    />
-    <div class="flex flex-wrap items-center justify-between gap-4 pt-1">
-      <div>
-        <h1 class="ds-page-title text-ink">{tr('common.workflows')}</h1>
-        <p class="text-sm font-normal leading-relaxed text-mute mt-1">{tr('workflows.description')}</p>
+  <header class="space-y-2.5 sm:space-y-3">
+    <div class="hidden sm:block">
+      <Breadcrumb
+        items={[
+          { label: tr('common.dashboard'), href: '/dashboard' },
+          { label: tr('common.workflows') }
+        ]}
+        showHomeIcon
+      />
+    </div>
+    <div class="flex items-center justify-between gap-3 pt-0.5 sm:pt-1">
+      <div class="min-w-0">
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-ink">{tr('common.workflows')}</h1>
+        <p class="text-xs sm:text-sm font-normal leading-relaxed text-mute mt-0.5 sm:mt-1 truncate sm:whitespace-normal">{tr('workflows.description')}</p>
       </div>
-      <Button variant="primary" onclick={openChooser} class="shadow-xs" data-onboarding="create-workflow">
+      <Button variant="primary" size="sm" onclick={openChooser} class="sm:h-10 sm:px-4 sm:text-sm shrink-0 shadow-xs" data-onboarding="create-workflow">
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={2} />
         <span>{tr('workflows.create')}</span>
       </Button>
@@ -341,16 +355,16 @@
 
   <!-- TOOLBAR: SEARCH & COUNT -->
   {#if !loadingData && workflows.length > 0}
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4">
-      <div class="relative w-full max-w-sm" data-onboarding="workflow-search">
+    <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between pb-2 sm:pb-4">
+      <div class="relative w-full sm:max-w-sm" data-onboarding="workflow-search">
         <HugeiconsIcon
           icon={Search01Icon}
-          size={17}
+          size={16}
           strokeWidth={1.8}
           class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
         />
         <input
-          class="h-10 w-full rounded-xl bg-card pl-9 pr-8 text-base text-ink placeholder:text-mute/70 ring-1 ring-hairline/30 transition-all focus:ring-2 focus:ring-[var(--focus)] focus:outline-none"
+          class="h-9 sm:h-10 w-full rounded-xl bg-card pl-9 pr-8 text-sm sm:text-base text-ink placeholder:text-mute/70 ring-1 ring-hairline/30 transition-all focus:ring-2 focus:ring-[var(--focus)] focus:outline-none"
           bind:value={workflowSearch}
           placeholder={tr('common.search') + '…'}
         />
@@ -366,7 +380,7 @@
         {/if}
       </div>
 
-      <div class="text-[13px] text-mute font-medium">
+      <div class="flex items-center justify-between sm:justify-end text-xs sm:text-[13px] text-mute font-medium px-0.5 sm:px-0">
         <span>{filteredWorkflows.length} {filteredWorkflows.length === 1 ? 'workflow' : 'workflows'}</span>
       </div>
     </div>
@@ -409,26 +423,26 @@
       </Button>
     </div>
   {:else}
-    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-onboarding="workflows-grid">
+    <div class="grid gap-3.5 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3" data-onboarding="workflows-grid">
       {#each filteredWorkflows as workflow, i (workflow.id)}
         {@const assigned = (workflow.defaultAssigneeIds ?? [])
           .map((id) => members.find((m) => m.id === id))
           .filter((m): m is ApiWorkspaceMember => Boolean(m))}
         {@const canManage = canManageWorkflow(workflow)}
 
-        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
+        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
           <!-- TOP SECTION -->
-          <div class="space-y-3.5">
+          <div class="space-y-3 sm:space-y-3.5">
             <div class="flex items-start justify-between gap-3">
               <!-- ICON BADGE & TITLE -->
               <div class="flex items-center gap-3 min-w-0">
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
-                  <HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} />
+                <div class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                  <HugeiconsIcon icon={WorkflowSquare01Icon} size={19} strokeWidth={1.8} />
                 </div>
                 <div class="min-w-0 flex-1">
                   <a
                     href="/dashboard/workflows/{workflow.id}"
-                    class="block truncate text-base font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
+                    class="block truncate text-sm sm:text-base font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
                     title={workflow.name}
                   >
                     {workflow.name}
@@ -441,24 +455,9 @@
                 </div>
               </div>
 
-              <!-- DIRECT MANAGEMENT ICON ACTIONS (EDIT & DELETE) -->
+              <!-- DIRECT MANAGEMENT ICON ACTIONS (DELETE) -->
               {#if canManage}
                 <div class="flex items-center gap-1 shrink-0" {...i === 0 ? { 'data-onboarding': 'workflow-edit' } : {}}>
-                  <Tooltip text={tr('common.edit')} side="top">
-                    <button
-                      type="button"
-                      onclick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openEditWorkflow(workflow);
-                      }}
-                      class="flex size-8 items-center justify-center rounded-lg text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-                      aria-label={tr('common.edit')}
-                    >
-                      <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
-                    </button>
-                  </Tooltip>
-
                   <Tooltip text={tr('common.delete')} side="top">
                     <button
                       type="button"
@@ -512,18 +511,30 @@
                 </Badge>
               {/if}
             </div>
+
+            <div class="flex items-center gap-1.5 pt-0.5">
+              {#if workflow.workspaceMemberGroupId}
+                {@const matchedGroup = groups.find((g) => g.id === workflow.workspaceMemberGroupId)}
+                <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] font-semibold">
+                  <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+                  <span>{matchedGroup?.name ?? 'Departemen'}</span>
+                </Badge>
+              {:else}
+                <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">Publik</Badge>
+              {/if}
+            </div>
           </div>
 
           <!-- FOOTER ACTIONS -->
-          <div class="mt-5 flex items-center justify-between border-t border-hairline pt-3.5">
+          <div class="mt-4 sm:mt-5 flex items-center justify-between gap-2 border-t border-hairline pt-3 sm:pt-3.5">
             <Button
-              href="/dashboard/workflows/{workflow.id}/setup"
+              href="/dashboard/workflows/{workflow.id}/settings"
               variant="secondary"
               size="sm"
-              class="gap-1.5 text-xs text-mute hover:text-ink"
+              class="flex-1 sm:flex-none justify-center gap-1.5 text-xs text-mute hover:text-ink"
               {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
             >
-              <HugeiconsIcon icon={Settings01Icon} size={14} strokeWidth={1.8} />
+              <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} />
               <span>{tr('workflows.setup')}</span>
             </Button>
 
@@ -531,12 +542,12 @@
               href="/dashboard/workflows/{workflow.id}"
               variant="primary"
               size="sm"
-              class="gap-1.5 shadow-xs"
+              class="flex-1 sm:flex-none justify-center gap-1.5 shadow-xs"
               {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
             >
               <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} />
-              <span>{tr('workflows.openBoard')}</span>
-              <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2.2} class="transition-transform group-hover:translate-x-0.5" />
+              <span class="truncate">{tr('workflows.openBoard')}</span>
+              <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2.2} class="shrink-0 transition-transform group-hover:translate-x-0.5" />
             </Button>
           </div>
         </article>
@@ -675,6 +686,15 @@
       {/snippet}
     </FormField>
 
+    <FormField label="Hak Akses Alur Kerja" helper="Pilih departemen pemegang alur kerja ini atau jadikan publik untuk semua pegawai.">
+      {#snippet control(args)}
+        <SelectMenu
+          {...args}
+          bind:value={manualGroupId}
+          options={groupOptions}
+        />
+      {/snippet}
+    </FormField>
     {#if error}
       <p class="text-sm font-normal leading-relaxed text-status-urgent">{error}</p>
     {/if}
@@ -725,6 +745,20 @@
           showPrimaryBadge
           placeholder={tr('setup.assigneesPlaceholder')}
           emptyText={tr('setup.noMembers')}
+        />
+      {/snippet}
+    </FormField>
+
+    <FormField
+      label="Hak Akses Alur Kerja"
+      helper="Pilih departemen pemegang alur kerja ini atau jadikan publik untuk semua pegawai."
+    >
+      {#snippet control(args)}
+        <SelectMenu
+          {...args}
+          bind:value={editWorkflowGroupId}
+          disabled={savingWorkflow}
+          options={groupOptions}
         />
       {/snippet}
     </FormField>

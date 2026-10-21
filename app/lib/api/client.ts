@@ -29,6 +29,7 @@ export type ApiWorkflow = {
   id: string;
   name: string;
   description?: string | null;
+  workspaceMemberGroupId?: string | null;
   ownerId: string;
   ownerName?: string;
   defaultAssigneeId: string | null;
@@ -130,6 +131,8 @@ export type ApiBoardColumn = {
   name: string;
   color: string;
   position: number;
+  hasMore: boolean;
+  totalCount: number;
   cards: Array<{
     id: string;
     customerName: string;
@@ -192,12 +195,14 @@ export type ApiCardDetail = {
 };
 
 export type ApiTaskPriority = 'low' | 'medium' | 'high';
+export type ApiTaskRecurrence = 'never' | 'daily' | 'weekly';
 
 export type ApiTaskBoard = {
   id: string;
   workspaceId?: string;
   name: string;
   description: string | null;
+  workspaceMemberGroupId?: string | null;
   ownerId: string;
   ownerName?: string;
   taskCount?: number;
@@ -210,14 +215,21 @@ export type ApiTask = {
   title: string;
   description: string | null;
   priority: ApiTaskPriority;
+  labels?: string[];
   assigneeId: string | null;
   assigneeName: string | null;
+  startAt: string | null;
   dueAt: string | null;
+  recurrence: ApiTaskRecurrence;
+  recurrenceDays: number[];
   position: number;
+  createdById: string | null;
   commentCount: number;
   attachmentCount: number;
   completedAt: string | null;
   createdAt: string;
+  viewerMode: 'all' | 'group';
+  viewerGroupIds: string[];
 };
 
 export type ApiTaskBoardColumn = {
@@ -256,9 +268,15 @@ export type ApiTaskDetail = {
   title: string;
   description: string | null;
   priority: ApiTaskPriority;
+  labels?: string[];
   assigneeId: string | null;
   assigneeName: string | null;
+  viewerMode: 'all' | 'group';
+  viewerGroupIds: string[];
+  startAt: string | null;
   dueAt: string | null;
+  recurrence: ApiTaskRecurrence;
+  recurrenceDays: number[];
   position: number;
   createdById: string | null;
   completedAt: string | null;
@@ -266,6 +284,15 @@ export type ApiTaskDetail = {
   updatedAt: string;
   comments?: ApiTaskComment[];
   attachments?: ApiTaskAttachment[];
+};
+
+export type ApiTaskLabel = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ApiTaskActivity = {
@@ -492,6 +519,16 @@ export type ApiWorkspaceMember = {
   role: 'owner' | 'member';
   joinedAt: string;
 };
+export type ApiWorkspaceMemberGroup = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdById: string;
+  chatConversationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  members: Array<Pick<ApiWorkspaceMember, 'id' | 'name' | 'email' | 'avatarUrl'>>;
+};
 
 export type ApiChatAttachment = {
   id: string;
@@ -527,7 +564,11 @@ export type ApiChatMessage = {
 
 export type ApiChatConversation = {
   id: string;
-  kind: 'direct' | 'group';
+  kind: 'direct' | 'group' | 'taskboard' | 'workflow';
+  category?: 'personal' | 'group' | 'taskboard' | 'workflow';
+  contextType?: 'group' | 'taskboard' | 'workflow' | null;
+  contextId?: string | null;
+  groupId?: string | null;
   name: string | null;
   partner: {
     id: string;
@@ -549,7 +590,10 @@ export type ApiChatConversation = {
 
 export type ApiChatConversationDetail = {
   id: string;
-  kind: 'direct' | 'group';
+  kind: 'direct' | 'group' | 'taskboard' | 'workflow';
+  contextType?: 'group' | 'taskboard' | 'workflow' | null;
+  contextId?: string | null;
+  groupId?: string | null;
   name: string | null;
   partner: {
     id: string;
@@ -792,6 +836,39 @@ export const api = {
     request<{ members: ApiWorkspaceMember[] }>(`/workspaces/${workspaceId}/members`, {
       fetch: fetchFn
     }),
+  listWorkspaceMemberGroups: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ groups: ApiWorkspaceMemberGroup[] }>(`/workspaces/${workspaceId}/groups`, {
+      fetch: fetchFn
+    }),
+
+  createWorkspaceMemberGroup: (
+    workspaceId: string,
+    body: { name: string; memberIds: string[] },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ group: ApiWorkspaceMemberGroup }>(`/workspaces/${workspaceId}/groups`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  updateWorkspaceMemberGroup: (
+    workspaceId: string,
+    groupId: string,
+    body: { name?: string; memberIds?: string[] },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ group: ApiWorkspaceMemberGroup }>(`/workspaces/${workspaceId}/groups/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  deleteWorkspaceMemberGroup: (workspaceId: string, groupId: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/groups/${groupId}`, {
+      method: 'DELETE',
+      fetch: fetchFn
+    }),
 
   listChatConversations: (workspaceId: string, search?: string, fetchFn?: FetchLike) =>
     request<{ conversations: ApiChatConversation[] }>(
@@ -801,6 +878,11 @@ export const api = {
 
   getChatUnread: (workspaceId: string, fetchFn?: FetchLike) =>
     request<{ unread: number }>(`/workspaces/${workspaceId}/chat/unread`, {
+      fetch: fetchFn
+    }),
+
+  getChatPresence: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ onlineUserIds: string[] }>(`/workspaces/${workspaceId}/chat/presence`, {
       fetch: fetchFn
     }),
 
@@ -1005,6 +1087,7 @@ export const api = {
     body: {
       name: string;
       description?: string | null;
+      workspaceMemberGroupId?: string | null;
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
@@ -1040,11 +1123,32 @@ export const api = {
       fetch: fetchFn
     }),
 
-  getWorkflowBoard: (workspaceId: string, workflowId: string, fetchFn?: FetchLike) =>
-    request<{ board: { columns: ApiBoardColumn[] } }>(
-      `/workspaces/${workspaceId}/workflows/${workflowId}/board`,
+  getWorkflowBoard: (
+    workspaceId: string,
+    workflowId: string,
+    options?: {
+      stageId?: string;
+      offset?: number;
+      limit?: number;
+      search?: string;
+      assigneeId?: string;
+      tag?: string;
+    },
+    fetchFn?: FetchLike
+  ) => {
+    const query = new URLSearchParams();
+    if (options?.stageId) query.set('stageId', options.stageId);
+    if (options?.offset !== undefined) query.set('offset', String(options.offset));
+    if (options?.limit !== undefined) query.set('limit', String(options.limit));
+    if (options?.search) query.set('search', options.search);
+    if (options?.assigneeId) query.set('assigneeId', options.assigneeId);
+    if (options?.tag) query.set('tag', options.tag);
+    const queryString = query.toString();
+    return request<{ board: { columns: ApiBoardColumn[]; tags: string[] } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/board${queryString ? `?${queryString}` : ''}`,
       { fetch: fetchFn }
-    ),
+    );
+  },
 
   getWorkflowStats: (workspaceId: string, workflowId: string, rangeDays?: number, fetchFn?: FetchLike) =>
     request<{ stats: ApiWorkflowStats }>(
@@ -1180,12 +1284,37 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
     ),
 
+  addCardChecklistItem: (
+    workspaceId: string,
+    workflowId: string,
+    cardId: string,
+    body: { label: string; required?: boolean },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ item: { id: string; label: string; required: boolean; done: boolean; position: number } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}/checklist`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteCardChecklistItem: (
+    workspaceId: string,
+    workflowId: string,
+    cardId: string,
+    itemId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: boolean }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}/checklist/${itemId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
   updateWorkflow: (
     workspaceId: string,
     workflowId: string,
     body: {
       name?: string;
       description?: string | null;
+      workspaceMemberGroupId?: string | null;
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
@@ -1729,7 +1858,7 @@ export const api = {
 
   createTaskBoard: (
     workspaceId: string,
-    body: { name: string; description?: string | null },
+    body: { name: string; description?: string | null; workspaceMemberGroupId?: string | null },
     fetchFn?: FetchLike
   ) =>
     request<{ board: ApiTaskBoard; columns: ApiTaskBoardColumn[] }>(
@@ -1745,7 +1874,7 @@ export const api = {
   updateTaskBoard: (
     workspaceId: string,
     boardId: string,
-    body: { name?: string; description?: string | null },
+    body: { name?: string; description?: string | null; workspaceMemberGroupId?: string | null },
     fetchFn?: FetchLike
   ) =>
     request<{ board: ApiTaskBoard }>(`/workspaces/${workspaceId}/boards/${boardId}`, {
@@ -1764,6 +1893,46 @@ export const api = {
     request<{ board: { columns: ApiTaskBoardColumn[] } }>(
       `/workspaces/${workspaceId}/boards/${boardId}/board`,
       { fetch: fetchFn }
+    ),
+
+  listTaskLabels: (workspaceId: string, boardId: string, fetchFn?: FetchLike) =>
+    request<{ labels: ApiTaskLabel[] }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/labels`,
+      { fetch: fetchFn }
+    ),
+
+  createTaskLabel: (
+    workspaceId: string,
+    boardId: string,
+    body: { name: string; color?: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ label: ApiTaskLabel }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/labels`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateTaskLabel: (
+    workspaceId: string,
+    boardId: string,
+    labelId: string,
+    body: { name?: string; color?: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ label: ApiTaskLabel }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/labels/${labelId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteTaskLabel: (
+    workspaceId: string,
+    boardId: string,
+    labelId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/labels/${labelId}`,
+      { method: 'DELETE', fetch: fetchFn }
     ),
 
   createTaskColumn: (
@@ -1814,8 +1983,12 @@ export const api = {
       title: string;
       description?: string | null;
       priority?: ApiTaskPriority;
+      labels?: string[];
       assigneeId?: string | null;
+      startAt?: string | null;
       dueAt?: string | null;
+      recurrence?: ApiTaskRecurrence;
+      recurrenceDays?: number[];
     },
     fetchFn?: FetchLike
   ) =>
@@ -1825,11 +1998,20 @@ export const api = {
       fetch: fetchFn
     }),
 
-  getTaskDetail: (workspaceId: string, boardId: string, taskId: string, fetchFn?: FetchLike) =>
-    request<{ task: ApiTaskDetail & { comments: ApiTaskComment[]; attachments: ApiTaskAttachment[] } }>(
-      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}`,
+  getTaskDetail: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    fetchFn?: FetchLike,
+    options?: { commentsLimit?: number }
+  ) => {
+    const query =
+      options?.commentsLimit !== undefined ? `?commentsLimit=${options.commentsLimit}` : '';
+    return request<{ task: ApiTaskDetail & { comments: ApiTaskComment[]; attachments: ApiTaskAttachment[] } }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}${query}`,
       { fetch: fetchFn }
-    ),
+    );
+  },
 
   updateTask: (
     workspaceId: string,
@@ -1839,14 +2021,29 @@ export const api = {
       title?: string;
       description?: string | null;
       priority?: ApiTaskPriority;
+      labels?: string[];
       assigneeId?: string | null;
+      startAt?: string | null;
       dueAt?: string | null;
+      recurrence?: ApiTaskRecurrence;
+      recurrenceDays?: number[];
     },
     fetchFn?: FetchLike
   ) =>
     request<{ task: ApiTaskDetail }>(
       `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}`,
       { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+  completeTask: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    body: { completed: boolean },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ task: ApiTaskDetail }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/complete`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
     ),
 
   deleteTask: (workspaceId: string, boardId: string, taskId: string, fetchFn?: FetchLike) =>
@@ -1884,6 +2081,18 @@ export const api = {
       `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/comments`,
       { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
     ),
+  updateTaskComment: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    commentId: string,
+    body: { content: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ comment: ApiTaskComment }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/comments/${commentId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
 
   deleteTaskComment: (
     workspaceId: string,
@@ -1917,6 +2126,32 @@ export const api = {
       { method: 'POST', body: formData, fetch: fetchFn }
     );
   },
+  uploadTaskDescriptionImage: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    file: File,
+    fetchFn?: FetchLike
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<{ filePath: string }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/description-images`,
+      { method: 'POST', body: formData, fetch: fetchFn }
+    );
+  },
+
+  createTaskLinkAttachment: (
+    workspaceId: string,
+    boardId: string,
+    taskId: string,
+    body: { url: string; displayText?: string },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ attachment: ApiTaskAttachment }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/attachments/link`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
 
   deleteTaskAttachment: (
     workspaceId: string,
@@ -1934,10 +2169,18 @@ export const api = {
     workspaceId: string,
     boardId: string,
     limit?: number,
-    fetchFn?: FetchLike
-  ) =>
-    request<{ activity: ApiTaskActivity[] }>(
-      `/workspaces/${workspaceId}/boards/${boardId}/activity${limit ? `?limit=${limit}` : ''}`,
+    fetchFn?: FetchLike,
+    taskId?: string
+  ) => {
+    const query = [
+      limit !== undefined ? `limit=${limit}` : '',
+      taskId ? `taskId=${encodeURIComponent(taskId)}` : ''
+    ]
+      .filter((value) => value.length > 0)
+      .join('&');
+    return request<{ activity: ApiTaskActivity[] }>(
+      `/workspaces/${workspaceId}/boards/${boardId}/activity${query ? `?${query}` : ''}`,
       { fetch: fetchFn }
-    )
+    );
+  }
 };

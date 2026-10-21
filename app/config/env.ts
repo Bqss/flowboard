@@ -16,6 +16,8 @@ export const env = {
   databaseUrl: required('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/app'),
   sessionCookie: process.env.SESSION_COOKIE ?? 'sid',
   sessionTtlDays: Number(process.env.SESSION_TTL_DAYS ?? 7),
+  mobileAccessTokenTtlMinutes: Number(process.env.MOBILE_ACCESS_TOKEN_TTL_MINUTES ?? 15),
+  mobileRefreshTokenTtlDays: Number(process.env.MOBILE_REFRESH_TOKEN_TTL_DAYS ?? 30),
   loginMaxAttempts: Number(process.env.LOGIN_MAX_ATTEMPTS ?? 5),
   loginLockoutMs: Number(process.env.LOGIN_LOCKOUT_MS ?? 15 * 60 * 1000),
   integrationTokenPepper: isProduction
