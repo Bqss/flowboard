@@ -57,10 +57,19 @@ const chatWsPlugin = (): Plugin => ({
         connections.delete(ws);
       }
 
-      async function validateSession(cookie: string): Promise<string | null> {
-        const res = await fetch(`http://localhost:${server.config.server?.port ?? 3000}/api/auth/me`, {
-          headers: { cookie }
-        });
+      async function validateSession(cookie: string, accessToken?: string): Promise<string | null> {
+        const port = server.config.server?.port ?? 3000;
+        const headers: Record<string, string> = {};
+        let endpoint = `http://localhost:${port}/api/auth/me`;
+
+        if (accessToken) {
+          endpoint = `http://localhost:${port}/api/v1/auth/me`;
+          headers.authorization = `Bearer ${accessToken}`;
+        } else {
+          headers.cookie = cookie;
+        }
+
+        const res = await fetch(endpoint, { headers });
         if (!res.ok) return null;
         const data = await res.json() as { user?: { id?: string } };
         return data.user?.id ?? null;
@@ -79,13 +88,18 @@ const chatWsPlugin = (): Plugin => ({
           const url = new URL(req.url);
           const cookie = req.headers.get('cookie') ?? '';
           const sessionId = parseCookie(cookie, 'sid');
+          const authorization = req.headers.get('authorization');
+          const accessToken =
+            authorization?.startsWith('Bearer ')
+              ? authorization.slice(7).trim() || undefined
+              : url.searchParams.get('token') || undefined;
           const workspaceId = url.searchParams.get('workspaceId');
 
-          if (!sessionId || !workspaceId) {
+          if ((!sessionId && !accessToken) || !workspaceId) {
             return new Response('Unauthorized', { status: 401 });
           }
 
-          const userId = await validateSession(cookie);
+          const userId = await validateSession(cookie, accessToken);
           if (!userId) {
             return new Response('Unauthorized', { status: 401 });
           }
@@ -138,6 +152,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [backendHmr(), chatWsPlugin(), tailwindcss(), sveltekit()],
     server: {
+      host: '0.0.0.0',
       port: Number(process.env.PORT) || 3000,
       fs: {
         // `app.css` sits at the `app/` root (nara-style layout), which is outside
