@@ -24,5 +24,5 @@ CREATE INDEX IF NOT EXISTS "chat_conversations_group_idx" ON "chat_conversations
 ALTER TABLE "tasks" DROP COLUMN IF EXISTS "viewer_mode";--> statement-breakpoint
 ALTER TABLE "tasks" DROP COLUMN IF EXISTS "viewer_group_id";--> statement-breakpoint
 ALTER TABLE "tasks" DROP COLUMN IF EXISTS "viewer_group_ids";--> statement-breakpoint
-ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_kind_check" CHECK ((kind = 'direct' AND direct_key IS NOT NULL AND name IS NULL) OR (kind IN ('group', 'taskboard', 'workflow') AND name IS NOT NULL AND direct_key IS NULL));
+ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_kind_check" CHECK ((kind = 'direct' AND direct_key IS NOT NULL AND name IS NULL) OR (kind = 'group' AND name IS NOT NULL AND direct_key IS NULL));
 DROP TYPE "public"."task_viewer_mode";
