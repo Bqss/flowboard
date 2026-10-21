@@ -1,0 +1,2261 @@
+{
+  "info": {
+    "_postman_id": "6f4d5d10-1c1f-4d19-9f86-6d3f2e6b0e01",
+    "name": "actjom Mobile API v1",
+    "description": "Postman collection for the native mobile API. Import this collection, set baseUrl, then run Auth > Login to capture accessToken and refreshToken automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "baseWsUrl",
+      "value": "ws://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "integrationApiKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workspaceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workflowId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stageId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "templateId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cardId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "boardId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "columnId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "taskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "commentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attachmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "conversationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "messageId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "connectionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "jobId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sheetsConnectionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "spreadsheetId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sheetName",
+      "value": "Sheet1",
+      "type": "string"
+    },
+    {
+      "key": "clientMessageId",
+      "value": "{{$guid}}",
+      "type": "string"
+    },
+    {
+      "key": "googleAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "googleCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "googleState",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "inviteToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "inviteId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "memberId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "groupId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "keyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "itemId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/",
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Liveness check."
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.user@example.com\",\n  \"name\": \"New User\",\n  \"phone\": \"60123456789\",\n  \"password\": \"password123\",\n  \"deviceName\": \"iPhone 15\",\n  \"platform\": \"ios\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "  if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password\",\n  \"deviceName\": \"Postman\",\n  \"platform\": \"ios\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "  if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Google sign-in",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/google",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessToken\": \"{{googleAccessToken}}\",\n  \"deviceName\": \"Postman\",\n  \"platform\": \"android\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "  if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"deviceName\": \"Postman\",\n  \"platform\": \"ios\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "  if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout current device",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        },
+        {
+          "name": "Logout all mobile devices",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout-all"
+          }
+        },
+        {
+          "name": "Get current user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Update current profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated User\",\n  \"phone\": \"60123456789\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/change-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"password\",\n  \"newPassword\": \"new-password-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload avatar",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/avatar",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "item": [
+        {
+          "name": "List workspaces",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces"
+          }
+        },
+        {
+          "name": "Get workspace",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}"
+          }
+        },
+        {
+          "name": "Switch workspace",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/switch"
+          }
+        },
+        {
+          "name": "List my invites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/my-invites"
+          }
+        },
+        {
+          "name": "Preview invite",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/invites/{{inviteToken}}",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Accept invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/invites/accept",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{inviteToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/members"
+          }
+        },
+        {
+          "name": "List member groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/member-groups"
+          }
+        },
+        {
+          "name": "Create member group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/member-groups",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sales Team\",\n  \"memberIds\": [\n    \"{{memberId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update member group",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/member-groups/{{groupId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Sales Team\",\n  \"memberIds\": [\n    \"{{memberId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete member group",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/member-groups/{{groupId}}"
+          }
+        },
+        {
+          "name": "List workspace invites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/invites"
+          }
+        },
+        {
+          "name": "Create workspace invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/invites",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"invitee@example.com\",\n  \"role\": \"member\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete workspace invite",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/invites/{{inviteId}}"
+          }
+        },
+        {
+          "name": "Resend workspace invite",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/invites/{{inviteId}}/resend"
+          }
+        },
+        {
+          "name": "List MCP API keys",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/api-keys"
+          }
+        },
+        {
+          "name": "Create MCP API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/api-keys",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Mobile integration key\",\n  \"scopeMode\": \"selected\",\n  \"enabledTools\": [],\n  \"workflowIds\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update MCP API key",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/api-keys/{{keyId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Updated integration key\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Revoke MCP API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/api-keys/revoke",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyId\": \"{{keyId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Rotate MCP API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/api-keys/rotate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyId\": \"{{keyId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get MCP API key prompt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/api-keys/prompt",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyId\": \"{{keyId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get MCP API key config",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/api-keys/config",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyId\": \"{{keyId}}\",\n  \"apiKey\": \"{{integrationApiKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workflows",
+      "item": [
+        {
+          "name": "List workflows",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows"
+          }
+        },
+        {
+          "name": "Create workflow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Customer onboarding\",\n  \"description\": \"Mobile-created workflow\",\n  \"urgency\": \"medium\",\n  \"repeatRule\": \"none\",\n  \"closureBy\": \"initiator\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Dashboard workflow stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/stats"
+          }
+        },
+        {
+          "name": "Waiting action cards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/waiting-action"
+          }
+        },
+        {
+          "name": "Bulk assign cards",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/cards/bulk-assign",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cardIds\": [\n    \"{{cardId}}\"\n  ],\n  \"assigneeId\": \"{{memberId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Generate AI workflow draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/ai/draft",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"Onboard a customer from lead to completed with WhatsApp reminders\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Save AI workflow draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/ai/save",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"AI workflow\",\n  \"stages\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get workflow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}"
+          }
+        },
+        {
+          "name": "Update workflow",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated workflow\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete workflow",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}"
+          }
+        },
+        {
+          "name": "Get workflow setup",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/setup"
+          }
+        },
+        {
+          "name": "Get workflow board",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/board"
+          }
+        },
+        {
+          "name": "Get workflow stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stats?range=30"
+          }
+        },
+        {
+          "name": "Create stage",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"In progress\",\n  \"color\": \"#4f46e5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update stage",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages/{{stageId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated stage\",\n  \"color\": \"#4f46e5\",\n  \"onReplyNotify\": true,\n  \"overdueReminderHours\": 24\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete stage",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages/{{stageId}}"
+          }
+        },
+        {
+          "name": "Reorder stages",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages/reorder",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stageIds\": [\n    \"{{stageId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create checklist template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages/{{stageId}}/templates",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Verify documents\",\n  \"required\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update checklist template",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages/{{stageId}}/templates/{{templateId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Verify customer documents\",\n  \"required\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update checklist action",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages/{{stageId}}/templates/{{templateId}}/action",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"send\",\n  \"messageTemplate\": \"Hello {{name}}\",\n  \"delayMinutes\": 0,\n  \"followupIfNoReply\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete checklist template",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/stages/{{stageId}}/templates/{{templateId}}"
+          }
+        },
+        {
+          "name": "Create workflow card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"wa\": \"60123456789\",\n  \"product\": \"Starter\",\n  \"tag\": \"new\",\n  \"assigneeId\": null,\n  \"source\": \"manual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Import workflow cards",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards/import",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"csv\": \"name,wa\\nJane Doe,60123456789\",\n  \"mode\": \"skip\",\n  \"columnMapping\": {\n    \"name\": 0,\n    \"wa\": 1\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get workflow card detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards/{{cardId}}"
+          }
+        },
+        {
+          "name": "Delete workflow card",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards/{{cardId}}"
+          }
+        },
+        {
+          "name": "Assign workflow card",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards/{{cardId}}/assignee",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigneeId\": \"{{memberId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Move workflow card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards/{{cardId}}/move",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stageId\": \"{{stageId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Relay workflow card",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards/{{cardId}}/relay"
+          }
+        },
+        {
+          "name": "Toggle checklist item",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/workflows/{{workflowId}}/cards/{{cardId}}/checklist/{{itemId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"done\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Task Boards",
+      "item": [
+        {
+          "name": "List task boards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards"
+          }
+        },
+        {
+          "name": "Create task board",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mobile task board\",\n  \"description\": \"Created from Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get task board",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}"
+          }
+        },
+        {
+          "name": "Update task board",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated task board\",\n  \"description\": \"Updated description\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete task board",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}"
+          }
+        },
+        {
+          "name": "Get board view",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/board"
+          }
+        },
+        {
+          "name": "Get board activity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/activity?limit=50"
+          }
+        },
+        {
+          "name": "Create board column",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/columns",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"In progress\",\n  \"color\": \"#4f46e5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update board column",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/columns/{{columnId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated column\",\n  \"color\": \"#4f46e5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete board column",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/columns/{{columnId}}"
+          }
+        },
+        {
+          "name": "Reorder board columns",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/columns/reorder",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnIds\": [\n    \"{{columnId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Follow up customer\",\n  \"description\": \"Call customer\",\n  \"priority\": \"medium\",\n  \"assigneeId\": null,\n  \"dueAt\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get task detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}"
+          }
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated task\",\n  \"priority\": \"high\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}"
+          }
+        },
+        {
+          "name": "Move task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}/move",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnId\": \"{{columnId}}\",\n  \"position\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List task comments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}/comments"
+          }
+        },
+        {
+          "name": "Create task comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}/comments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Comment from mobile API\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete task comment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}/comments/{{commentId}}"
+          }
+        },
+        {
+          "name": "List task attachments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}/attachments"
+          }
+        },
+        {
+          "name": "Upload task attachment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}/attachments",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete task attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/boards/{{boardId}}/tasks/{{taskId}}/attachments/{{attachmentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/notifications"
+          }
+        },
+        {
+          "name": "Mark all notifications read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/notifications/read-all"
+          }
+        },
+        {
+          "name": "Mark notification read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/notifications/{{notificationId}}/read"
+          }
+        },
+        {
+          "name": "Get notification settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/notifications/settings"
+          }
+        },
+        {
+          "name": "Update notification settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/notifications/settings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"waFailed\": true,\n  \"customerReplied\": true,\n  \"cardOverdue\": true,\n  \"handover\": true,\n  \"emailDigest\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "List conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations"
+          }
+        },
+        {
+          "name": "Search conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations?search=jane"
+          }
+        },
+        {
+          "name": "Get chat unread count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/unread"
+          }
+        },
+        {
+          "name": "List chat members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/members"
+          }
+        },
+        {
+          "name": "Get online users (presence)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/presence",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "chat",
+                "presence"
+              ]
+            },
+            "description": "Returns array of user IDs who are currently online (connected via WebSocket) in this workspace. Returns { onlineUserIds: string[] }."
+          }
+        },
+        {
+          "name": "Create direct chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/direct",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create group chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/rooms",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sales room\",\n  \"memberIds\": [\n    \"{{memberId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get conversation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}"
+          }
+        },
+        {
+          "name": "Rename conversation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated room\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Add participant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/participants",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{memberId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Remove participant",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/participants/{{memberId}}"
+          }
+        },
+        {
+          "name": "List messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/messages"
+          }
+        },
+        {
+          "name": "List older messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/messages?before={{messageId}}"
+          }
+        },
+        {
+          "name": "Send message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/messages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Hello from Postman\",\n  \"clientMessageId\": \"{{$guid}}\",\n  \"replyToMessageId\": null,\n  \"attachmentIds\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Edit message",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/messages/{{messageId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Edited message\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete message",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/messages/{{messageId}}"
+          }
+        },
+        {
+          "name": "Upload chat attachment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/attachments",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle message reaction",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/messages/{{messageId}}/reactions/%F0%9F%91%8D"
+          }
+        },
+        {
+          "name": "Mark conversation read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/chat/conversations/{{conversationId}}/read"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integrations > Wajom",
+      "item": [
+        {
+          "name": "List Wajom connections",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom"
+          }
+        },
+        {
+          "name": "Create Wajom connection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Primary WhatsApp\",\n  \"countryCode\": \"MY\",\n  \"sendApiKey\": \"replace-me\",\n  \"enabledTools\": [\n    \"get_onboarding_status\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List Wajom jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom/jobs?connectionId={{connectionId}}"
+          }
+        },
+        {
+          "name": "Export Wajom actions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom/{{connectionId}}/export"
+          }
+        },
+        {
+          "name": "Update Wajom connection",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom/{{connectionId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated WhatsApp\",\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Revoke Wajom connection",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom/{{connectionId}}/revoke"
+          }
+        },
+        {
+          "name": "Test Wajom connection",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom/{{connectionId}}/test"
+          }
+        },
+        {
+          "name": "Test-send Wajom message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/wajom/{{connectionId}}/test-send",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"60123456789\",\n  \"message\": \"Test message\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Connector health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/integrations/wajom/health",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{integrationApiKey}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update connector job status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/integrations/wajom/jobs/{{jobId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{integrationApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"sent\",\n  \"providerMessageId\": \"provider-message-id\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integrations > Google Sheets",
+      "item": [
+        {
+          "name": "List Google Sheets connections",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets"
+          }
+        },
+        {
+          "name": "List spreadsheets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/spreadsheets"
+          }
+        },
+        {
+          "name": "Browse Drive items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/browse"
+          }
+        },
+        {
+          "name": "List workflow sheet connections",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/workflow/{{workflowId}}"
+          }
+        },
+        {
+          "name": "Start Google Sheets OAuth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/auth"
+          }
+        },
+        {
+          "name": "List sheet headers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/headers?spreadsheetId={{spreadsheetId}}&sheetName={{sheetName}}"
+          }
+        },
+        {
+          "name": "List sheet tabs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/sheets?spreadsheetId={{spreadsheetId}}"
+          }
+        },
+        {
+          "name": "Create Google Sheets connection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Customer import\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update Google Sheets connection",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/{{sheetsConnectionId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated customer import\",\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Configure Google Sheets connection",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/{{sheetsConnectionId}}/configure",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{workflowId}}\",\n  \"spreadsheetId\": \"{{spreadsheetId}}\",\n  \"spreadsheetName\": \"Customers\",\n  \"sheetName\": \"{{sheetName}}\",\n  \"columnMapping\": {\n    \"name\": 0,\n    \"wa\": 1,\n    \"product\": 2,\n    \"tag\": 3\n  },\n  \"headerRowCount\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete Google Sheets connection",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/{{sheetsConnectionId}}"
+          }
+        },
+        {
+          "name": "Sync Google Sheets connection",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/workspaces/{{workspaceId}}/integrations/google-sheets/{{sheetsConnectionId}}/sync"
+          }
+        },
+        {
+          "name": "Google Sheets OAuth callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/integrations/google-sheets/callback?code={{googleCode}}&state={{googleState}}",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "Get onboarding state",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/onboarding/state"
+          }
+        },
+        {
+          "name": "Update onboarding state",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/onboarding/state",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completedChallenges\": [\n    \"create_workflow\"\n  ],\n  \"seenTours\": [\n    \"workflows\"\n  ],\n  \"completeChallenge\": \"create_workflow\",\n  \"markTourSeen\": \"workflows\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reset onboarding state",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/onboarding/reset"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Realtime",
+      "item": [
+        {
+          "name": "Mobile chat WebSocket",
+          "request": {
+            "url": "{{baseWsUrl}}/api/v1/chat/ws?workspaceId={{workspaceId}}&token={{accessToken}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "description": "Open as a WebSocket connection in Postman or native mobile app.\n\n### 1. Connection & Handshake\n- **URL**: `{{baseWsUrl}}/api/v1/chat/ws?workspaceId={{workspaceId}}&token={{accessToken}}`\n- **Alternatively**: Use HTTP header `Authorization: Bearer {{accessToken}}`\n- When connected, the server immediately pushes:\n  1. `{\"type\": \"connected\", \"userId\": \"<currentUserId>\", \"onlineUsers\": [\"<userId1>\", \"<userId2>\"]}`\n  2. `{\"type\": \"presence:state\", \"userIds\": [\"<userId1>\", \"<userId2>\"]}`\n\n### 2. User Online / Offline Indicators (Presence)\nWhen another user in the workspace connects or disconnects, the server broadcasts:\n- **User comes online**:\n  ```json\n  {\n    \"type\": \"presence:user_online\",\n    \"userId\": \"<userId>\"\n  }\n  ```\n- **User goes offline**:\n  ```json\n  {\n    \"type\": \"presence:user_offline\",\n    \"userId\": \"<userId>\"\n  }\n  ```\n- **Query presence state over WebSocket**:\n  Client sends:\n  ```json\n  {\n    \"type\": \"presence:get\"\n  }\n  ```\n  Server responds with:\n  ```json\n  {\n    \"type\": \"presence:state\",\n    \"userIds\": [\"<userId1>\", \"<userId2>\"]\n  }\n  ```\n\n### 3. Typing Indicators\nWhen the user is typing in a conversation:\n- **Client sends (start typing)**:\n  ```json\n  {\n    \"type\": \"typing\",\n    \"conversationId\": \"{{conversationId}}\",\n    \"isTyping\": true\n  }\n  ```\n  *(Or shorthand: `{\"type\": \"typing:start\", \"conversationId\": \"{{conversationId}}\"}`)*\n\n- **Client sends (stop typing)**:\n  ```json\n  {\n    \"type\": \"typing\",\n    \"conversationId\": \"{{conversationId}}\",\n    \"isTyping\": false\n  }\n  ```\n  *(Or shorthand: `{\"type\": \"typing:stop\", \"conversationId\": \"{{conversationId}}\"}`)*\n\n- **Participants receive**:\n  ```json\n  {\n    \"type\": \"typing\",\n    \"conversationId\": \"{{conversationId}}\",\n    \"userId\": \"<senderUserId>\",\n    \"isTyping\": true\n  }\n  ```\n\n### 4. Heartbeat / Ping\n- Client sends: `{\"type\": \"ping\"}`\n- Server replies: `{\"type\": \"pong\"}`\n\n### 5. Chat Events (Server-Pushed)\n- `message:new` - New message in conversation\n- `message:edit` - Message edited\n- `message:delete` - Message deleted\n- `reaction:toggle` - Reaction added or removed\n- `read` - Participant read conversation\n- `conversation:update` - Conversation title or members updated\n"
+          }
+        }
+      ]
+    }
+  ]
+}

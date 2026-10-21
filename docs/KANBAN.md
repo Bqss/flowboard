@@ -136,3 +136,11 @@ Siti
   └── Post Produk (dari estafet Webinar Converted)
 ```
 
+
+---
+
+## Deskripsi dan attachment di panel
+
+Deskripsi kartu dibuka dalam mode baca agar isi mudah dipindai. Pemilik atau PIC dapat masuk ke mode edit dengan memilih **Edit** atau mengklik isi deskripsi, lalu menyimpan atau membatalkan perubahan.
+
+Editor mendukung heading, teks tebal/miring/coret, blok kode, daftar bullet/bernomor, tautan, dan penyisipan gambar. Gambar yang disisipkan juga tercatat sebagai attachment kartu. Tombol **Tambah** di bagian attachment membuka popover di dekat tombol tersebut.

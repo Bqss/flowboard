@@ -1,9 +1,9 @@
 {
-  "id": "/",
+  "id": "/dashboard/chat",
   "name": "ActJom",
   "short_name": "ActJom",
   "description": "A focused workspace for customer operations.",
-  "start_url": "/dashboard",
+  "start_url": "/dashboard/chat",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
