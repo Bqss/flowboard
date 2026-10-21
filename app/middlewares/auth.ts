@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia';
 import { env } from '../config/env';
-import { getUserBySession } from '../services';
+import { getBearerToken, getUserByMobileAccessToken, getUserBySession } from '../services';
 
 /**
  * Auth middlewares as composable Elysia plugins.
@@ -12,7 +12,16 @@ import { getUserBySession } from '../services';
  * Factory functions return a fresh plugin instance so Vite HMR can rebuild the
  * API graph without Elysia deduplicating named plugins from a previous instance.
  */
-const resolveUser = ({ cookie }: { cookie: Record<string, { value?: unknown }> }) => {
+const resolveUser = ({
+  cookie,
+  request
+}: {
+  cookie: Record<string, { value?: unknown }>;
+  request: Request;
+}) => {
+  const bearerToken = getBearerToken(request);
+  if (bearerToken) return getUserByMobileAccessToken(bearerToken);
+
   const sessionId = cookie[env.sessionCookie]?.value as string | undefined;
   return getUserBySession(sessionId);
 };

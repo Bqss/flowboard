@@ -35,8 +35,8 @@ export async function googleRedirect({ query, cookie, set }: Ctx) {
     maxAge: 10 * 60 // 10 minutes — enough for the OAuth round-trip
   });
 
-  // Remember where to go after login (default: /dashboard)
-  const dest = query.redirect ?? '/dashboard';
+  // Remember where to go after login (default: /dashboard/chat)
+  const dest = !query.redirect || query.redirect === '/dashboard' ? '/dashboard/chat' : query.redirect;
   cookie[DESTINATION_COOKIE].set({
     value: dest,
     httpOnly: true,
@@ -84,7 +84,8 @@ export async function googleCallback({ query, cookie, set }: Ctx) {
     const { sessionId, userId } = await googleLoginOrCreate(userInfo);
     setSessionCookies(cookie, userId, sessionId);
 
-    const dest = cookie[DESTINATION_COOKIE]?.value ?? '/dashboard';
+    const rawDest = cookie[DESTINATION_COOKIE]?.value;
+    const dest = !rawDest || rawDest === '/dashboard' ? '/dashboard/chat' : rawDest;
     cookie[DESTINATION_COOKIE]?.remove?.();
 
     logger.logAuth('oauth_google_success', { email: userInfo.email });

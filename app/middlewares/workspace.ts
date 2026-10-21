@@ -3,25 +3,28 @@ import { eq } from 'drizzle-orm';
 import { env } from '@config/env';
 import { db, workspaces } from '@db';
 import { getMembership } from '@services/workspace';
-import { getUserBySession } from '@services';
+import { getBearerToken, getUserByMobileAccessToken, getUserBySession } from '@services';
 
 export const resolveWorkspaceMember = async (
   cookie: Record<string, { value?: unknown }>,
-  workspaceId: string | undefined
+  workspaceId: string | undefined,
+  request?: Request
 ) => {
   if (!workspaceId) {
-    return { workspace: null, membership: null };
+    return { workspace: null, membership: null, user: null };
   }
 
-  const sessionId = cookie[env.sessionCookie]?.value as string | undefined;
-  const user = await getUserBySession(sessionId);
+  const bearerToken = request ? getBearerToken(request) : undefined;
+  const user = bearerToken
+    ? await getUserByMobileAccessToken(bearerToken)
+    : await getUserBySession(cookie[env.sessionCookie]?.value as string | undefined);
   if (!user) {
-    return { workspace: null, membership: null };
+    return { workspace: null, membership: null, user: null };
   }
 
   const membership = await getMembership(workspaceId, user.id);
   if (!membership) {
-    return { workspace: null, membership: null };
+    return { workspace: null, membership: null, user };
   }
 
   const [workspace] = await db
@@ -32,7 +35,8 @@ export const resolveWorkspaceMember = async (
 
   return {
     workspace: workspace ?? null,
-    membership: { role: membership.role }
+    membership: { role: membership.role },
+    user
   };
 };
 
@@ -42,14 +46,14 @@ export const resolveWorkspaceMember = async (
  * lifecycle propagates correctly to nested route groups.
  */
 export const createWithWorkspaceMember = () =>
-  new Elysia().derive({ as: 'scoped' }, async ({ cookie, params }) =>
-    resolveWorkspaceMember(cookie, params.workspaceId)
+  new Elysia().derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+    resolveWorkspaceMember(cookie, params.workspaceId, request)
   );
 
 export const createRequireWorkspaceMember = () =>
   new Elysia()
-    .derive({ as: 'scoped' }, async ({ cookie, params }) =>
-      resolveWorkspaceMember(cookie, params.workspaceId)
+    .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+      resolveWorkspaceMember(cookie, params.workspaceId, request)
     )
     .onBeforeHandle({ as: 'scoped' }, (ctx) => {
       const { workspace, membership, set } = ctx as typeof ctx & {
@@ -64,8 +68,8 @@ export const createRequireWorkspaceMember = () =>
 
 export const createRequireWorkspaceOwner = () =>
   new Elysia()
-    .derive({ as: 'scoped' }, async ({ cookie, params }) =>
-      resolveWorkspaceMember(cookie, params.workspaceId)
+    .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
+      resolveWorkspaceMember(cookie, params.workspaceId, request)
     )
     .onBeforeHandle({ as: 'scoped' }, (ctx) => {
       const { workspace, membership, set } = ctx as typeof ctx & {
