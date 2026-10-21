@@ -2,16 +2,21 @@ import { mkdir, unlink } from 'node:fs/promises';
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import {
   db,
+  chatConversations,
   taskActivities,
   taskAttachments,
+  taskLabels,
   taskBoards,
   taskColumns,
   taskComments,
   tasks,
   users,
+  workspaceMemberGroupMembers,
   type TaskBoard,
-  type TaskPriority
+  type TaskPriority,
+  type TaskRecurrence
 } from '@db';
+import { createScopedChatConversation } from './workspace';
 
 export class TaskBoardError extends Error {
   constructor(
@@ -31,6 +36,96 @@ const DEFAULT_COLUMNS: { name: string; color: string }[] = [
 
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50 MB
 
+export const listTaskLabels = async (workspaceId: string) =>
+  db.select().from(taskLabels).where(eq(taskLabels.workspaceId, workspaceId)).orderBy(asc(taskLabels.name));
+
+export const createTaskLabel = async (
+  workspaceId: string,
+  input: { name: string; color?: string }
+) => {
+  const name = input.name.trim();
+  if (!name) throw new TaskBoardError('Label name is required.');
+  const [label] = await db
+    .insert(taskLabels)
+    .values({ workspaceId, name, color: input.color?.trim() || 'indigo' })
+    .returning();
+  return label;
+};
+
+export const updateTaskLabel = async (
+  workspaceId: string,
+  labelId: string,
+  input: { name?: string; color?: string }
+) => {
+  const [current] = await db
+    .select()
+    .from(taskLabels)
+    .where(and(eq(taskLabels.id, labelId), eq(taskLabels.workspaceId, workspaceId)))
+    .limit(1);
+  if (!current) throw new TaskBoardError('Label not found.', 'not_found');
+
+  const nextName = input.name?.trim() || current.name;
+  const [updated] = await db
+    .update(taskLabels)
+    .set({
+      name: nextName,
+      ...(input.color !== undefined ? { color: input.color.trim() || 'indigo' } : {}),
+      updatedAt: new Date()
+    })
+    .where(eq(taskLabels.id, labelId))
+    .returning();
+
+  if (nextName !== current.name) {
+    const affectedTasks = await db
+      .select({ id: tasks.id, labels: tasks.labels })
+      .from(tasks)
+      .innerJoin(taskBoards, eq(tasks.boardId, taskBoards.id))
+      .where(eq(taskBoards.workspaceId, workspaceId));
+    for (const task of affectedTasks) {
+      if ((task.labels ?? []).includes(current.name)) {
+        await db
+          .update(tasks)
+          .set({
+            labels: [...new Set((task.labels ?? []).map((label) => (label === current.name ? nextName : label)))],
+            updatedAt: new Date()
+          })
+          .where(eq(tasks.id, task.id));
+      }
+    }
+  }
+
+  return updated;
+};
+
+export const deleteTaskLabel = async (workspaceId: string, labelId: string) => {
+  const [label] = await db
+    .select()
+    .from(taskLabels)
+    .where(and(eq(taskLabels.id, labelId), eq(taskLabels.workspaceId, workspaceId)))
+    .limit(1);
+  if (!label) throw new TaskBoardError('Label not found.', 'not_found');
+  const [deleted] = await db.delete(taskLabels).where(eq(taskLabels.id, labelId)).returning();
+  if (deleted) {
+    const affectedTasks = await db
+      .select({ id: tasks.id, labels: tasks.labels })
+      .from(tasks)
+      .innerJoin(taskBoards, eq(tasks.boardId, taskBoards.id))
+      .where(eq(taskBoards.workspaceId, workspaceId));
+    for (const task of affectedTasks) {
+      if ((task.labels ?? []).includes(label.name)) {
+        await db
+          .update(tasks)
+          .set({
+            labels: (task.labels ?? []).filter((value) => value !== label.name),
+            updatedAt: new Date()
+          })
+          .where(eq(tasks.id, task.id));
+      }
+    }
+  }
+  return deleted ?? null;
+};
+
 export const getBoardInWorkspace = async (workspaceId: string, boardId: string) => {
   const [row] = await db
     .select()
@@ -46,6 +141,28 @@ export const canManageBoard = (
   userId: string,
   board: Pick<TaskBoard, 'ownerId'>
 ) => membershipRole === 'owner' || board.ownerId === userId;
+
+export type TaskBoardActor = { userId: string; role: 'owner' | 'member' };
+
+const isBoardViewer = async (
+  board: Pick<TaskBoard, 'workspaceId' | 'ownerId' | 'workspaceMemberGroupId'>,
+  actor: TaskBoardActor
+) => {
+  if (actor.role === 'owner' || board.ownerId === actor.userId || !board.workspaceMemberGroupId) return true;
+
+  const [membership] = await db
+    .select({ id: workspaceMemberGroupMembers.id })
+    .from(workspaceMemberGroupMembers)
+    .where(
+      and(
+        eq(workspaceMemberGroupMembers.groupId, board.workspaceMemberGroupId),
+        eq(workspaceMemberGroupMembers.userId, actor.userId)
+      )
+    )
+    .limit(1);
+
+  return Boolean(membership);
+};
 
 const logActivity = async (input: {
   boardId: string;
@@ -79,16 +196,43 @@ const parseDueAt = (dueAt: string): Date => {
   if (Number.isNaN(parsed.getTime())) throw new TaskBoardError('Invalid due date.');
   return parsed;
 };
+const normalizeRecurrenceDays = (days: number[] | undefined) =>
+  [...new Set((days ?? []).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort(
+    (a, b) => a - b
+  );
 
-export const listBoards = async (workspaceId: string) => {
+const nextRecurringDate = (base: Date, recurrence: TaskRecurrence, recurrenceDays: number[]) => {
+  const next = new Date(base);
+  if (recurrence === 'daily') {
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next;
+  }
+  if (recurrence !== 'weekly') return next;
+
+  const days = normalizeRecurrenceDays(recurrenceDays);
+  const currentDay = next.getUTCDay();
+  const delta = Math.min(
+    ...days.map((day) => (day - currentDay + 7) % 7).filter((value) => value > 0),
+    7
+  );
+  next.setUTCDate(next.getUTCDate() + delta);
+  return next;
+};
+
+export const listBoards = async (
+  workspaceId: string,
+  actor?: TaskBoardActor
+) => {
   const rows = await db
     .select({
       id: taskBoards.id,
       name: taskBoards.name,
       description: taskBoards.description,
+      workspaceMemberGroupId: taskBoards.workspaceMemberGroupId,
       ownerId: taskBoards.ownerId,
       createdAt: taskBoards.createdAt,
       updatedAt: taskBoards.updatedAt,
+      workspaceId: taskBoards.workspaceId,
       ownerName: users.name
     })
     .from(taskBoards)
@@ -96,7 +240,12 @@ export const listBoards = async (workspaceId: string) => {
     .where(eq(taskBoards.workspaceId, workspaceId))
     .orderBy(asc(taskBoards.name));
 
-  const boardIds = rows.map((row) => row.id);
+  const visibleRows = actor
+    ? (await Promise.all(
+        rows.map(async (row) => ((await isBoardViewer(row, actor)) ? row : null))
+      )).filter((row): row is (typeof rows)[number] => row !== null)
+    : rows;
+  const boardIds = visibleRows.map((row) => row.id);
   const counts =
     boardIds.length === 0
       ? []
@@ -107,8 +256,7 @@ export const listBoards = async (workspaceId: string) => {
         .groupBy(tasks.boardId);
 
   const countByBoard = new Map(counts.map((row) => [row.boardId, Number(row.value)]));
-
-  return rows.map((row) => ({
+  return visibleRows.map((row) => ({
     ...row,
     taskCount: countByBoard.get(row.id) ?? 0
   }));
@@ -116,17 +264,31 @@ export const listBoards = async (workspaceId: string) => {
 
 export const createBoard = async (
   workspaceId: string,
-  input: { name: string; description?: string | null; ownerId: string }
+  input: {
+    name: string;
+    description?: string | null;
+    ownerId: string;
+    workspaceMemberGroupId?: string | null;
+  }
 ) => {
   const [board] = await db
     .insert(taskBoards)
     .values({
       workspaceId,
+      workspaceMemberGroupId: input.workspaceMemberGroupId ?? null,
       name: input.name.trim(),
       description: input.description ?? null,
       ownerId: input.ownerId
     })
     .returning();
+  await createScopedChatConversation({
+    workspaceId,
+    createdById: input.ownerId,
+    contextType: 'taskboard',
+    contextId: board.id,
+    groupId: input.workspaceMemberGroupId,
+    name: board.name
+  });
 
   const columns = await db
     .insert(taskColumns)
@@ -152,20 +314,35 @@ export const createBoard = async (
 
 export const updateBoard = async (
   boardId: string,
-  input: { name?: string; description?: string | null }
+  input: { name?: string; description?: string | null; workspaceMemberGroupId?: string | null }
 ) => {
   const [board] = await db
     .update(taskBoards)
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.workspaceMemberGroupId !== undefined
+        ? { workspaceMemberGroupId: input.workspaceMemberGroupId }
+        : {}),
       updatedAt: new Date()
     })
     .where(eq(taskBoards.id, boardId))
     .returning();
 
+  if (board && (input.name !== undefined || input.workspaceMemberGroupId !== undefined)) {
+    await db
+      .update(chatConversations)
+      .set({
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.workspaceMemberGroupId !== undefined ? { groupId: input.workspaceMemberGroupId } : {}),
+        updatedAt: new Date()
+      })
+      .where(and(eq(chatConversations.contextType, 'taskboard'), eq(chatConversations.contextId, boardId)));
+  }
+
   return board ?? null;
 };
+
 
 const unlinkAttachmentFiles = async (paths: string[]) => {
   await Promise.all(
@@ -331,18 +508,23 @@ export const reorderColumns = async (boardId: string, orderedColumnIds: string[]
         .where(eq(taskColumns.id, orderedColumnIds[i]));
     }
   });
-
-  return listColumns(boardId);
 };
 
-export const getTaskInBoard = async (boardId: string, taskId: string) => {
+export const getTaskInBoard = async (boardId: string, taskId: string, actor?: TaskBoardActor) => {
   const [row] = await db
     .select()
     .from(tasks)
     .where(and(eq(tasks.id, taskId), eq(tasks.boardId, boardId)))
     .limit(1);
 
-  return row ?? null;
+  if (!row || !actor) return row ?? null;
+  const [board] = await db
+    .select()
+    .from(taskBoards)
+    .where(eq(taskBoards.id, boardId))
+    .limit(1);
+  if (!board || !(await isBoardViewer(board, actor))) return null;
+  return row;
 };
 
 export const createTask = async (
@@ -352,8 +534,12 @@ export const createTask = async (
     title: string;
     description?: string | null;
     priority?: TaskPriority;
+    labels?: string[];
     assigneeId?: string | null;
+    startAt?: string | null;
     dueAt?: string | null;
+    recurrence?: TaskRecurrence;
+    recurrenceDays?: number[];
   },
   actor?: { userId: string }
 ) => {
@@ -364,8 +550,8 @@ export const createTask = async (
     ? (columns.find((column) => column.id === input.columnId) ?? null)
     : columns[0];
   if (!target) throw new TaskBoardError('Column not found.', 'not_found');
-
   if (input.assigneeId) await ensureAssigneeExists(input.assigneeId);
+
 
   const [last] = await db
     .select({ position: tasks.position })
@@ -383,8 +569,12 @@ export const createTask = async (
       title: input.title.trim(),
       description: input.description ?? null,
       priority: input.priority ?? 'medium',
+      labels: input.labels ? [...new Set(input.labels.map((l) => l.trim()).filter(Boolean))] : [],
       assigneeId: input.assigneeId ?? null,
+      startAt: input.startAt ? parseDueAt(input.startAt) : null,
       dueAt: input.dueAt ? parseDueAt(input.dueAt) : null,
+      recurrence: input.recurrence ?? 'never',
+      recurrenceDays: input.recurrence === 'weekly' ? normalizeRecurrenceDays(input.recurrenceDays) : [],
       position,
       createdById: actor?.userId ?? null
     })
@@ -400,8 +590,7 @@ export const createTask = async (
 
   return task;
 };
-
-export const getTaskBoardView = async (boardId: string) => {
+export const getTaskBoardView = async (boardId: string, actor?: TaskBoardActor) => {
   const columns = await listColumns(boardId);
 
   const boardTasks = await db
@@ -411,7 +600,18 @@ export const getTaskBoardView = async (boardId: string) => {
     .where(eq(tasks.boardId, boardId))
     .orderBy(asc(tasks.position), asc(tasks.createdAt));
 
-  const taskIds = boardTasks.map((row) => row.task.id);
+  let visibleBoardTasks = boardTasks;
+  if (actor) {
+    const [board] = await db
+      .select()
+      .from(taskBoards)
+      .where(eq(taskBoards.id, boardId))
+      .limit(1);
+    if (!board) visibleBoardTasks = [];
+    else if (!(await isBoardViewer(board, actor))) visibleBoardTasks = [];
+  }
+
+  const taskIds = visibleBoardTasks.map((row) => row.task.id);
   const counts =
     taskIds.length === 0
       ? []
@@ -440,17 +640,22 @@ export const getTaskBoardView = async (boardId: string) => {
       name: column.name,
       color: column.color,
       position: column.position,
-      tasks: boardTasks
+      tasks: visibleBoardTasks
         .filter((row) => row.task.columnId === column.id)
         .map((row) => ({
           id: row.task.id,
           title: row.task.title,
           description: row.task.description,
           priority: row.task.priority,
+          labels: row.task.labels ?? [],
+          startAt: row.task.startAt,
+          dueAt: row.task.dueAt,
+          recurrence: row.task.recurrence,
+          recurrenceDays: row.task.recurrenceDays ?? [],
           assigneeId: row.task.assigneeId,
           assigneeName: row.assigneeName,
-          dueAt: row.task.dueAt,
           position: row.task.position,
+          createdById: row.task.createdById,
           commentCount: countByTask.get(row.task.id) ?? 0,
           attachmentCount: attachmentCountByTask.get(row.task.id) ?? 0,
           completedAt: row.task.completedAt,
@@ -460,18 +665,23 @@ export const getTaskBoardView = async (boardId: string) => {
   };
 };
 
-export const getTaskDetail = async (boardId: string, taskId: string) => {
-  const task = await getTaskInBoard(boardId, taskId);
+export const getTaskDetail = async (
+  boardId: string,
+  taskId: string,
+  actor?: TaskBoardActor,
+  commentLimit?: number
+) => {
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) return null;
 
   const [assignee] = task.assigneeId
     ? await db.select({ name: users.name }).from(users).where(eq(users.id, task.assigneeId)).limit(1)
     : [];
 
-  const comments = await listTaskComments(boardId, taskId);
+  const comments = await listTaskComments(boardId, taskId, actor, commentLimit);
   if (!comments) return null;
 
-  const attachments = await listTaskAttachments(boardId, taskId);
+  const attachments = await listTaskAttachments(boardId, taskId, actor);
   if (!attachments) return null;
 
   return {
@@ -481,9 +691,13 @@ export const getTaskDetail = async (boardId: string, taskId: string) => {
     title: task.title,
     description: task.description,
     priority: task.priority,
+    labels: task.labels ?? [],
+    startAt: task.startAt,
+    dueAt: task.dueAt,
+    recurrence: task.recurrence,
+    recurrenceDays: task.recurrenceDays ?? [],
     assigneeId: task.assigneeId,
     assigneeName: assignee?.name ?? null,
-    dueAt: task.dueAt,
     position: task.position,
     createdById: task.createdById,
     completedAt: task.completedAt,
@@ -493,7 +707,6 @@ export const getTaskDetail = async (boardId: string, taskId: string) => {
     attachments
   };
 };
-
 export const updateTask = async (
   boardId: string,
   taskId: string,
@@ -501,12 +714,16 @@ export const updateTask = async (
     title?: string;
     description?: string | null;
     priority?: TaskPriority;
+    labels?: string[];
     assigneeId?: string | null;
+    startAt?: string | null;
     dueAt?: string | null;
+    recurrence?: TaskRecurrence;
+    recurrenceDays?: number[];
   },
-  actor?: { userId: string }
+  actor?: TaskBoardActor
 ) => {
-  const task = await getTaskInBoard(boardId, taskId);
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
   if (input.assigneeId) await ensureAssigneeExists(input.assigneeId);
@@ -516,10 +733,14 @@ export const updateTask = async (
     .set({
       ...(input.title !== undefined ? { title: input.title.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      ...(input.labels !== undefined ? { labels: [...new Set(input.labels.map((l) => l.trim()).filter(Boolean))] } : {}),
       ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
+      ...(input.startAt !== undefined ? { startAt: input.startAt ? parseDueAt(input.startAt) : null } : {}),
       ...(input.dueAt !== undefined ? { dueAt: input.dueAt ? parseDueAt(input.dueAt) : null } : {}),
-      updatedAt: new Date()
+      ...(input.recurrence !== undefined ? { recurrence: input.recurrence } : {}),
+      ...(input.recurrenceDays !== undefined
+        ? { recurrenceDays: input.recurrence === 'weekly' ? normalizeRecurrenceDays(input.recurrenceDays) : [] }
+        : {}),
     })
     .where(eq(tasks.id, taskId))
     .returning();
@@ -537,6 +758,65 @@ export const updateTask = async (
   return updated ?? null;
 };
 
+export const completeTask = async (
+  boardId: string,
+  taskId: string,
+  completed: boolean,
+  actor: TaskBoardActor
+) => {
+  const [board] = await db.select().from(taskBoards).where(eq(taskBoards.id, boardId)).limit(1);
+  if (!board) throw new TaskBoardError('Board not found.', 'not_found');
+
+  const task = await getTaskInBoard(boardId, taskId, actor);
+  if (!task) throw new TaskBoardError('Task not found.', 'not_found');
+
+  const isManager = canManageBoard(actor.role, actor.userId, board);
+  if (!isManager && task.assigneeId !== actor.userId && task.createdById !== actor.userId) {
+    throw new TaskBoardError('Only the PIC, task creator, or board manager can complete this task.', 'forbidden');
+  }
+
+  let completedAt = completed ? new Date() : null;
+  let startAt = task.startAt;
+  let dueAt = task.dueAt;
+  const recurrence = task.recurrence ?? 'never';
+
+  if (completed && recurrence !== 'never') {
+    const baseDate = dueAt ?? startAt;
+    if (baseDate) {
+      const nextDate = nextRecurringDate(baseDate, recurrence, task.recurrenceDays ?? []);
+      const dueShift = dueAt ? nextDate.getTime() - dueAt.getTime() : 0;
+      dueAt = dueAt ? nextDate : null;
+      startAt = startAt
+        ? new Date(startAt.getTime() + (dueAt ? dueShift : nextDate.getTime() - startAt.getTime()))
+        : nextDate;
+    }
+    completedAt = null;
+  }
+
+  const [updated] = await db
+    .update(tasks)
+    .set({ completedAt, startAt, dueAt, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId))
+    .returning();
+
+  if (updated) {
+    await logActivity({
+      boardId,
+      eventType: completed ? (recurrence === 'never' ? 'task.completed' : 'task.recurring') : 'task.reopened',
+      description:
+        completed && recurrence !== 'never'
+          ? `Task "${updated.title}" recurring cycle completed`
+          : completed
+            ? `Task "${updated.title}" completed`
+            : `Task "${updated.title}" reopened`,
+      actorId: actor.userId,
+      taskId: updated.id
+    });
+  }
+
+  return updated ?? null;
+};
+
 export const deleteTask = async (
   boardId: string,
   taskId: string,
@@ -545,7 +825,7 @@ export const deleteTask = async (
   const [board] = await db.select().from(taskBoards).where(eq(taskBoards.id, boardId)).limit(1);
   if (!board) throw new TaskBoardError('Board not found.', 'not_found');
 
-  const task = await getTaskInBoard(boardId, taskId);
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
   const isManager = canManageBoard(actor.role, actor.userId, board);
@@ -576,9 +856,9 @@ export const moveTask = async (
   boardId: string,
   taskId: string,
   input: { columnId: string; position?: number },
-  actor?: { userId: string }
+  actor?: TaskBoardActor
 ) => {
-  const task = await getTaskInBoard(boardId, taskId);
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
   const columns = await listColumns(boardId);
@@ -687,18 +967,28 @@ export const moveTask = async (
   return updated ?? task;
 };
 
-export const listTaskComments = async (boardId: string, taskId: string) => {
-  const task = await getTaskInBoard(boardId, taskId);
+export const listTaskComments = async (
+  boardId: string,
+  taskId: string,
+  actor?: TaskBoardActor,
+  limit?: number
+) => {
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) return null;
 
-  const rows = await db
+  const selectComments = db
     .select({ comment: taskComments, authorName: users.name })
     .from(taskComments)
     .leftJoin(users, eq(taskComments.userId, users.id))
-    .where(eq(taskComments.taskId, taskId))
-    .orderBy(asc(taskComments.createdAt));
+    .where(eq(taskComments.taskId, taskId));
+  const rows =
+    limit === undefined
+      ? await selectComments.orderBy(asc(taskComments.createdAt))
+      : await selectComments
+          .orderBy(desc(taskComments.createdAt))
+          .limit(Math.min(Math.max(limit, 1), 100));
 
-  return rows.map((row) => ({
+  return (limit === undefined ? rows : [...rows].reverse()).map((row) => ({
     id: row.comment.id,
     content: row.comment.content,
     authorId: row.comment.userId,
@@ -711,9 +1001,9 @@ export const createTaskComment = async (
   boardId: string,
   taskId: string,
   input: { content: string },
-  actor: { userId: string }
+  actor: TaskBoardActor
 ) => {
-  const task = await getTaskInBoard(boardId, taskId);
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
   const content = input.content.trim();
@@ -746,14 +1036,73 @@ export const createTaskComment = async (
     createdAt: comment.createdAt
   };
 };
+export const updateTaskComment = async (
+  boardId: string,
+  taskId: string,
+  commentId: string,
+  input: { content: string },
+  actor: TaskBoardActor
+) => {
+  const task = await getTaskInBoard(boardId, taskId, actor);
+  if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
+  const [comment] = await db
+    .select()
+    .from(taskComments)
+    .where(and(eq(taskComments.id, commentId), eq(taskComments.taskId, taskId)))
+    .limit(1);
+  if (!comment) throw new TaskBoardError('Comment not found.', 'not_found');
+
+  const [board] = await db.select().from(taskBoards).where(eq(taskBoards.id, boardId)).limit(1);
+  if (!board) throw new TaskBoardError('Board not found.', 'not_found');
+
+  const isManager = canManageBoard(actor.role, actor.userId, board);
+  if (!isManager && comment.userId !== actor.userId) {
+    throw new TaskBoardError('Only the comment author or board manager can edit this comment.', 'forbidden');
+  }
+
+  const content = input.content.trim();
+  if (!content) throw new TaskBoardError('Comment must not be empty.');
+
+  const [updated] = await db
+    .update(taskComments)
+    .set({ content })
+    .where(and(eq(taskComments.id, commentId), eq(taskComments.taskId, taskId)))
+    .returning();
+
+  const [author] = updated.userId
+    ? await db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, updated.userId))
+        .limit(1)
+    : [];
+
+  await logActivity({
+    boardId,
+    eventType: 'comment.updated',
+    description: `Comment updated on task "${task.title}"`,
+    actorId: actor.userId,
+    taskId
+  });
+
+  return {
+    id: updated.id,
+    content: updated.content,
+    authorId: updated.userId,
+    authorName: author?.name ?? null,
+    createdAt: updated.createdAt
+  };
+
+
+};
 export const deleteTaskComment = async (
   boardId: string,
   taskId: string,
   commentId: string,
-  actor: { userId: string; role: 'owner' | 'member' }
+  actor: TaskBoardActor
 ) => {
-  const task = await getTaskInBoard(boardId, taskId);
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
   const [comment] = await db
@@ -784,9 +1133,17 @@ export const deleteTaskComment = async (
   return comment;
 };
 
-export const listTaskBoardActivity = async (boardId: string, limit = 50) => {
+export const listTaskBoardActivity = async (
+  boardId: string,
+  limit = 50,
+  actor?: TaskBoardActor,
+  taskId?: string
+) => {
   const clamped = Math.min(Math.max(limit, 1), 100);
 
+  const activityWhere = taskId
+    ? and(eq(taskActivities.boardId, boardId), eq(taskActivities.taskId, taskId))
+    : eq(taskActivities.boardId, boardId);
   const rows = await db
     .select({
       activity: taskActivities,
@@ -796,11 +1153,31 @@ export const listTaskBoardActivity = async (boardId: string, limit = 50) => {
     .from(taskActivities)
     .leftJoin(users, eq(taskActivities.actorId, users.id))
     .leftJoin(tasks, eq(taskActivities.taskId, tasks.id))
-    .where(eq(taskActivities.boardId, boardId))
+    .where(activityWhere)
     .orderBy(desc(taskActivities.createdAt))
     .limit(clamped);
 
-  return rows.map((row) => ({
+  let visibleRows = rows;
+  if (actor) {
+    const [board] = await db
+      .select({ workspaceId: taskBoards.workspaceId, ownerId: taskBoards.ownerId })
+      .from(taskBoards)
+      .where(eq(taskBoards.id, boardId))
+      .limit(1);
+    if (board) {
+      visibleRows = (
+        await Promise.all(
+          rows.map(async (row) =>
+            row.activity.taskId && row.taskTitle
+              ? (await getTaskInBoard(boardId, row.activity.taskId, actor) ? row : null)
+              : row
+          )
+        )
+      ).filter((row): row is (typeof rows)[number] => row !== null);
+    }
+  }
+
+  return visibleRows.map((row) => ({
     id: row.activity.id,
     eventType: row.activity.eventType,
     description: row.activity.description,
@@ -815,10 +1192,9 @@ export const listTaskBoardActivity = async (boardId: string, limit = 50) => {
 
 /* ------------------------------------------------------- attachments */
 
-export const listTaskAttachments = async (boardId: string, taskId: string) => {
-  const task = await getTaskInBoard(boardId, taskId);
+export const listTaskAttachments = async (boardId: string, taskId: string, actor?: TaskBoardActor) => {
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) return null;
-
   const rows = await db
     .select({ attachment: taskAttachments, uploaderName: users.name })
     .from(taskAttachments)
@@ -843,10 +1219,10 @@ export const listTaskAttachments = async (boardId: string, taskId: string) => {
 export const createTaskAttachment = async (
   boardId: string,
   taskId: string,
-  userId: string,
+  actor: TaskBoardActor,
   file: File
 ) => {
-  const task = await getTaskInBoard(boardId, taskId);
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
   if (file.size > MAX_ATTACHMENT_SIZE) {
@@ -868,7 +1244,7 @@ export const createTaskAttachment = async (
 
   // Save file to static/task-uploads/
   const ext = file.name.split('.').pop() || 'bin';
-  const filename = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const filename = `${actor.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   await mkdir('static/task-uploads', { recursive: true });
   await Bun.write(`static/task-uploads/${filename}`, file);
 
@@ -878,7 +1254,7 @@ export const createTaskAttachment = async (
     .values({
       taskId,
       boardId,
-      uploaderId: userId,
+      uploaderId: actor.userId,
       fileName: file.name,
       filePath: `/task-uploads/${filename}`,
       fileType,
@@ -891,14 +1267,97 @@ export const createTaskAttachment = async (
   const [uploader] = await db
     .select({ name: users.name })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(eq(users.id, actor.userId))
     .limit(1);
 
   await logActivity({
     boardId,
     eventType: 'attachment.added',
     description: `${uploader?.name ?? 'Someone'} attached ${file.name} to ${task.title}`,
-    actorId: userId,
+    actorId: actor.userId,
+    taskId
+  });
+
+  return {
+    id: inserted.id,
+    fileName: inserted.fileName,
+    filePath: inserted.filePath,
+    fileType: inserted.fileType,
+    fileSize: inserted.fileSize,
+    width: inserted.width,
+    height: inserted.height,
+    uploaderId: inserted.uploaderId,
+    uploaderName: uploader?.name ?? null,
+    createdAt: inserted.createdAt
+  };
+};
+export const createTaskDescriptionImage = async (
+  boardId: string,
+  taskId: string,
+  actor: TaskBoardActor,
+  file: File
+) => {
+  const task = await getTaskInBoard(boardId, taskId, actor);
+  if (!task) throw new TaskBoardError('Task not found.', 'not_found');
+  if (!file.type.startsWith('image/')) {
+    throw new TaskBoardError('Only image files can be inserted into a description.');
+  }
+  if (file.size > MAX_ATTACHMENT_SIZE) {
+    throw new TaskBoardError('File too large (max 50 MB).', 'too_large');
+  }
+
+  const extension = (file.name.split('.').pop() ?? 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+  const filename = `${actor.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  await mkdir('static/task-description-images', { recursive: true });
+  await Bun.write(`static/task-description-images/${filename}`, file);
+
+  return { filePath: `/task-description-images/${filename}` };
+};
+
+
+export const createTaskLinkAttachment = async (
+  boardId: string,
+  taskId: string,
+  actor: TaskBoardActor,
+  input: { url: string; displayText?: string }
+) => {
+  const task = await getTaskInBoard(boardId, taskId, actor);
+  if (!task) throw new TaskBoardError('Task not found.', 'not_found');
+
+  let url: URL;
+  try {
+    url = new URL(input.url);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported protocol');
+  } catch {
+    throw new TaskBoardError('A valid HTTP or HTTPS link is required.', 'validation');
+  }
+
+  const fileName = input.displayText?.trim() || url.hostname;
+  const [inserted] = await db
+    .insert(taskAttachments)
+    .values({
+      taskId,
+      boardId,
+      uploaderId: actor.userId,
+      fileName,
+      filePath: url.toString(),
+      fileType: 'text/uri-list',
+      fileSize: 0,
+      width: null,
+      height: null
+    })
+    .returning();
+
+  const [uploader] = await db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, actor.userId))
+    .limit(1);
+  await logActivity({
+    boardId,
+    eventType: 'attachment.added',
+    description: `${uploader?.name ?? 'Someone'} attached ${fileName} to ${task.title}`,
+    actorId: actor.userId,
     taskId
   });
 
@@ -920,9 +1379,9 @@ export const deleteTaskAttachment = async (
   boardId: string,
   taskId: string,
   attachmentId: string,
-  actor: { userId: string; role: 'owner' | 'member' }
+  actor: TaskBoardActor
 ) => {
-  const task = await getTaskInBoard(boardId, taskId);
+  const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
 
   const [attachment] = await db

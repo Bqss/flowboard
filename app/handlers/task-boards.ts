@@ -1,18 +1,22 @@
 import { type Ctx } from '@core';
-import type { TaskBoard, TaskPriority } from '@db';
+import type { TaskBoard, TaskPriority, TaskRecurrence } from '@db';
 import {
   TaskBoardError,
   canManageBoard,
   createBoard,
   createColumn,
   createTask,
+  completeTask,
   createTaskAttachment,
+  createTaskLinkAttachment,
   createTaskComment,
+  createTaskDescriptionImage,
   deleteBoard,
   deleteColumn,
   deleteTask,
   deleteTaskAttachment,
   deleteTaskComment,
+  deleteTaskLabel,
   getColumnInBoard,
   getTaskBoardView,
   getTaskDetail,
@@ -20,11 +24,16 @@ import {
   listTaskAttachments,
   listTaskBoardActivity,
   listTaskComments,
+  listTaskLabels,
   moveTask,
   reorderColumns,
   updateBoard,
   updateColumn,
-  updateTask
+  updateTask,
+  updateTaskComment,
+  updateTaskLabel,
+  createTaskLabel,
+  type TaskBoardActor
 } from '@services/task-board';
 
 type BoardCtx<Body = unknown, Params = Record<string, string>> = Ctx<Body, Params> & {
@@ -37,15 +46,18 @@ type ColumnParams = BoardParams & { columnId: string };
 type TaskParams = BoardParams & { taskId: string };
 type CommentParams = TaskParams & { commentId: string };
 type AttachmentParams = TaskParams & { attachmentId: string };
+type LabelParams = BoardParams & { labelId: string };
 
 type CreateBoardBody = {
   name: string;
   description?: string | null;
+  workspaceMemberGroupId?: string | null;
 };
 
 type UpdateBoardBody = {
   name?: string;
   description?: string | null;
+  workspaceMemberGroupId?: string | null;
 };
 
 type CreateColumnBody = {
@@ -67,15 +79,37 @@ type CreateTaskBody = {
   title: string;
   description?: string | null;
   priority?: TaskPriority;
+  labels?: string[];
   assigneeId?: string | null;
+  startAt?: string | null;
   dueAt?: string | null;
+  recurrence?: TaskRecurrence;
+  recurrenceDays?: number[];
 };
+
 type UpdateTaskBody = {
   title?: string;
   description?: string | null;
   priority?: TaskPriority;
+  labels?: string[];
   assigneeId?: string | null;
+  startAt?: string | null;
   dueAt?: string | null;
+  recurrence?: TaskRecurrence;
+  recurrenceDays?: number[];
+};
+type CompleteTaskBody = {
+  completed: boolean;
+};
+
+type CreateLabelBody = {
+  name: string;
+  color?: string;
+};
+
+type UpdateLabelBody = {
+  name?: string;
+  color?: string;
 };
 
 type MoveTaskBody = {
@@ -88,6 +122,11 @@ type CreateCommentBody = {
 };
 type UploadAttachmentBody = {
   file: File;
+};
+
+type CreateLinkAttachmentBody = {
+  url: string;
+  displayText?: string;
 };
 
 const handleTaskBoardError = (error: unknown, set: Ctx['set']) => {
@@ -115,18 +154,19 @@ const requireManager = (
   return null;
 };
 
-export async function list({ workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
-  if (!workspace || !membership) {
+export async function list({ user, workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
+  if (!user || !workspace || !membership) {
     set.status = 403;
     return { error: 'Forbidden' };
   }
 
-  const rows = await listBoards(workspace.id);
+  const rows = await listBoards(workspace.id, { userId: user.id, role: membership.role });
   return {
     boards: rows.map((row) => ({
       id: row.id,
       name: row.name,
       description: row.description ?? null,
+      workspaceMemberGroupId: row.workspaceMemberGroupId,
       ownerId: row.ownerId,
       ownerName: row.ownerName,
       taskCount: row.taskCount,
@@ -151,6 +191,7 @@ export async function create({
   const { board, columns } = await createBoard(workspace.id, {
     name: body.name,
     description: body.description,
+    workspaceMemberGroupId: body.workspaceMemberGroupId,
     ownerId: user.id
   });
 
@@ -158,6 +199,7 @@ export async function create({
     board: {
       id: board.id,
       workspaceId: board.workspaceId,
+      workspaceMemberGroupId: board.workspaceMemberGroupId,
       name: board.name,
       description: board.description ?? null,
       ownerId: board.ownerId,
@@ -178,6 +220,7 @@ export function show({ board, membership, set }: BoardCtx<unknown, BoardParams>)
     board: {
       id: board.id,
       workspaceId: board.workspaceId,
+      workspaceMemberGroupId: board.workspaceMemberGroupId,
       name: board.name,
       description: board.description ?? null,
       ownerId: board.ownerId,
@@ -219,16 +262,23 @@ export async function remove({ user, board, membership, set }: BoardCtx<unknown,
   return { ok: true };
 }
 
-export async function boardView({ board, membership, set }: BoardCtx<unknown, BoardParams>) {
+export async function boardView({
+  user,
+  board,
+  membership,
+  set
+}: BoardCtx<unknown, BoardParams>) {
   if (!board || !membership) {
     set.status = 404;
     return { error: 'Board not found' };
   }
 
-  const data = await getTaskBoardView(board.id);
+  const data = await getTaskBoardView(
+    board.id,
+    user ? { userId: user.id, role: membership.role } : undefined
+  );
   return { board: data };
 }
-
 export async function createColumnHandler({
   user,
   board,
@@ -320,6 +370,73 @@ export async function reorderColumnsHandler({
   }
 }
 
+export async function listLabelsHandler({ board, membership }: BoardCtx<unknown, BoardParams>) {
+  if (!board || !membership) return { labels: [] };
+  return { labels: await listTaskLabels(board.workspaceId) };
+}
+
+export async function createLabelHandler({
+  user,
+  board,
+  membership,
+  body,
+  set
+}: BoardCtx<CreateLabelBody, BoardParams>) {
+  if (!user || !board || !membership) {
+    set.status = 404;
+    return { error: 'Board not found' };
+  }
+  const denied = requireManager(user, membership, board, set);
+  if (denied) return denied;
+  try {
+    return { label: await createTaskLabel(board.workspaceId, body) };
+  } catch (error) {
+    return handleTaskBoardError(error, set);
+  }
+}
+
+export async function updateLabelHandler({
+  user,
+  board,
+  membership,
+  params,
+  body,
+  set
+}: BoardCtx<UpdateLabelBody, LabelParams>) {
+  if (!user || !board || !membership) {
+    set.status = 404;
+    return { error: 'Board not found' };
+  }
+  const denied = requireManager(user, membership, board, set);
+  if (denied) return denied;
+  try {
+    return { label: await updateTaskLabel(board.workspaceId, params.labelId, body) };
+  } catch (error) {
+    return handleTaskBoardError(error, set);
+  }
+}
+
+export async function deleteLabelHandler({
+  user,
+  board,
+  membership,
+  params,
+  set
+}: BoardCtx<unknown, LabelParams>) {
+  if (!user || !board || !membership) {
+    set.status = 404;
+    return { error: 'Board not found' };
+  }
+  const denied = requireManager(user, membership, board, set);
+  if (denied) return denied;
+  try {
+    await deleteTaskLabel(board.workspaceId, params.labelId);
+    return { ok: true };
+  } catch (error) {
+    return handleTaskBoardError(error, set);
+  }
+}
+
 export async function createTaskHandler({
   user,
   board,
@@ -341,17 +458,25 @@ export async function createTaskHandler({
 }
 
 export async function taskDetail({
+  user,
   board,
   membership,
   params,
+  query,
   set
-}: BoardCtx<unknown, TaskParams>) {
+}: BoardCtx<unknown, TaskParams> & { query: { commentsLimit?: string } }) {
   if (!board || !membership) {
     set.status = 404;
     return { error: 'Board not found' };
   }
 
-  const detail = await getTaskDetail(board.id, params.taskId);
+  const parsedLimit = query.commentsLimit ? parseInt(query.commentsLimit, 10) : undefined;
+  const detail = await getTaskDetail(
+    board.id,
+    params.taskId,
+    user ? { userId: user.id, role: membership.role } : undefined,
+    parsedLimit !== undefined && !Number.isNaN(parsedLimit) ? parsedLimit : undefined
+  );
   if (!detail) {
     set.status = 404;
     return { error: 'Task not found' };
@@ -374,7 +499,35 @@ export async function updateTaskHandler({
   }
 
   try {
-    const task = await updateTask(board.id, params.taskId, body, user ? { userId: user.id } : undefined);
+    const task = await updateTask(
+      board.id,
+      params.taskId,
+      body,
+      user ? { userId: user.id, role: membership.role } : undefined
+    );
+    return { task };
+  } catch (error) {
+    return handleTaskBoardError(error, set);
+  }
+}
+export async function completeTaskHandler({
+  user,
+  board,
+  membership,
+  params,
+  body,
+  set
+}: BoardCtx<CompleteTaskBody, TaskParams>) {
+  if (!user || !board || !membership) {
+    set.status = 404;
+    return { error: 'Board not found' };
+  }
+
+  try {
+    const task = await completeTask(board.id, params.taskId, body.completed, {
+      userId: user.id,
+      role: membership.role
+    });
     return { task };
   } catch (error) {
     return handleTaskBoardError(error, set);
@@ -415,7 +568,12 @@ export async function moveTaskHandler({
   }
 
   try {
-    const task = await moveTask(board.id, params.taskId, body, user ? { userId: user.id } : undefined);
+    const task = await moveTask(
+      board.id,
+      params.taskId,
+      body,
+      user ? { userId: user.id, role: membership.role } : undefined
+    );
     return { task };
   } catch (error) {
     return handleTaskBoardError(error, set);
@@ -423,6 +581,7 @@ export async function moveTaskHandler({
 }
 
 export async function listComments({
+  user,
   board,
   membership,
   params,
@@ -433,7 +592,11 @@ export async function listComments({
     return { error: 'Board not found' };
   }
 
-  const comments = await listTaskComments(board.id, params.taskId);
+  const comments = await listTaskComments(
+    board.id,
+    params.taskId,
+    user ? { userId: user.id, role: membership.role } : undefined
+  );
   if (!comments) {
     set.status = 404;
     return { error: 'Task not found' };
@@ -456,7 +619,33 @@ export async function createCommentHandler({
   }
 
   try {
-    const comment = await createTaskComment(board.id, params.taskId, body, { userId: user.id });
+    const comment = await createTaskComment(board.id, params.taskId, body, {
+      userId: user.id,
+      role: membership.role
+    });
+    return { comment };
+  } catch (error) {
+    return handleTaskBoardError(error, set);
+  }
+}
+export async function updateCommentHandler({
+  user,
+  board,
+  membership,
+  params,
+  body,
+  set
+}: BoardCtx<CreateCommentBody, CommentParams>) {
+  if (!user || !board || !membership) {
+    set.status = 404;
+    return { error: 'Board not found' };
+  }
+
+  try {
+    const comment = await updateTaskComment(board.id, params.taskId, params.commentId, body, {
+      userId: user.id,
+      role: membership.role
+    });
     return { comment };
   } catch (error) {
     return handleTaskBoardError(error, set);
@@ -487,22 +676,29 @@ export async function deleteCommentHandler({
 }
 
 export async function activity({
+  user,
   board,
   membership,
   query,
   set
-}: BoardCtx<unknown, BoardParams> & { query: { limit?: string } }) {
+}: BoardCtx<unknown, BoardParams> & { query: { limit?: string; taskId?: string } }) {
   if (!board || !membership) {
     set.status = 404;
     return { error: 'Board not found' };
   }
 
   const parsed = parseInt(query.limit ?? '50', 10);
-  const rows = await listTaskBoardActivity(board.id, Number.isNaN(parsed) ? 50 : parsed);
+  const rows = await listTaskBoardActivity(
+    board.id,
+    Number.isNaN(parsed) ? 50 : parsed,
+    user ? { userId: user.id, role: membership.role } : undefined,
+    query.taskId
+  );
   return { activity: rows };
 }
 
 export async function listAttachments({
+  user,
   board,
   membership,
   params,
@@ -513,7 +709,11 @@ export async function listAttachments({
     return { error: 'Board not found' };
   }
 
-  const attachments = await listTaskAttachments(board.id, params.taskId);
+  const attachments = await listTaskAttachments(
+    board.id,
+    params.taskId,
+    user ? { userId: user.id, role: membership.role } : undefined
+  );
   if (!attachments) {
     set.status = 404;
     return { error: 'Task not found' };
@@ -542,7 +742,69 @@ export async function uploadAttachment({
   }
 
   try {
-    const attachment = await createTaskAttachment(board.id, params.taskId, user.id, file);
+    const attachment = await createTaskAttachment(
+      board.id,
+      params.taskId,
+      { userId: user.id, role: membership.role },
+      file
+    );
+    return { attachment };
+  } catch (error) {
+    return handleTaskBoardError(error, set);
+  }
+}
+export async function uploadDescriptionImage({
+  user,
+  board,
+  membership,
+  params,
+  body,
+  set
+}: BoardCtx<UploadAttachmentBody, TaskParams>) {
+  if (!user || !board || !membership) {
+    set.status = 404;
+    return { error: 'Board not found' };
+  }
+
+  const file = body.file;
+  if (!file || !file.name) {
+    set.status = 400;
+    return { error: 'No file uploaded' };
+  }
+
+  try {
+    const result = await createTaskDescriptionImage(
+      board.id,
+      params.taskId,
+      { userId: user.id, role: membership.role },
+      file
+    );
+    return result;
+  } catch (error) {
+    return handleTaskBoardError(error, set);
+  }
+}
+
+
+export async function createLinkAttachmentHandler({
+  user,
+  board,
+  membership,
+  params,
+  body,
+  set
+}: BoardCtx<CreateLinkAttachmentBody, TaskParams>) {
+  if (!user || !board || !membership) {
+    set.status = 404;
+    return { error: 'Board not found' };
+  }
+  try {
+    const attachment = await createTaskLinkAttachment(
+      board.id,
+      params.taskId,
+      { userId: user.id, role: membership.role },
+      body
+    );
     return { attachment };
   } catch (error) {
     return handleTaskBoardError(error, set);

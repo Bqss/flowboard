@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, ApiError, type ApiTaskBoard } from '$lib/api/client';
+  import { api, ApiError, type ApiTaskBoard, type ApiWorkspaceMemberGroup } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, IconButton, Input, Skeleton, Textarea, Tooltip } from '$lib/components/atoms/index.js';
@@ -9,6 +9,7 @@
     EmptyStateBlock,
     Breadcrumb,
     SearchInput,
+    SelectMenu,
     toast
   } from '$lib/components/molecules/index.js';
   import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
@@ -17,8 +18,10 @@
     Add01Icon,
     ArrowRight01Icon,
     Delete02Icon,
+    Edit02Icon,
     KanbanIcon,
-    Search01Icon
+    Search01Icon,
+    UserGroupIcon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../$types';
 
@@ -37,9 +40,53 @@
   let createError = $state<string | null>(null);
   let boardName = $state('');
   let boardDescription = $state('');
+  let boardGroupId = $state<string>('');
+  let groups = $state<ApiWorkspaceMemberGroup[]>([]);
 
   let boardToDelete = $state<ApiTaskBoard | null>(null);
   let deletingBoard = $state(false);
+
+  let editOpen = $state(false);
+  let editLoading = $state(false);
+  let editError = $state<string | null>(null);
+  let editingBoard = $state<ApiTaskBoard | null>(null);
+  let editBoardName = $state('');
+  let editBoardDescription = $state('');
+  let editBoardGroupId = $state('');
+
+  function openEditBoard(board: ApiTaskBoard) {
+    editingBoard = board;
+    editBoardName = board.name;
+    editBoardDescription = board.description ?? '';
+    editBoardGroupId = board.workspaceMemberGroupId ?? '';
+    editError = null;
+    editOpen = true;
+  }
+
+  async function saveEditBoard() {
+    if (!editingBoard || !editBoardName.trim() || !data.workspace?.id) return;
+    editLoading = true;
+    editError = null;
+    try {
+      const res = await api.updateTaskBoard(data.workspace.id, editingBoard.id, {
+        name: editBoardName.trim(),
+        description: editBoardDescription.trim() ? editBoardDescription.trim() : null,
+        workspaceMemberGroupId: editBoardGroupId ? editBoardGroupId : null
+      });
+      boards = boards.map((b) => (b.id === editingBoard?.id ? { ...b, ...res.board } : b));
+      editOpen = false;
+      editingBoard = null;
+      toast.success(tr('taskboard.saved') ?? 'Pengaturan papan disimpan');
+    } catch (err) {
+      editError = err instanceof ApiError ? err.message : tr('taskboard.loadError');
+    } finally {
+      editLoading = false;
+    }
+  }
+  const groupOptions = $derived([
+    { value: '', label: tr('taskboard.viewerAll') },
+    ...groups.map((g) => ({ value: g.id, label: g.name }))
+  ]);
 
   const filteredBoards = $derived(
     boardSearch.trim()
@@ -62,8 +109,12 @@
     loadingData = true;
     loadError = null;
     try {
-      const res = await api.listTaskBoards(data.workspace.id);
+      const [res, groupsRes] = await Promise.all([
+        api.listTaskBoards(data.workspace.id),
+        api.listWorkspaceMemberGroups(data.workspace.id).catch(() => ({ groups: [] }))
+      ]);
       boards = res.boards ?? [];
+      groups = groupsRes.groups ?? [];
     } catch (err) {
       loadError = err instanceof ApiError ? err.message : tr('taskboard.loadError');
     } finally {
@@ -80,6 +131,7 @@
   function openCreate() {
     boardName = '';
     boardDescription = '';
+    boardGroupId = '';
     createError = null;
     createOpen = true;
   }
@@ -91,7 +143,8 @@
     try {
       const res = await api.createTaskBoard(data.workspace.id, {
         name: boardName.trim(),
-        description: boardDescription.trim() ? boardDescription.trim() : null
+        description: boardDescription.trim() ? boardDescription.trim() : null,
+        workspaceMemberGroupId: boardGroupId ? boardGroupId : null
       });
       createOpen = false;
       await goto(`/dashboard/boards/${res.board.id}`);
@@ -233,16 +286,28 @@
               </div>
 
               {#if canManage}
-                <Tooltip text={tr('common.delete')} side="top">
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    label={tr('common.delete')}
-                    onclick={() => openDeleteBoard(board)}
-                  >
-                    <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
-                  </IconButton>
-                </Tooltip>
+                <div class="flex items-center gap-0.5">
+                  <Tooltip text={tr('common.edit')} side="top">
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      label={tr('common.edit')}
+                      onclick={() => openEditBoard(board)}
+                    >
+                      <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip text={tr('common.delete')} side="top">
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      label={tr('common.delete')}
+                      onclick={() => openDeleteBoard(board)}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                    </IconButton>
+                  </Tooltip>
+                </div>
               {/if}
             </div>
 
@@ -252,10 +317,19 @@
               </p>
             {/if}
 
-            <div>
+            <div class="flex flex-wrap items-center gap-1.5">
               <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">
                 {board.taskCount ?? 0} {tr('taskboard.cardCount')}
               </Badge>
+              {#if board.workspaceMemberGroupId}
+                {@const matchedGroup = groups.find((g) => g.id === board.workspaceMemberGroupId)}
+                <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] font-semibold">
+                  <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+                  <span>{matchedGroup?.name ?? tr('taskboard.viewerGroup')}</span>
+                </Badge>
+              {:else}
+                <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">Publik</Badge>
+              {/if}
             </div>
           </div>
 
@@ -280,6 +354,12 @@
       {/snippet}
     </FormField>
 
+    <FormField label={tr('taskboard.viewerGroup')}>
+      {#snippet control(args)}
+        <SelectMenu {...args} bind:value={boardGroupId} options={groupOptions} />
+      {/snippet}
+    </FormField>
+
     <FormField label={tr('taskboard.boardDescription')}>
       {#snippet control(args)}
         <Textarea
@@ -300,6 +380,44 @@
       <Button variant="secondary" onclick={() => (createOpen = false)}>{tr('common.cancel')}</Button>
       <Button variant="primary" loading={createLoading} disabled={!boardName.trim()} onclick={createBoard}>
         {tr('taskboard.create')}
+      </Button>
+    </div>
+  {/snippet}
+</Dialog>
+<Dialog bind:open={editOpen} title="Pengaturan Papan" description={tr('members.groupsDescription')} size="md">
+  <div class="space-y-4">
+    <FormField label={tr('taskboard.name')} required>
+      {#snippet control(args)}
+        <Input {...args} bind:value={editBoardName} placeholder={tr('taskboard.namePlaceholder')} />
+      {/snippet}
+    </FormField>
+
+    <FormField label={tr('taskboard.viewerGroup')}>
+      {#snippet control(args)}
+        <SelectMenu {...args} bind:value={editBoardGroupId} options={groupOptions} />
+      {/snippet}
+    </FormField>
+
+    <FormField label={tr('taskboard.boardDescription')}>
+      {#snippet control(args)}
+        <Textarea
+          {...args}
+          bind:value={editBoardDescription}
+          placeholder={tr('taskboard.boardDescriptionPlaceholder')}
+          rows={3}
+        />
+      {/snippet}
+    </FormField>
+
+    {#if editError}
+      <p class="text-sm font-normal leading-relaxed text-status-urgent">{editError}</p>
+    {/if}
+  </div>
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
+      <Button variant="secondary" onclick={() => (editOpen = false)}>{tr('common.cancel')}</Button>
+      <Button variant="primary" loading={editLoading} disabled={!editBoardName.trim()} onclick={saveEditBoard}>
+        {tr('common.save')}
       </Button>
     </div>
   {/snippet}
