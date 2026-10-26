@@ -19,7 +19,9 @@
     ArrowRight01Icon,
     Delete02Icon,
     Edit02Icon,
+    GridViewIcon,
     KanbanIcon,
+    ListViewIcon,
     Search01Icon,
     UserGroupIcon
   } from '@hugeicons/core-free-icons';
@@ -34,6 +36,23 @@
   let loadError = $state<string | null>(null);
   let boards = $state<ApiTaskBoard[]>([]);
   let boardSearch = $state('');
+  let viewMode = $state<'grid' | 'list'>('list');
+
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('flowboard:boards:view-mode');
+      if (saved === 'grid' || saved === 'list') {
+        viewMode = saved;
+      }
+    }
+  });
+
+  function setViewMode(mode: 'grid' | 'list') {
+    viewMode = mode;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('flowboard:boards:view-mode', mode);
+    }
+  }
 
   let createOpen = $state(false);
   let createLoading = $state(false);
@@ -208,8 +227,38 @@
         placeholder={tr('taskboard.search')}
         class="max-w-sm"
       />
-      <div class="text-[13px] font-medium text-mute">
-        <span>{filteredBoards.length} {tr('taskboard.cardCount')}</span>
+      <div class="flex items-center justify-between sm:justify-end gap-3">
+        <span class="text-[13px] font-medium text-mute">
+          {filteredBoards.length} {tr('taskboard.cardCount')}
+        </span>
+        <div
+          class="inline-flex items-center gap-0.5 rounded-xl border border-hairline/60 bg-lane p-1"
+          role="radiogroup"
+          aria-label={tr('common.viewMode')}
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={viewMode === 'grid'}
+            aria-label={tr('common.viewGrid')}
+            title={tr('common.viewGrid')}
+            onclick={() => setViewMode('grid')}
+            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'grid' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+          >
+            <HugeiconsIcon icon={GridViewIcon} size={16} strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={viewMode === 'list'}
+            aria-label={tr('common.viewList')}
+            title={tr('common.viewList')}
+            onclick={() => setViewMode('list')}
+            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'list' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+          >
+            <HugeiconsIcon icon={ListViewIcon} size={16} strokeWidth={1.8} />
+          </button>
+        </div>
       </div>
     </div>
   {/if}
@@ -258,7 +307,7 @@
         {tr('common.clear')}
       </Button>
     </div>
-  {:else}
+  {:else if viewMode === 'grid'}
     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {#each filteredBoards as board (board.id)}
         {@const canManage = canManageBoard(board)}
@@ -342,6 +391,107 @@
           </div>
         </article>
       {/each}
+    </div>
+  {:else}
+    <!-- LIST / TABLE VIEW -->
+    <div class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+            <tr>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.title')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.viewer')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('common.pic')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.cardCount')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5 text-right">{tr('common.actions')}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-hairline">
+            {#each filteredBoards as board (board.id)}
+              {@const canManage = canManageBoard(board)}
+              {@const matchedGroup = board.workspaceMemberGroupId ? groups.find((g) => g.id === board.workspaceMemberGroupId) : null}
+              <tr class="group hover:bg-lane/40 transition-colors">
+                <td class="px-4 py-3.5 sm:px-6">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                      <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
+                    </div>
+                    <div class="min-w-0">
+                      <a
+                        href="/dashboard/boards/{board.id}"
+                        class="font-bold text-ink hover:text-primary transition-colors truncate block focus-visible:outline-none focus-visible:underline"
+                        title={board.name}
+                      >
+                        {board.name}
+                      </a>
+                      {#if board.description}
+                        <p class="text-xs text-mute truncate max-w-xs sm:max-w-md">{board.description}</p>
+                      {/if}
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
+                  {#if board.workspaceMemberGroupId}
+                    <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[11px] font-semibold">
+                      <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+                      <span>{matchedGroup?.name ?? tr('taskboard.viewerGroup')}</span>
+                    </Badge>
+                  {:else}
+                    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">Publik</Badge>
+                  {/if}
+                </td>
+                <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap text-xs text-mute font-medium">
+                  {board.ownerName ?? '—'}
+                </td>
+                <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
+                  <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                    {board.taskCount ?? 0} {tr('taskboard.cardCount')}
+                  </Badge>
+                </td>
+                <td class="px-4 py-3.5 sm:px-6 text-right whitespace-nowrap">
+                  <div class="flex items-center justify-end gap-1.5">
+                    {#if canManage}
+                      <Tooltip text={tr('common.edit')} side="top">
+                        <IconButton
+                          variant="ghost"
+                          size="sm"
+                          class="size-8 rounded-lg"
+                          label={tr('common.edit')}
+                          onclick={() => openEditBoard(board)}
+                        >
+                          <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip text={tr('common.delete')} side="top">
+                        <IconButton
+                          variant="ghost"
+                          size="sm"
+                          class="size-8 rounded-lg text-mute hover:text-status-urgent hover:bg-status-urgent/10"
+                          label={tr('common.delete')}
+                          onclick={() => openDeleteBoard(board)}
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                        </IconButton>
+                      </Tooltip>
+                    {/if}
+                    <Tooltip text={tr('taskboard.openBoard')} side="top">
+                      <IconButton
+                        href="/dashboard/boards/{board.id}"
+                        variant="primary"
+                        size="sm"
+                        class="size-8 rounded-lg shadow-xs"
+                        label={tr('taskboard.openBoard')}
+                      >
+                        <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
+                      </IconButton>
+                    </Tooltip>
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     </div>
   {/if}
 </div>

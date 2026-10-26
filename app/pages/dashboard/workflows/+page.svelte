@@ -3,7 +3,7 @@
   import { api, ApiError, type ApiWorkflow, type ApiWorkflowDraft, type ApiWorkspaceMember, type ApiWorkspaceMemberGroup } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Avatar, Badge, Button, Input, Skeleton, Tooltip } from '$lib/components/atoms/index.js';
+  import { Avatar, Badge, Button, IconButton, Input, Skeleton, Tooltip } from '$lib/components/atoms/index.js';
   import {
     FormField,
     EmptyStateBlock,
@@ -23,6 +23,8 @@
     Delete02Icon,
     Copy01Icon,
     ArrowRight01Icon,
+    GridViewIcon,
+    ListViewIcon,
     UserGroupIcon,
     Search01Icon,
     Cancel01Icon,
@@ -99,6 +101,23 @@
   let workflows = $state<ApiWorkflow[]>([]);
   let members = $state<ApiWorkspaceMember[]>([]);
   let workflowSearch = $state('');
+  let viewMode = $state<'grid' | 'list'>('list');
+
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('flowboard:workflows:view-mode');
+      if (saved === 'grid' || saved === 'list') {
+        viewMode = saved;
+      }
+    }
+  });
+
+  function setViewMode(mode: 'grid' | 'list') {
+    viewMode = mode;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('flowboard:workflows:view-mode', mode);
+    }
+  }
 
   let editingWorkflow = $state<ApiWorkflow | null>(null);
   let editWorkflowOpen = $state(false);
@@ -380,8 +399,36 @@
         {/if}
       </div>
 
-      <div class="flex items-center justify-between sm:justify-end text-xs sm:text-[13px] text-mute font-medium px-0.5 sm:px-0">
+      <div class="flex items-center justify-between sm:justify-end gap-3 text-xs sm:text-[13px] text-mute font-medium px-0.5 sm:px-0">
         <span>{filteredWorkflows.length} {filteredWorkflows.length === 1 ? 'workflow' : 'workflows'}</span>
+        <div
+          class="inline-flex items-center gap-0.5 rounded-xl border border-hairline/60 bg-lane p-1"
+          role="radiogroup"
+          aria-label={tr('common.viewMode')}
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={viewMode === 'grid'}
+            aria-label={tr('common.viewGrid')}
+            title={tr('common.viewGrid')}
+            onclick={() => setViewMode('grid')}
+            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'grid' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+          >
+            <HugeiconsIcon icon={GridViewIcon} size={16} strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={viewMode === 'list'}
+            aria-label={tr('common.viewList')}
+            title={tr('common.viewList')}
+            onclick={() => setViewMode('list')}
+            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'list' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+          >
+            <HugeiconsIcon icon={ListViewIcon} size={16} strokeWidth={1.8} />
+          </button>
+        </div>
       </div>
     </div>
   {/if}
@@ -423,135 +470,276 @@
       </Button>
     </div>
   {:else}
-    <div class="grid gap-3.5 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3" data-onboarding="workflows-grid">
-      {#each filteredWorkflows as workflow, i (workflow.id)}
-        {@const assigned = (workflow.defaultAssigneeIds ?? [])
-          .map((id) => members.find((m) => m.id === id))
-          .filter((m): m is ApiWorkspaceMember => Boolean(m))}
-        {@const canManage = canManageWorkflow(workflow)}
+    <div data-onboarding="workflows-grid">
+      {#if viewMode === 'grid'}
+        <div class="grid gap-3.5 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {#each filteredWorkflows as workflow, i (workflow.id)}
+            {@const assigned = (workflow.defaultAssigneeIds ?? [])
+              .map((id) => members.find((m) => m.id === id))
+              .filter((m): m is ApiWorkspaceMember => Boolean(m))}
+            {@const canManage = canManageWorkflow(workflow)}
 
-        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
-          <!-- TOP SECTION -->
-          <div class="space-y-3 sm:space-y-3.5">
-            <div class="flex items-start justify-between gap-3">
-              <!-- ICON BADGE & TITLE -->
-              <div class="flex items-center gap-3 min-w-0">
-                <div class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
-                  <HugeiconsIcon icon={WorkflowSquare01Icon} size={19} strokeWidth={1.8} />
+            <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
+              <!-- TOP SECTION -->
+              <div class="space-y-3 sm:space-y-3.5">
+                <div class="flex items-start justify-between gap-3">
+                  <!-- ICON BADGE & TITLE -->
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                      <HugeiconsIcon icon={WorkflowSquare01Icon} size={19} strokeWidth={1.8} />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <a
+                        href="/dashboard/workflows/{workflow.id}"
+                        class="block truncate text-sm sm:text-base font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
+                        title={workflow.name}
+                      >
+                        {workflow.name}
+                      </a>
+                      {#if workflow.createdAt}
+                        <span class="block text-[11px] text-faint">
+                          {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      {/if}
+                    </div>
+                  </div>
+
+                  <!-- DIRECT MANAGEMENT ICON ACTIONS (DELETE) -->
+                  {#if canManage}
+                    <div class="flex items-center gap-1 shrink-0" {...i === 0 ? { 'data-onboarding': 'workflow-edit' } : {}}>
+                      <Tooltip text={tr('common.delete')} side="top">
+                        <button
+                          type="button"
+                          onclick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openDeleteWorkflow(workflow);
+                          }}
+                          class="flex size-8 items-center justify-center rounded-lg text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                          aria-label={tr('common.delete')}
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                        </button>
+                      </Tooltip>
+                    </div>
+                  {/if}
                 </div>
-                <div class="min-w-0 flex-1">
-                  <a
-                    href="/dashboard/workflows/{workflow.id}"
-                    class="block truncate text-sm sm:text-base font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
-                    title={workflow.name}
-                  >
-                    {workflow.name}
-                  </a>
-                  {#if workflow.createdAt}
-                    <span class="block text-[11px] text-faint">
-                      {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
+
+                <!-- ASSIGNEES / PIC INFO -->
+                <div class="rounded-xl bg-canvas-sunken/60 p-2.5 flex items-center justify-between gap-2 border border-hairline/60">
+                  <div class="flex items-center gap-2 min-w-0">
+                    {#if assigned.length > 0}
+                      <div class="flex items-center -space-x-2 shrink-0">
+                        {#each assigned.slice(0, 3) as member (member.id)}
+                          <Tooltip text={member.name} side="top">
+                            <div class="ring-2 ring-card rounded-full overflow-hidden">
+                              <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={24} />
+                            </div>
+                          </Tooltip>
+                        {/each}
+                        {#if assigned.length > 3}
+                          <div class="flex size-6 items-center justify-center rounded-full bg-lane ring-2 ring-card text-[10px] font-bold text-ink">
+                            +{assigned.length - 3}
+                          </div>
+                        {/if}
+                      </div>
+                      <span class="truncate font-medium text-ink text-xs">
+                        {assigned.map(m => m.name).slice(0, 2).join(', ')}{assigned.length > 2 ? ` (+${assigned.length - 2})` : ''}
+                      </span>
+                    {:else}
+                      <div class="flex items-center gap-1.5 text-mute text-xs">
+                        <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={1.8} class="text-faint" />
+                        <span>{workflow.ownerName ?? tr('common.unassigned')}</span>
+                      </div>
+                    {/if}
+                  </div>
+
+                  {#if assigned.length > 0}
+                    <Badge tone="queued" variant="soft" class="text-[10px] font-semibold py-0.5 px-2 shrink-0">
+                      {tr('workflows.picCount', { count: assigned.length })}
+                    </Badge>
+                  {/if}
+                </div>
+
+                <div class="flex items-center gap-1.5 pt-0.5">
+                  {#if workflow.workspaceMemberGroupId}
+                    {@const matchedGroup = groups.find((g) => g.id === workflow.workspaceMemberGroupId)}
+                    <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] font-semibold">
+                      <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+                      <span>{matchedGroup?.name ?? 'Departemen'}</span>
+                    </Badge>
+                  {:else}
+                    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">Publik</Badge>
                   {/if}
                 </div>
               </div>
 
-              <!-- DIRECT MANAGEMENT ICON ACTIONS (DELETE) -->
-              {#if canManage}
-                <div class="flex items-center gap-1 shrink-0" {...i === 0 ? { 'data-onboarding': 'workflow-edit' } : {}}>
-                  <Tooltip text={tr('common.delete')} side="top">
-                    <button
-                      type="button"
-                      onclick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openDeleteWorkflow(workflow);
-                      }}
-                      class="flex size-8 items-center justify-center rounded-lg text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-                      aria-label={tr('common.delete')}
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
-                    </button>
-                  </Tooltip>
-                </div>
-              {/if}
-            </div>
+              <!-- FOOTER ACTIONS -->
+              <div class="mt-4 sm:mt-5 flex items-center justify-between gap-2 border-t border-hairline pt-3 sm:pt-3.5">
+                <Button
+                  href="/dashboard/workflows/{workflow.id}/settings"
+                  variant="secondary"
+                  size="sm"
+                  class="flex-1 sm:flex-none justify-center gap-1.5 text-xs text-mute hover:text-ink"
+                  {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
+                >
+                  <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} />
+                  <span>{tr('workflows.setup')}</span>
+                </Button>
 
-            <!-- ASSIGNEES / PIC INFO -->
-            <div class="rounded-xl bg-canvas-sunken/60 p-2.5 flex items-center justify-between gap-2 border border-hairline/60">
-              <div class="flex items-center gap-2 min-w-0">
-                {#if assigned.length > 0}
-                  <div class="flex items-center -space-x-2 shrink-0">
-                    {#each assigned.slice(0, 3) as member (member.id)}
-                      <Tooltip text={member.name} side="top">
-                        <div class="ring-2 ring-card rounded-full overflow-hidden">
-                          <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={24} />
-                        </div>
-                      </Tooltip>
-                    {/each}
-                    {#if assigned.length > 3}
-                      <div class="flex size-6 items-center justify-center rounded-full bg-lane ring-2 ring-card text-[10px] font-bold text-ink">
-                        +{assigned.length - 3}
-                      </div>
-                    {/if}
-                  </div>
-                  <span class="truncate font-medium text-ink text-xs">
-                    {assigned.map(m => m.name).slice(0, 2).join(', ')}{assigned.length > 2 ? ` (+${assigned.length - 2})` : ''}
-                  </span>
-                {:else}
-                  <div class="flex items-center gap-1.5 text-mute text-xs">
-                    <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={1.8} class="text-faint" />
-                    <span>{workflow.ownerName ?? tr('common.unassigned')}</span>
-                  </div>
-                {/if}
+                <Button
+                  href="/dashboard/workflows/{workflow.id}"
+                  variant="primary"
+                  size="sm"
+                  class="flex-1 sm:flex-none justify-center gap-1.5 shadow-xs"
+                  {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
+                >
+                  <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} />
+                  <span class="truncate">{tr('workflows.openBoard')}</span>
+                  <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2.2} class="shrink-0 transition-transform group-hover:translate-x-0.5" />
+                </Button>
               </div>
+            </article>
+          {/each}
+        </div>
+      {:else}
+        <!-- LIST / TABLE VIEW -->
+        <div class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+                <tr>
+                  <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('common.workflow')}</th>
+                  <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.viewer')}</th>
+                  <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('common.pic')}</th>
+                  <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5 text-right">{tr('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-hairline">
+                {#each filteredWorkflows as workflow, i (workflow.id)}
+                  {@const assigned = (workflow.defaultAssigneeIds ?? [])
+                    .map((id) => members.find((m) => m.id === id))
+                    .filter((m): m is ApiWorkspaceMember => Boolean(m))}
+                  {@const canManage = canManageWorkflow(workflow)}
+                  {@const matchedGroup = workflow.workspaceMemberGroupId ? groups.find((g) => g.id === workflow.workspaceMemberGroupId) : null}
+                  <tr
+                    class="group hover:bg-lane/40 transition-colors"
+                    {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}
+                  >
+                    <!-- Workflow Icon + Name + Created Date -->
+                    <td class="px-4 py-3.5 sm:px-6">
+                      <div class="flex items-center gap-3 min-w-0">
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                          <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+                        </div>
+                        <div class="min-w-0">
+                          <a
+                            href="/dashboard/workflows/{workflow.id}"
+                            class="font-bold text-ink hover:text-primary transition-colors truncate block focus-visible:outline-none focus-visible:underline"
+                            title={workflow.name}
+                          >
+                            {workflow.name}
+                          </a>
+                          {#if workflow.createdAt}
+                            <p class="text-[11px] text-faint">
+                              {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          {/if}
+                        </div>
+                      </div>
+                    </td>
 
-              {#if assigned.length > 0}
-                <Badge tone="queued" variant="soft" class="text-[10px] font-semibold py-0.5 px-2 shrink-0">
-                  {tr('workflows.picCount', { count: assigned.length })}
-                </Badge>
-              {/if}
-            </div>
+                    <!-- Access / Group -->
+                    <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
+                      {#if workflow.workspaceMemberGroupId}
+                        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[11px] font-semibold">
+                          <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+                          <span>{matchedGroup?.name ?? 'Departemen'}</span>
+                        </Badge>
+                      {:else}
+                        <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">Publik</Badge>
+                      {/if}
+                    </td>
 
-            <div class="flex items-center gap-1.5 pt-0.5">
-              {#if workflow.workspaceMemberGroupId}
-                {@const matchedGroup = groups.find((g) => g.id === workflow.workspaceMemberGroupId)}
-                <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] font-semibold">
-                  <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
-                  <span>{matchedGroup?.name ?? 'Departemen'}</span>
-                </Badge>
-              {:else}
-                <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">Publik</Badge>
-              {/if}
-            </div>
+                    <!-- PIC / Assignees -->
+                    <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
+                      {#if assigned.length > 0}
+                        <div class="flex items-center gap-2">
+                          <div class="flex items-center -space-x-1.5 shrink-0">
+                            {#each assigned.slice(0, 3) as member (member.id)}
+                              <Tooltip text={member.name} side="top">
+                                <div class="ring-2 ring-card rounded-full overflow-hidden">
+                                  <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={22} />
+                                </div>
+                              </Tooltip>
+                            {/each}
+                            {#if assigned.length > 3}
+                              <div class="flex size-5 items-center justify-center rounded-full bg-lane ring-2 ring-card text-[9px] font-bold text-ink">
+                                +{assigned.length - 3}
+                              </div>
+                            {/if}
+                          </div>
+                          <span class="truncate text-xs font-medium text-ink max-w-[160px]">
+                            {assigned.map((m) => m.name).slice(0, 2).join(', ')}{assigned.length > 2 ? ` (+${assigned.length - 2})` : ''}
+                          </span>
+                        </div>
+                      {:else}
+                        <span class="text-xs text-mute font-medium">
+                          {workflow.ownerName ?? tr('common.unassigned')}
+                        </span>
+                      {/if}
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="px-4 py-3.5 sm:px-6 text-right whitespace-nowrap">
+                      <div class="flex items-center justify-end gap-1.5">
+                        {#if canManage}
+                          <Tooltip text={tr('common.delete')} side="top">
+                            <IconButton
+                              variant="ghost"
+                              size="sm"
+                              class="size-8 rounded-lg text-mute hover:text-status-urgent hover:bg-status-urgent/10"
+                              label={tr('common.delete')}
+                              onclick={() => openDeleteWorkflow(workflow)}
+                              {...i === 0 ? { 'data-onboarding': 'workflow-edit' } : {}}
+                            >
+                              <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                            </IconButton>
+                          </Tooltip>
+                        {/if}
+                        <Tooltip text={tr('workflows.setup')} side="top">
+                          <IconButton
+                            href="/dashboard/workflows/{workflow.id}/settings"
+                            variant="card"
+                            size="sm"
+                            class="size-8 rounded-lg text-mute hover:text-ink"
+                            label={tr('workflows.setup')}
+                            {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
+                          >
+                            <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip text={tr('workflows.openBoard')} side="top">
+                          <IconButton
+                            href="/dashboard/workflows/{workflow.id}"
+                            variant="primary"
+                            size="sm"
+                            class="size-8 rounded-lg shadow-xs"
+                            label={tr('workflows.openBoard')}
+                            {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
+                          >
+                            <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
+                          </IconButton>
+                        </Tooltip>
+                      </div>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
           </div>
-
-          <!-- FOOTER ACTIONS -->
-          <div class="mt-4 sm:mt-5 flex items-center justify-between gap-2 border-t border-hairline pt-3 sm:pt-3.5">
-            <Button
-              href="/dashboard/workflows/{workflow.id}/settings"
-              variant="secondary"
-              size="sm"
-              class="flex-1 sm:flex-none justify-center gap-1.5 text-xs text-mute hover:text-ink"
-              {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
-            >
-              <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} />
-              <span>{tr('workflows.setup')}</span>
-            </Button>
-
-            <Button
-              href="/dashboard/workflows/{workflow.id}"
-              variant="primary"
-              size="sm"
-              class="flex-1 sm:flex-none justify-center gap-1.5 shadow-xs"
-              {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
-            >
-              <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} />
-              <span class="truncate">{tr('workflows.openBoard')}</span>
-              <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2.2} class="shrink-0 transition-transform group-hover:translate-x-0.5" />
-            </Button>
-          </div>
-        </article>
-      {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
