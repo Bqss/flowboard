@@ -69,7 +69,7 @@
   let multiStep = $state(0);
   let settingsTab = $state('general');
 
-  const kanbanColumns = [
+  let kanbanColumns = $state([
     {
       id: 'todo',
       title: 'To Do',
@@ -88,7 +88,12 @@
       title: 'Completed',
       items: [{ id: '4', title: 'Send VIP Intro message', badge: 'OK' }]
     }
-  ];
+  ]);
+
+  function handleDemoColumnReorder(newIds: string[]) {
+    const map = new Map(kanbanColumns.map((col) => [col.id, col]));
+    kanbanColumns = newIds.map((id) => map.get(id)!).filter(Boolean);
+  }
 
   const timelineItems = [
     { id: '1', title: 'Customer registered', description: 'FBO account created via portal', time: 'Today, 09:14', tone: 'positive' as const },
@@ -209,6 +214,7 @@
       onaddcolumn={() => {}}
       oneditcolumn={() => {}}
       ondeletecolumn={() => {}}
+      oncolumnreorder={handleDemoColumnReorder}
     />
   </ShowcaseSection>
 

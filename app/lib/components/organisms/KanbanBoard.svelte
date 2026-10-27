@@ -17,7 +17,8 @@
 		MoreHorizontalIcon,
 		RepeatIcon,
 		PencilEdit01Icon,
-		Delete02Icon
+		Delete02Icon,
+		DragDropVerticalIcon
 	} from '@hugeicons/core-free-icons';
 	import type { KanbanColumn, KanbanCard } from './shared.js';
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
@@ -30,10 +31,12 @@
 		countLabel?: string;
 		waErrorLabel?: string;
 		dragEnabled?: boolean;
+		columnDragEnabled?: boolean;
 		addButtonPosition?: 'top' | 'bottom';
 		onloadmore?: (columnId: string) => void;
 		oncardclick?: (columnId: string, cardId: string) => void;
 		oncardmove?: (cardId: string, fromColumnId: string, toColumnId: string) => void | Promise<void>;
+		oncolumnreorder?: (columnIds: string[]) => void | Promise<void>;
 		oncomplete?: (cardId: string, completed: boolean) => void | Promise<void>;
 		onadd?: (columnId: string) => void;
 		onaddcard?: (columnId: string) => void;
@@ -59,11 +62,13 @@
 		countLabel = 'kad',
 		waErrorLabel = 'WA Error',
 		dragEnabled = true,
+		columnDragEnabled = true,
 		addButtonPosition = 'bottom',
 		onloadmore,
 		oncardclick,
 		oncardmove,
 		oncomplete,
+		oncolumnreorder,
 		onadd,
 		onaddcard,
 		oneditcolumn,
@@ -83,6 +88,13 @@
 	let dropTargetColumnId = $state<string | null>(null);
 	let suppressClick = $state(false);
 
+	let draggingColumnId = $state<string | null>(null);
+	let columnDropTargetIndex = $state<number | null>(null);
+
+	const canDragColumns = $derived(columnDragEnabled && Boolean(oncolumnreorder) && columns.length > 1);
+	const draggingColumnIndex = $derived(
+		draggingColumnId ? columns.findIndex((c) => c.id === draggingColumnId) : -1
+	);
 	const laneTone = (index: number) => {
 		const tones = ['queued', 'progress', 'done'] as const;
 		return tones[index % tones.length];
@@ -123,12 +135,19 @@
 		dropTargetColumnId = null;
 	}
 
+	function resetColumnDragState() {
+		draggingColumnId = null;
+		columnDropTargetIndex = null;
+	}
+
 	function onDragStart(event: DragEvent, columnId: string, cardId: string) {
 		if (!dragEnabled || !oncardmove) return;
+		event.stopPropagation();
 
 		draggingCardId = cardId;
 		dragSourceColumnId = columnId;
 		dropTargetColumnId = columnId;
+		event.dataTransfer?.setData('application/x-kanban-card', cardId);
 		event.dataTransfer?.setData('text/plain', cardId);
 		if (event.dataTransfer) {
 			event.dataTransfer.effectAllowed = 'move';
@@ -145,7 +164,47 @@
 		resetDragState();
 	}
 
-	function onDragOver(event: DragEvent, columnId: string) {
+	function onColumnDragStart(event: DragEvent, columnId: string) {
+		if (!canDragColumns) return;
+		draggingColumnId = columnId;
+		columnDropTargetIndex = null;
+		event.dataTransfer?.setData('application/x-kanban-column', columnId);
+		event.dataTransfer?.setData('text/plain', columnId);
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			const sectionEl = (event.currentTarget as HTMLElement | null)?.closest('section');
+			if (sectionEl) {
+				const rect = sectionEl.getBoundingClientRect();
+				const offsetX = event.clientX - rect.left;
+				const offsetY = event.clientY - rect.top;
+				event.dataTransfer.setDragImage(sectionEl, Math.max(0, offsetX), Math.max(0, offsetY));
+			}
+		}
+	}
+
+	function onColumnDragEnd() {
+		if (draggingColumnId) {
+			suppressClick = true;
+			queueMicrotask(() => {
+				suppressClick = false;
+			});
+		}
+		resetColumnDragState();
+	}
+
+	function onSectionDragOver(event: DragEvent, colIndex: number, columnId: string) {
+		if (draggingColumnId) {
+			event.preventDefault();
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect = 'move';
+			}
+			const current = event.currentTarget as HTMLElement;
+			const rect = current.getBoundingClientRect();
+			const midX = rect.left + rect.width / 2;
+			columnDropTargetIndex = event.clientX < midX ? colIndex : colIndex + 1;
+			return;
+		}
+
 		if (!draggingCardId || !oncardmove) return;
 		event.preventDefault();
 		dropTargetColumnId = columnId;
@@ -154,7 +213,8 @@
 		}
 	}
 
-	function onDragLeave(event: DragEvent, columnId: string) {
+	function onSectionDragLeave(event: DragEvent, columnId: string) {
+		if (draggingColumnId) return;
 		const related = event.relatedTarget as Node | null;
 		const current = event.currentTarget as HTMLElement;
 		if (related && current.contains(related)) return;
@@ -163,8 +223,26 @@
 		}
 	}
 
-	async function onDrop(event: DragEvent, columnId: string) {
+	async function onSectionDrop(event: DragEvent, colIndex: number, columnId: string) {
 		event.preventDefault();
+
+		if (draggingColumnId) {
+			const fromId = draggingColumnId;
+			const targetSlot = columnDropTargetIndex ?? colIndex;
+			resetColumnDragState();
+
+			if (!fromId || targetSlot === null || !oncolumnreorder) return;
+			const fromIdx = columns.findIndex((c) => c.id === fromId);
+			if (fromIdx === -1) return;
+			if (targetSlot === fromIdx || targetSlot === fromIdx + 1) return;
+
+			const remaining = columns.filter((_, idx) => idx !== fromIdx);
+			const insertAt = targetSlot <= fromIdx ? targetSlot : targetSlot - 1;
+			remaining.splice(insertAt, 0, columns[fromIdx]);
+			await oncolumnreorder(remaining.map((c) => c.id));
+			return;
+		}
+
 		const cardId = draggingCardId;
 		const fromColumnId = dragSourceColumnId;
 		resetDragState();
@@ -172,7 +250,6 @@
 		if (!cardId || !fromColumnId || !oncardmove || fromColumnId === columnId) return;
 		await oncardmove(cardId, fromColumnId, columnId);
 	}
-
 	function handleCardClick(columnId: string, cardId: string) {
 		if (suppressClick) return;
 		oncardclick?.(columnId, cardId);
@@ -190,27 +267,64 @@
 <div
 	bind:this={ref}
 	class={cn('flex items-start gap-4 overflow-x-auto pb-2 pt-1 kanban-scrollbar-hidden', className)}
+	ondragover={(event) => {
+		if (draggingColumnId) {
+			event.preventDefault();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		}
+	}}
+	ondrop={async (event) => {
+		if (draggingColumnId && columnDropTargetIndex !== null) {
+			await onSectionDrop(event, columnDropTargetIndex, '');
+		}
+	}}
 	{...rest}
 >
 	{#each columns as column, i (column.id)}
 		{@const tone = laneTone(i)}
+		{#if canDragColumns && draggingColumnId && columnDropTargetIndex === i && columnDropTargetIndex !== draggingColumnIndex && columnDropTargetIndex !== draggingColumnIndex + 1}
+			<div
+				class="h-[calc(100%-16px)] min-h-[320px] w-1.5 shrink-0 self-center rounded-full bg-primary ring-4 ring-primary/20 transition-all animate-pulse -mx-1 z-20"
+				aria-hidden="true"
+			></div>
+		{/if}
 		<section
 			role="group"
 			aria-label={`${columnLabel} ${column.title}`}
 			class={cn(
 				'flex h-full min-h-0 w-lane shrink-0 flex-col rounded-2xl bg-canvas-sunken p-3.5 select-none shadow-xs border border-hairline transition-all duration-150',
+				draggingColumnId === column.id && 'opacity-40 ring-2 ring-primary/40 scale-[0.98]',
 				dropTargetColumnId === column.id &&
 					draggingCardId &&
 					dragSourceColumnId !== column.id &&
 					'bg-primary-soft/40 ring-2 ring-primary/30'
 			)}
-			ondragover={(event) => onDragOver(event, column.id)}
-			ondragleave={(event) => onDragLeave(event, column.id)}
-			ondrop={(event) => onDrop(event, column.id)}
+			ondragover={(event) => onSectionDragOver(event, i, column.id)}
+			ondragleave={(event) => onSectionDragLeave(event, column.id)}
+			ondrop={(event) => onSectionDrop(event, i, column.id)}
 		>
 			<!-- Column Header -->
-			<header class="mb-3 flex items-center justify-between gap-2">
-				<div class="flex min-w-0 items-center gap-2">
+			<header
+				role="group"
+				aria-label={`${columnLabel} ${column.title}`}
+				class={cn(
+					'mb-3 flex items-center justify-between gap-2 select-none',
+					canDragColumns && 'cursor-grab active:cursor-grabbing'
+				)}
+				draggable={canDragColumns}
+				ondragstart={(event) => onColumnDragStart(event, column.id)}
+				ondragend={onColumnDragEnd}
+			>
+				<div class="flex min-w-0 items-center gap-1.5">
+					{#if canDragColumns}
+						<span
+							class="flex size-5 shrink-0 items-center justify-center rounded text-mute/50 hover:text-mute transition-colors cursor-grab active:cursor-grabbing"
+							title="Seret untuk mengubah urutan lajur"
+							aria-hidden="true"
+						>
+							<HugeiconsIcon icon={DragDropVerticalIcon} size={15} strokeWidth={1.8} />
+						</span>
+					{/if}
 					<span
 						class={cn(
 							'size-2.5 shrink-0 rounded-full shadow-xs',
@@ -220,7 +334,7 @@
 					></span>
 					<h3 class="text-sm font-bold text-ink truncate tracking-tight">{column.title}</h3>
 				</div>
-				<div class="flex items-center gap-1.5 shrink-0">
+				<div role="presentation" class="flex items-center gap-1.5 shrink-0" ondragstart={(e) => e.stopPropagation()}>
 					<span class="text-xs font-semibold text-mute px-0.5">
 						{column.count ?? column.items.length}{countLabel ? ` ${countLabel}` : ''}
 					</span>
@@ -521,9 +635,31 @@
 			{/if}
 		</section>
 	{/each}
+	{#if canDragColumns && draggingColumnId && columnDropTargetIndex === columns.length && columnDropTargetIndex !== draggingColumnIndex && columnDropTargetIndex !== draggingColumnIndex + 1}
+		<div
+			class="h-[calc(100%-16px)] min-h-[320px] w-1.5 shrink-0 self-center rounded-full bg-primary ring-4 ring-primary/20 transition-all animate-pulse -mx-1 z-20"
+			aria-hidden="true"
+		></div>
+	{/if}
 	<!-- Rightmost Ghost Lane: Add Column (Image #2) -->
 	{#if onaddcolumn || showAddColumn}
-		<div class="flex w-lane shrink-0 flex-col">
+		<div
+			role="region"
+			aria-label={addColumnLabel}
+			class="flex w-lane shrink-0 flex-col"
+			ondragover={(event) => {
+				if (draggingColumnId) {
+					event.preventDefault();
+					if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+					columnDropTargetIndex = columns.length;
+				}
+			}}
+			ondrop={async (event) => {
+				if (draggingColumnId) {
+					await onSectionDrop(event, columns.length, '');
+				}
+			}}
+		>
 			<button
 				type="button"
 				onclick={onaddcolumn}
