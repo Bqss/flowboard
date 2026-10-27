@@ -626,6 +626,25 @@
       toast.error(err instanceof ApiError ? err.message : tr('taskboard.moveError'));
     }
   }
+  async function handleColumnReorder(newColumnIds: string[]) {
+    if (!data.workspace?.id || !boardId) return;
+    if (!canManage) {
+      toast.error('Hanya Admin atau Owner yang dapat mengubah urutan lajur.');
+      return;
+    }
+
+    const originalColumns = [...columns];
+    const colMap = new Map(columns.map((c) => [c.id, c]));
+    columns = newColumnIds.map((id) => colMap.get(id)).filter(Boolean) as typeof columns;
+
+    try {
+      await api.reorderTaskColumns(data.workspace.id, boardId, { columnIds: newColumnIds });
+      toast.success(tr('taskboard.columnsReordered'));
+    } catch (err) {
+      columns = originalColumns;
+      toast.error(err instanceof ApiError ? err.message : tr('taskboard.columnsReorderError'));
+    }
+  }
   async function handleTaskCompletion(cardId: string, completed: boolean) {
     if (!data.workspace?.id || !boardId) return;
     const task = columns.flatMap((column) => column.tasks).find((item) => item.id === cardId);
@@ -1625,6 +1644,7 @@
         showAddColumn={canManage}
         addColumnLabel={tr('setup.newStage')}
         addColumnDescription={tr('setup.newStageDescription')}
+        oncolumnreorder={canManage ? handleColumnReorder : undefined}
       />
     {/if}
   </div>
