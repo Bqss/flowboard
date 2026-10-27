@@ -603,6 +603,31 @@
       await loadWorkflowBoardData();
     }
   }
+  async function handleStageReorder(newStageIds: string[]) {
+    if (!data.workspace?.id || !workflowId) return;
+    if (!canManage) {
+      toast.error('Hanya Admin atau Owner yang dapat mengubah urutan peringkat.');
+      return;
+    }
+
+    const originalBoard = [...board];
+    const stageMap = new Map(board.map((col) => [col.id, col]));
+    board = newStageIds.map((id) => stageMap.get(id)).filter(Boolean) as typeof board;
+
+    if (stages.length > 0) {
+      const setupMap = new Map(stages.map((s) => [s.id, s]));
+      stages = newStageIds.map((id) => setupMap.get(id)).filter(Boolean) as typeof stages;
+    }
+
+    try {
+      await api.reorderStages(data.workspace.id, workflowId, { stageIds: newStageIds });
+      toast.success(tr('setup.stagesReordered'));
+    } catch (err) {
+      board = originalBoard;
+      toast.error(err instanceof ApiError ? err.message : tr('setup.reorderFailed'));
+    }
+  }
+
 
   function promptDeleteCard(card: { id: string; name: string }) {
     cardToDelete = card;
@@ -1070,6 +1095,7 @@
             emptyTitle={tr('board.noCustomersInStage')}
             emptyDropHint={tr('board.dropCardHere')}
             waErrorLabel={tr('board.waError')}
+            oncolumnreorder={canManage ? handleStageReorder : undefined}
           />
         {/if}
       {/if}

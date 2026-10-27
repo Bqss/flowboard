@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cn } from '$lib/utils.js';
   import {
     api,
     ApiError,
@@ -33,7 +34,8 @@
     WhatsappIcon,
     FlowConnectionIcon,
     CheckmarkBadge01Icon,
-    CircleIcon
+    CircleIcon,
+    DragDropVerticalIcon
   } from '@hugeicons/core-free-icons';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
@@ -444,6 +446,73 @@
       reordering = false;
     }
   }
+  // --- Drag and Drop Stage Reorder ---
+  let draggingStageIndex = $state<number | null>(null);
+  let stageDropTargetIndex = $state<number | null>(null);
+
+  function onStageDragStart(event: DragEvent, index: number) {
+    if (!canManage || reordering) return;
+    draggingStageIndex = index;
+    stageDropTargetIndex = null;
+    event.dataTransfer?.setData('text/plain', stages[index]?.id ?? '');
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      const laneEl = (event.currentTarget as HTMLElement | null)?.closest('section');
+      if (laneEl) {
+        const rect = laneEl.getBoundingClientRect();
+        event.dataTransfer.setDragImage(laneEl, Math.max(0, event.clientX - rect.left), Math.max(0, event.clientY - rect.top));
+      }
+    }
+  }
+
+  function onStageDragEnd() {
+    draggingStageIndex = null;
+    stageDropTargetIndex = null;
+  }
+
+  function onStageDragOver(event: DragEvent, index: number) {
+    if (draggingStageIndex === null) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    const current = event.currentTarget as HTMLElement;
+    const rect = current.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    stageDropTargetIndex = event.clientX < midX ? index : index + 1;
+  }
+
+  async function onStageDrop(event: DragEvent, index: number) {
+    event.preventDefault();
+    if (draggingStageIndex === null || !canManage || reordering) return;
+
+    const fromIndex = draggingStageIndex;
+    const targetSlot = stageDropTargetIndex ?? index;
+    draggingStageIndex = null;
+    stageDropTargetIndex = null;
+
+    if (fromIndex === targetSlot || fromIndex === targetSlot - 1) return;
+    if (!(await ensureSetupChangesSaved())) return;
+
+    reordering = true;
+    const originalStages = [...stages];
+    const newStages = [...stages];
+    const [moved] = newStages.splice(fromIndex, 1);
+    const insertAt = targetSlot <= fromIndex ? targetSlot : targetSlot - 1;
+    newStages.splice(insertAt, 0, moved);
+    stages = newStages;
+
+    try {
+      await api.reorderStages(workspaceId, workflowId, { stageIds: newStages.map((s) => s.id) });
+      await onchange?.();
+    } catch (err) {
+      stages = originalStages;
+      toast.error(err instanceof ApiError ? err.message : tr('setup.reorderFailed'));
+    } finally {
+      reordering = false;
+    }
+  }
+
 
   // --- Checklist Management Modal State ---
   let checklistModalOpen = $state(false);
@@ -599,16 +668,43 @@
     {@const requiredCount = (stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0)}
     {@const totalItems = stage.templates?.length ?? 0}
 
+    {#if canManage && draggingStageIndex !== null && stageDropTargetIndex === index && stageDropTargetIndex !== draggingStageIndex && stageDropTargetIndex !== draggingStageIndex + 1}
+      <div
+        class="h-[calc(100%-16px)] min-h-[320px] w-1.5 shrink-0 self-center rounded-full bg-primary ring-4 ring-primary/20 transition-all animate-pulse -mx-1 z-20"
+        aria-hidden="true"
+      ></div>
+    {/if}
     <section
+      aria-label={`Peringkat ${stage.name}`}
       id={`stage-lane-${stage.id}`}
-      class="w-[330px] shrink-0 rounded-2xl bg-canvas-sunken p-3 flex flex-col space-y-3 shadow-xs border border-hairline"
+      class={cn(
+        "w-[330px] shrink-0 rounded-2xl bg-canvas-sunken p-3 flex flex-col space-y-3 shadow-xs border border-hairline transition-all duration-150",
+        draggingStageIndex === index && "opacity-40 ring-2 ring-primary/40 scale-[0.98]"
+      )}
+      ondragover={(event) => onStageDragOver(event, index)}
+      ondrop={(event) => onStageDrop(event, index)}
       data-onboarding={index === 0 ? 'stage-lane' : undefined}
     >
       <!-- Lane Header Card -->
-      <div class="relative rounded-xl bg-card p-3.5 shadow-card space-y-2.5 overflow-hidden border border-hairline">
+      <div
+        role="group"
+        aria-label={`Tajuk peringkat ${stage.name}`}
+        class={cn(
+          "relative rounded-xl bg-card p-3.5 shadow-card space-y-2.5 overflow-hidden border border-hairline select-none",
+          canManage && stages.length > 1 && "cursor-grab active:cursor-grabbing"
+        )}
+        draggable={canManage && stages.length > 1}
+        ondragstart={(e) => onStageDragStart(e, index)}
+        ondragend={onStageDragEnd}
+      >
         <!-- Top Row: Stage Step, Color Badge & Controls -->
         <div class="flex items-center justify-between gap-2 pt-0.5">
           <div class="flex items-center gap-1.5 min-w-0">
+            {#if canManage && stages.length > 1}
+              <span class="flex size-5 shrink-0 items-center justify-center rounded text-mute/50 hover:text-mute transition-colors cursor-grab active:cursor-grabbing" title="Seret untuk mengubah urutan peringkat" aria-hidden="true">
+                <HugeiconsIcon icon={DragDropVerticalIcon} size={15} strokeWidth={1.8} />
+              </span>
+            {/if}
             <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-lane text-[13px] font-bold text-ink-soft shrink-0">
               {index + 1}
             </span>
@@ -621,7 +717,7 @@
           </div>
 
           {#if canManage}
-            <div class="flex items-center gap-0.5 shrink-0 text-mute" {...index === 0 ? { 'data-onboarding': 'stage-controls' } : {}}>
+            <div class="flex items-center gap-0.5 shrink-0 text-mute" ondragstart={(e) => e.stopPropagation()} {...index === 0 ? { 'data-onboarding': 'stage-controls' } : {}}>
               <IconButton
                 label={tr('setup.moveLeft')}
                 variant="ghost"
@@ -822,6 +918,12 @@
       {/if}
     </section>
   {/each}
+  {#if canManage && draggingStageIndex !== null && stageDropTargetIndex === stages.length && stageDropTargetIndex !== draggingStageIndex && stageDropTargetIndex !== draggingStageIndex + 1}
+    <div
+      class="h-[calc(100%-16px)] min-h-[320px] w-1.5 shrink-0 self-center rounded-full bg-primary ring-4 ring-primary/20 transition-all animate-pulse -mx-1 z-20"
+      aria-hidden="true"
+    ></div>
+  {/if}
 
   <!-- Rightmost "Add Stage" Ghost Lane [Image #3 - Always Visible in Edit Mode] -->
   {#if canManage}
@@ -830,6 +932,14 @@
       onclick={() => (createStageOpen = true)}
       data-onboarding="add-stage-ghost"
       class="w-[280px] shrink-0 min-h-[160px] rounded-2xl border-2 border-dashed border-hairline-strong hover:border-primary hover:bg-primary-soft/30 flex flex-col items-center justify-center p-6 text-center transition-all cursor-pointer group"
+      ondragover={(event) => {
+        if (draggingStageIndex !== null) {
+          event.preventDefault();
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+          stageDropTargetIndex = stages.length;
+        }
+      }}
+      ondrop={(event) => onStageDrop(event, stages.length)}
     >
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-lane group-hover:bg-primary-soft group-hover:text-primary transition-colors text-mute mb-2">
         <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2} />
