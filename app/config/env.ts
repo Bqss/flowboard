@@ -46,7 +46,7 @@ export const env = {
   // Public base URL of the app (used for invite links in emails).
   appUrl: (process.env.APP_URL?.trim() || `http://localhost:${process.env.PORT ?? 3000}`).replace(/\/$/, ''),
   // Email transport (Resend API). When empty, email sending is skipped (dev).
-  emailFrom: process.env.EMAIL_FROM ?? 'actjom <no-reply@flowboard.app>',
+  emailFrom: process.env.EMAIL_FROM ?? 'ActJom <no-reply@flowboard.app>',
   emailResendApiKey: process.env.RESEND_API_KEY ?? '',
   // Days of read-only grace after a subscription becomes past_due / canceled before hard block.
   billingGraceDays: Number(process.env.BILLING_GRACE_DAYS ?? 7)

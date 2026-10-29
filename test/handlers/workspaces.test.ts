@@ -8,6 +8,24 @@ const sendEmailMock = mock((_msg: unknown): Promise<{ ok: boolean; id?: string }
   Promise.resolve({ ok: true, id: 'test-id' })
 );
 
+const getInviteByIdMock = mock(async (_workspaceId: string, _inviteId: string) => ({
+  invite: {
+    id: 'invite-123',
+    email: 'new@example.com',
+    role: 'member',
+    token: 'tok-abc-123',
+    acceptedAt: null
+  },
+  workspaceName: 'Test Workspace'
+}));
+
+const extendInviteExpiryMock = mock(async (_inviteId: string) => ({
+  id: 'invite-123',
+  email: 'new@example.com',
+  role: 'member',
+  token: 'tok-abc-123',
+  expiresAt: new Date('2026-09-10T00:00:00Z')
+}));
 const createWorkspaceInviteMock = mock(async ({
   workspaceId,
   email,
@@ -32,15 +50,16 @@ const createWorkspaceInviteMock = mock(async ({
 
 mock.module('@services/email', () => ({ sendEmail: sendEmailMock }));
 mock.module('@services/workspace', () => ({
+  createWorkspaceForUser: () => Promise.resolve({}),
   createWorkspaceInvite: createWorkspaceInviteMock,
   // Stubs not exercised by createInvite but required by the module barrel:
   acceptWorkspaceInvite: () => Promise.resolve({ workspaceId: '', alreadyMember: false }),
   countWorkspaceOwners: () => Promise.resolve(0),
   getActiveWorkspaceContext: () => Promise.resolve(null),
   getInviteByToken: () => Promise.resolve(null),
-  getInviteById: () => Promise.resolve(null),
+  getInviteById: getInviteByIdMock,
   deleteInvite: () => Promise.resolve(false),
-  extendInviteExpiry: () => Promise.resolve({}),
+  extendInviteExpiry: extendInviteExpiryMock,
   getMembership: () => Promise.resolve(null),
   listPendingInvites: () => Promise.resolve([]),
   listPendingInvitesForEmail: () => Promise.resolve([]),
@@ -64,7 +83,7 @@ mock.module('@config/env', () => ({
 
 // Dynamic import is required here: mock.module() must register before the
 // handler module loads so its static imports resolve to our mocks.
-const { createInvite } = await import('@handlers/workspaces');
+const { createInvite, resendInviteHandler } = await import('@handlers/workspaces');
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -104,6 +123,8 @@ const baseCtx = {
 
 beforeEach(() => {
   sendEmailMock.mockClear();
+  getInviteByIdMock.mockClear();
+  extendInviteExpiryMock.mockClear();
   createWorkspaceInviteMock.mockClear();
 });
 
@@ -138,6 +159,9 @@ test('createInvite sends an email with the invite link and returns the invite', 
   expect(emailArg.subject).toContain('Owner Name');
   expect(emailArg.html).toContain('https://test.flowboard.app/invite/tok-abc-123');
   expect(emailArg.text).toContain('https://test.flowboard.app/invite/tok-abc-123');
+  expect(emailArg.html).toContain('workspace ActJom');
+  expect(emailArg.html).not.toContain('workspace Flowboard');
+  expect(emailArg.text).toContain('workspace ActJom');
 
   // 3. Response shape
   expect(res).toEqual({
@@ -149,6 +173,25 @@ test('createInvite sends an email with the invite link and returns the invite', 
       expiresAt: new Date('2026-09-10T00:00:00Z')
     }
   });
+});
+
+test('resendInviteHandler sends an ActJom-branded email', async () => {
+  await resendInviteHandler({
+    ...baseCtx,
+    user: ownerUser,
+    workspace,
+    membership: { role: 'owner' },
+    params: { workspaceId: 'ws-1', inviteId: 'invite-123' }
+  } as never);
+
+  expect(getInviteByIdMock).toHaveBeenCalledTimes(1);
+  expect(extendInviteExpiryMock).toHaveBeenCalledTimes(1);
+  expect(sendEmailMock).toHaveBeenCalledTimes(1);
+
+  const emailArg = sendEmailMock.mock.calls[0][0] as { html: string; text: string };
+  expect(emailArg.html).toContain('workspace ActJom');
+  expect(emailArg.html).not.toContain('workspace Flowboard');
+  expect(emailArg.text).toContain('workspace ActJom');
 });
 
 test('createInvite returns 403 when user is missing', async () => {

@@ -264,14 +264,14 @@ export async function createInvite({
     html: [
       `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px">`,
       `<h2 style="margin:0 0 8px">Anda diundang ke "${workspace.name}"</h2>`,
-      `<p style="margin:0 0 16px;color:#555">${user.name} mengundang Anda sebagai <strong>${role}</strong> di workspace Flowboard.</p>`,
+      `<p style="margin:0 0 16px;color:#555">${user.name} mengundang Anda sebagai <strong>${role}</strong> di workspace ActJom.</p>`,
       `<p style="margin:0 0 24px">Klik tombol di bawah untuk menerima undangan:</p>`,
       `<a href="${inviteLink}" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Terima Undangan</a>`,
       `<p style="margin:24px 0 0;color:#999;font-size:13px">Atau salin link ini: ${inviteLink}</p>`,
       `<p style="margin:16px 0 0;color:#999;font-size:13px">Undangan berlaku 7 hari.</p>`,
       `</div>`
     ].join(''),
-    text: `${user.name} mengundang Anda sebagai ${role} di workspace "${workspace.name}".\n\nBuka link ini untuk menerima undangan:\n${inviteLink}\n\nUndangan berlaku 7 hari.`
+    text: `${user.name} mengundang Anda ke workspace ActJom "${workspace.name}" sebagai ${role}.\n\nBuka link ini untuk menerima undangan:\n${inviteLink}\n\nUndangan berlaku 7 hari.`
   }).catch((error) => {
     console.error('[invite] email send failed:', error);
   });
@@ -352,14 +352,14 @@ export async function resendInviteHandler({
     html: [
       `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px">`,
       `<h2 style="margin:0 0 8px">Anda diundang ke "${workspaceName}"</h2>`,
-      `<p style="margin:0 0 16px;color:#555">${user.name} mengundang Anda sebagai <strong>${invite.role}</strong> di workspace Flowboard.</p>`,
+      `<p style="margin:0 0 16px;color:#555">${user.name} mengundang Anda sebagai <strong>${invite.role}</strong> di workspace ActJom.</p>`,
       `<p style="margin:0 0 24px">Klik tombol di bawah untuk menerima undangan:</p>`,
       `<a href="${inviteLink}" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Terima Undangan</a>`,
       `<p style="margin:24px 0 0;color:#999;font-size:13px">Atau salin link ini: ${inviteLink}</p>`,
       `<p style="margin:16px 0 0;color:#999;font-size:13px">Undangan berlaku 7 hari.</p>`,
       `</div>`
     ].join(''),
-    text: `${user.name} mengundang Anda sebagai ${invite.role} di workspace "${workspaceName}".\n\nBuka link ini untuk menerima undangan:\n${inviteLink}\n\nUndangan berlaku 7 hari.`
+    text: `${user.name} mengundang Anda ke workspace ActJom "${workspaceName}" sebagai ${invite.role}.\n\nBuka link ini untuk menerima undangan:\n${inviteLink}\n\nUndangan berlaku 7 hari.`
   }).catch((error) => {
     console.error('[invite:resend] email send failed:', error);
   });
