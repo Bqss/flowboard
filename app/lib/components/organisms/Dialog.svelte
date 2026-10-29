@@ -40,7 +40,7 @@
 		md: 'max-w-lg',
 		lg: 'max-w-2xl',
 		xl: 'max-w-3xl',
-		full: 'max-w-[min(96vw,1200px)]'
+		full: 'max-w-[min(96vw,1440px)]'
 	} as const;
 
 	function close() {
