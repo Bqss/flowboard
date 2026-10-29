@@ -73,6 +73,28 @@
 		selection?.removeAllRanges();
 		selection?.addRange(savedSelection);
 	}
+	function insertImage(src: string) {
+		if (!editor) return;
+		restoreSelection();
+		editor.focus();
+		const selection = window.getSelection();
+		let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+		if (!range || !editor.contains(range.commonAncestorContainer)) {
+			range = document.createRange();
+			range.selectNodeContents(editor);
+			range.collapse(false);
+		}
+		range.deleteContents();
+		const image = document.createElement('img');
+		image.src = src;
+		image.alt = 'Gambar';
+		range.insertNode(image);
+		range.setStartAfter(image);
+		range.collapse(true);
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+		savedSelection = range.cloneRange();
+	}
 
 	function run(command: string, commandValue?: string) {
 		if (disabled || !editor) return;
@@ -114,16 +136,37 @@
 		try {
 			const src = await onimageupload(file);
 			if (!src || !editor) return;
-			restoreSelection();
-			editor.focus();
-			document.execCommand('insertImage', false, src);
+			insertImage(src);
 			syncValue();
 		} finally {
 			imageUploading = false;
 		}
 	}
 
-	function handlePaste(event: ClipboardEvent) {
+	async function handlePaste(event: ClipboardEvent) {
+		const imageFiles = Array.from(event.clipboardData?.items ?? [])
+			.filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+			.map((item) => item.getAsFile())
+			.filter((file): file is File => file !== null);
+
+		if (imageFiles.length > 0 && onimageupload) {
+			event.preventDefault();
+			const text = event.clipboardData?.getData('text/plain') ?? '';
+			if (text) document.execCommand('insertText', false, text);
+			saveSelection();
+			imageUploading = true;
+			try {
+				for (const file of imageFiles) {
+					const src = await onimageupload(file);
+					if (src && editor) insertImage(src);
+				}
+				syncValue();
+			} finally {
+				imageUploading = false;
+			}
+			return;
+		}
+
 		event.preventDefault();
 		const text = event.clipboardData?.getData('text/plain') ?? '';
 		document.execCommand('insertText', false, text);
@@ -260,7 +303,7 @@
 		onpaste={handlePaste}
 		role="textbox"
 		aria-multiline="true"
-		aria-label="Deskripsi tugas"
+		aria-label={placeholder}
 	></div>
 </div>
 

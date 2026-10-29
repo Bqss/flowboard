@@ -121,6 +121,7 @@
   let commentEditSaving = $state(false);
   let commentDetailsLoading = $state(false);
   let commentsExpanded = $state(false);
+  let commentImageError = $state<string | null>(null);
   let uploadingAttachment = $state(false);
   let attachmentError = $state<string | null>(null);
   let deletingAttachmentId = $state<string | null>(null);
@@ -685,6 +686,7 @@
     detailLoading = true;
     detailError = null;
     commentDraft = '';
+    commentImageError = null;
     commentComposerOpen = false;
     editingCommentId = null;
     commentEditDraft = '';
@@ -737,6 +739,7 @@
     taskDetail = null;
     detailError = null;
     commentDraft = '';
+    commentImageError = null;
     commentComposerOpen = false;
     editingCommentId = null;
     commentEditDraft = '';
@@ -922,6 +925,7 @@
   function cancelCommentComposer() {
     commentDraft = '';
     commentComposerOpen = false;
+    commentImageError = null;
   }
 
   async function loadCommentDetails() {
@@ -956,11 +960,13 @@
     if (!canEditComment(comment)) return;
     editingCommentId = comment.id;
     commentEditDraft = comment.content;
+    commentImageError = null;
   }
 
   function cancelCommentEdit() {
     editingCommentId = null;
     commentEditDraft = '';
+    commentImageError = null;
   }
 
   async function saveCommentEdit() {
@@ -1152,32 +1158,49 @@
     }
   }
 
-  async function uploadDescriptionImage(file: File): Promise<string | null> {
+  async function uploadTaskImage(
+    file: File,
+    setError: (message: string | null) => void
+  ): Promise<string | null> {
     if (!taskDetail || !data.workspace?.id || !boardId) return null;
+    setError(null);
     if (!file.type.startsWith('image/')) {
-      attachmentError = 'Pilih file gambar untuk disisipkan ke deskripsi.';
+      setError('Pilih file gambar untuk disisipkan.');
       return null;
     }
     if (file.size > MAX_ATTACHMENT_BYTES) {
-      attachmentError = tr('taskboard.attachTooLarge');
+      setError(tr('taskboard.attachTooLarge'));
       return null;
     }
 
     uploadingAttachment = true;
-    attachmentError = null;
     try {
       const res = await api.uploadTaskDescriptionImage(data.workspace.id, boardId, taskDetail.id, file);
       return res.filePath;
     } catch (err) {
-      if (err instanceof ApiError && err.status === 413) {
-        attachmentError = tr('taskboard.attachTooLarge');
-      } else {
-        attachmentError = err instanceof ApiError ? err.message : tr('taskboard.attachFailed');
-      }
+      setError(
+        err instanceof ApiError && err.status === 413
+          ? tr('taskboard.attachTooLarge')
+          : err instanceof ApiError
+            ? err.message
+            : tr('taskboard.attachFailed')
+      );
       return null;
     } finally {
       uploadingAttachment = false;
     }
+  }
+
+  async function uploadDescriptionImage(file: File): Promise<string | null> {
+    return uploadTaskImage(file, (message) => {
+      attachmentError = message;
+    });
+  }
+
+  async function uploadCommentImage(file: File): Promise<string | null> {
+    return uploadTaskImage(file, (message) => {
+      commentImageError = message;
+    });
   }
 
   async function deleteAttachment(attachmentId: string) {
@@ -1683,7 +1706,7 @@
   {/snippet}
 
   {#if detailLoading}
-    <div class="grid min-h-[min(720px,calc(100dvh-8rem))] lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.85fr)]">
+    <div class="grid min-h-[min(780px,calc(100dvh-6rem))] lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.85fr)]">
       <section class="min-w-0 space-y-7 overflow-y-auto p-5 sm:p-8">
         <div class="flex flex-wrap items-center gap-2">
           {#each [1, 2, 3, 4] as item (item)}
@@ -1746,7 +1769,7 @@
   {:else if detailError}
     <p class="p-6 text-sm text-status-urgent">{detailError}</p>
   {:else if taskDetail}
-    <div class="grid min-h-[min(720px,calc(100dvh-8rem))] lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.85fr)]">
+    <div class="grid min-h-[min(780px,calc(100dvh-6rem))] lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.85fr)]">
       <section class="min-w-0 space-y-6 overflow-y-auto p-5 sm:p-8">
         <div class="flex flex-wrap items-end gap-2">
           {#if canEditCurrentTask}
@@ -2087,7 +2110,7 @@
 
       </section>
 
-      <aside class="sticky top-0 h-full min-w-0 border-t border-hairline bg-lane/40 p-5 sm:p-6 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:self-stretch lg:border-l lg:border-t-0">
+      <aside class="sticky top-0 h-full min-w-0 border-t border-hairline bg-lane/40 p-5 sm:p-6 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:self-stretch lg:border-l lg:border-t-0">
         <div class="flex items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-3">
             <HugeiconsIcon icon={BubbleChatIcon} size={18} strokeWidth={1.8} />
@@ -2116,7 +2139,11 @@
               autofocus
               disabled={postingComment}
               placeholder="Write a comment…"
+              onimageupload={uploadCommentImage}
             />
+            {#if commentImageError}
+              <p class="mt-2 text-sm text-status-urgent">{commentImageError}</p>
+            {/if}
             <div class="mt-3 flex justify-end gap-2">
               <Button variant="secondary" size="sm" disabled={postingComment} onclick={cancelCommentComposer}>
                 Cancel
@@ -2161,7 +2188,11 @@
                   autofocus
                   disabled={commentEditSaving}
                   placeholder="Edit comment…"
+                  onimageupload={uploadCommentImage}
                 />
+                {#if commentImageError}
+                  <p class="mt-2 text-sm text-status-urgent">{commentImageError}</p>
+                {/if}
                 <div class="flex justify-end gap-2">
                   <Button variant="secondary" size="sm" disabled={commentEditSaving} onclick={cancelCommentEdit}>
                     Cancel

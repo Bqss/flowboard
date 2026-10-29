@@ -40,8 +40,8 @@ const server = Bun.serve<{
   async fetch(request, srv) {
     const { pathname, searchParams } = new URL(request.url);
 
-    // Serve dynamic uploaded static files (chat uploads, task uploads, avatars)
-    const uploadPrefixes = ['/chat-uploads/', '/task-uploads/', '/avatars/'];
+    // Serve dynamically uploaded chat, task, task-description image, and avatar files.
+    const uploadPrefixes = ['/chat-uploads/', '/task-uploads/', '/task-description-images/', '/avatars/'];
     if (uploadPrefixes.some((prefix) => pathname.startsWith(prefix))) {
       const safePath = normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
       const filePath = join(process.cwd(), 'static', safePath);
