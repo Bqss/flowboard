@@ -56,6 +56,7 @@ Status: **v1** kecuali ditandai nanti.
 - 4.3 Panel detail: checklist stage aktif, rule, tombol geser
 - 4.4 Drag & drop antar stage (dengan gate 3.5)
 - 4.5 Assign / reassign assignee per card
+- 4.6 Komentar pada detail task mendukung gambar melalui tombol upload dan paste dari clipboard
 
 ## 5. Masukkan pelanggan (`createCard`)
 
@@ -110,7 +111,13 @@ Bukan Owner workspace. Ini operator Flowboard (tim internal).
 - 11.4 Comp / extend trial / ganti paket manual
 - 11.5 *(nanti)* impersonate workspace, refund penuh
 
-## 12. Di luar v1
+## 12. PWA & pembaruan aplikasi
+
+- Instalasi melalui web manifest dan prompt pemasangan aplikasi.
+- Service Worker menyimpan aset statis; API dan dokumen HTML autentik tidak dicache.
+- Pembaruan Service Worker mengikuti versi `package.json`, menunggu pilihan pengguna di banner sebelum aktif, lalu memuat ulang aplikasi.
+
+## 13. Di luar v1
 
 - Nested Kanban di dalam stage
 - Portal login pelanggan
