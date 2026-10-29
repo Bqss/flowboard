@@ -1,8 +1,10 @@
-const CACHE_NAME = 'flowboard-static-v1';
-const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'image', 'font']);
+const VERSION = new URL(self.location.href).searchParams.get('v') ?? 'dev';
+const CACHE_NAME = `flowboard-static-${VERSION}`;
 
-self.addEventListener('install', () => {
-  self.skipWaiting();
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+  }
 });
 
 self.addEventListener('activate', (event) => {

@@ -8,6 +8,9 @@ declare global {
     // interface PageState {}
     // interface Platform {}
   }
+
+  const __FLOWBOARD_VERSION__: string;
+  const __FLOWBOARD_PRODUCTION__: boolean;
 }
 
 export {};

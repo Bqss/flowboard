@@ -1,6 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, loadEnv } from 'vite';
+
+const packageJson = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
+const flowboardVersion = packageJson.version;
+
 const backendRe =
   /(?:^|\/)(?:app\/(?:handlers|middlewares|services|db|core|validators|config)|routes)\/|hooks\.server\.ts$/;
 
@@ -143,13 +150,17 @@ function parseCookie(header: string, name: string): string | undefined {
   return undefined;
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   // Bun auto-loads `.env` for its own entrypoints (migrate.ts, server.ts), but
   // the Vite dev server runs under Node and does not. Without this, server-side
   // code that reads `process.env` (e.g. `config/env.ts`) falls back to defaults.
   Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
   return {
+    define: {
+      __FLOWBOARD_VERSION__: JSON.stringify(flowboardVersion),
+      __FLOWBOARD_PRODUCTION__: JSON.stringify(command === 'build')
+    },
     plugins: [backendHmr(), chatWsPlugin(), tailwindcss(), sveltekit()],
     server: {
       host: '0.0.0.0',
