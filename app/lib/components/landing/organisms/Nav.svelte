@@ -96,7 +96,7 @@
       {#if user}
         <div class="hidden items-center gap-2 md:flex">
           <Button variant="tertiary" size="sm" onclick={logout} loading={loggingOut}>{copy.nav.signOut}</Button>
-          <Button variant="primary" size="sm" href="/dashboard">{copy.nav.openWorkspace}</Button>
+          <Button variant="primary" size="sm" href="/dashboard/chat">{copy.nav.openWorkspace}</Button>
         </div>
       {:else}
         <Button variant="primary" size="sm" href="/login">{copy.nav.signIn}</Button>
@@ -130,7 +130,7 @@
       <div class="mt-2 flex items-center justify-between gap-3 rounded-2xl bg-lane/70 p-2 pl-3 sm:hidden">
         {@render languageSwitcher(true)}
         {#if user}
-          <Button variant="secondary" size="sm" href="/dashboard">{copy.nav.workspace}</Button>
+          <Button variant="secondary" size="sm" href="/dashboard/chat">{copy.nav.workspace}</Button>
         {:else}
           <Button variant="secondary" size="sm" href="/login">{copy.nav.signIn}</Button>
         {/if}

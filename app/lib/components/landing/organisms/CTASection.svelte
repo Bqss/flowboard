@@ -25,7 +25,7 @@
         </p>
         <div class="mt-9 flex flex-wrap items-center gap-4">
           {#if user}
-            <Button variant="secondary" size="lg" href="/dashboard" arrow class="cta-action">{copy.cta.openWorkspace}</Button>
+            <Button variant="secondary" size="lg" href="/dashboard/chat" arrow class="cta-action">{copy.cta.openWorkspace}</Button>
           {:else}
             <Button variant="secondary" size="lg" href="/register" arrow class="cta-action">{copy.cta.startFree}</Button>
             <a href="/login" class="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-semibold text-on-primary/78 transition-colors duration-300 hover:text-on-primary">

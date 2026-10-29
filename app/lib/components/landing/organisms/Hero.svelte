@@ -37,7 +37,7 @@
 
       <div class="mt-8 flex flex-wrap items-center gap-3">
         {#if user}
-          <Button variant="primary" size="lg" href="/dashboard" arrow>{copy.hero.openWorkspace}</Button>
+          <Button variant="primary" size="lg" href="/dashboard/chat" arrow>{copy.hero.openWorkspace}</Button>
         {:else}
           <Button variant="primary" size="lg" href="/register" arrow>{copy.hero.startFree}</Button>
         {/if}

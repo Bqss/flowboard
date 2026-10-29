@@ -78,7 +78,7 @@
                 <Button
                   variant="secondary"
                   size="lg"
-                  href={user ? '/dashboard' : tier.href}
+                  href={user ? '/dashboard/chat' : tier.href}
                   arrow
                   class="tier-action"
                 >
@@ -88,7 +88,7 @@
                 <Button
                   variant="primary"
                   size="lg"
-                  href={user ? '/dashboard' : tier.href}
+                  href={user ? '/dashboard/chat' : tier.href}
                   arrow
                 >
                   {user ? copy.nav.openWorkspace : tier.cta}
