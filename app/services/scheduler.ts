@@ -6,6 +6,7 @@ import {
   processOverdueNotifications,
   processRecurringWorkflows
 } from './workflow';
+import { processTaskDueSoonReminders, processTaskOverdueReminders } from './task-reminder';
 import { syncAllConnections as syncSheetsConnections } from './google-sheets';
 
 let interval: ReturnType<typeof setInterval> | null = null;
@@ -24,6 +25,8 @@ export const schedulerTick = async () => {
     await processDueSoonNotifications();
     await processOverdueNotifications();
     await processRecurringWorkflows();
+    await processTaskDueSoonReminders();
+    await processTaskOverdueReminders();
   } catch (error) {
     console.error('[scheduler] tick failed:', error);
   } finally {

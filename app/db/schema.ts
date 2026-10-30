@@ -1028,6 +1028,7 @@ export const taskBoards = pgTable('task_boards', {
     .notNull()
     .references(() => users.id, { onDelete: 'restrict' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  reminderBeforeHours: integer('reminder_before_hours').default(2),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -1067,6 +1068,8 @@ export const tasks = pgTable('tasks', {
   position: integer('position').notNull().default(0),
   createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
+  dueSoonNotifiedAt: timestamp('due_soon_notified_at', { withTimezone: true }),
+  overdueNotifiedAt: timestamp('overdue_notified_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });

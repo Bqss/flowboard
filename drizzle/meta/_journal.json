@@ -141,6 +141,20 @@
       "when": 1792562273962,
       "tag": "0019_finalize_entity_chat_kinds",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793349586087,
+      "tag": "0020_remarkable_agent_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793359977297,
+      "tag": "0021_damp_wallop",
+      "breakpoints": true
     }
   ]
 }

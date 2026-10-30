@@ -77,7 +77,9 @@ Status: **v1** kecuali ditandai nanti.
 ## 7. Reminder (ke staff)
 
 - 7.1 Overdue in-app (bell + highlight card)
-- 7.2 *(nanti)* email digest / WA ke staff
+- 7.2 Email reminder task belum selesai: H-2 jam; email overdue satu kali setelah tenggat ke creator dan assignee. Digest / WA ke staff belum tersedia.
+- 7.3 Template email taskboard Actjom: Inter dan token `docs/DESIGN.md`, surface rounded tanpa garis aksen/pemisah, serta tombol pill indigo. Preview reminder dan overdue tersedia di `app/resources/notifications/static/index.html`.
+  - Inter dimuat seperti website; email client yang tidak mendukung web font menggunakan fallback sans-serif.
 
 ## 8. Dashboard
 

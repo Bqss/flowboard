@@ -736,7 +736,13 @@ export const updateTask = async (
       ...(input.labels !== undefined ? { labels: [...new Set(input.labels.map((l) => l.trim()).filter(Boolean))] } : {}),
       ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
       ...(input.startAt !== undefined ? { startAt: input.startAt ? parseDueAt(input.startAt) : null } : {}),
-      ...(input.dueAt !== undefined ? { dueAt: input.dueAt ? parseDueAt(input.dueAt) : null } : {}),
+      ...(input.dueAt !== undefined
+        ? {
+            dueAt: input.dueAt ? parseDueAt(input.dueAt) : null,
+            dueSoonNotifiedAt: null,
+            overdueNotifiedAt: null
+          }
+        : {}),
       ...(input.recurrence !== undefined ? { recurrence: input.recurrence } : {}),
       ...(input.recurrenceDays !== undefined
         ? { recurrenceDays: input.recurrence === 'weekly' ? normalizeRecurrenceDays(input.recurrenceDays) : [] }
@@ -795,7 +801,13 @@ export const completeTask = async (
 
   const [updated] = await db
     .update(tasks)
-    .set({ completedAt, startAt, dueAt, updatedAt: new Date() })
+    .set({
+      completedAt,
+      startAt,
+      dueAt,
+      ...(completed && recurrence !== 'never' ? { dueSoonNotifiedAt: null, overdueNotifiedAt: null } : {}),
+      updatedAt: new Date()
+    })
     .where(eq(tasks.id, taskId))
     .returning();
 

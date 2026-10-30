@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Actjom | Preview email taskboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&amp;display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme:light; font-family:'Inter',system-ui,-apple-system,sans-serif; color:#0f172a; background:#f8fafc; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#f8fafc; }
+    header { background:#ffffff; }
+    .header-inner { max-width:1120px; margin:auto; padding:16px 24px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { display:flex; align-items:center; gap:8px; font-size:18px; line-height:1.3; font-weight:800; letter-spacing:-.015em; }
+    .brand img { width:40px; height:40px; border-radius:12px; }
+    .header-label { color:#64748b; font-size:13px; line-height:1.3; font-weight:600; }
+    main { width:min(100% - 32px,1120px); margin:32px auto; }
+    .intro { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:24px; }
+    h1 { margin:0; font-size:30px; line-height:1.15; font-weight:800; letter-spacing:-.025em; }
+    .subject { margin:12px 0 0; color:#64748b; font-size:13px; line-height:1.3; font-weight:600; }
+    .tools { display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:flex-end; }
+    .switcher { display:flex; gap:4px; padding:4px; border-radius:9999px; background:#ffffff; box-shadow:0 1px 2px rgba(15,23,42,.05); }
+    button { min-height:44px; padding:0 16px; border:0; border-radius:9999px; background:transparent; color:#64748b; font:600 14px/1.2 'Inter',system-ui,-apple-system,sans-serif; cursor:pointer; }
+    button[aria-pressed="true"] { background:#eef2ff; color:#4338ca; }
+    button:hover { background:#f1f5f9; }
+    button:focus-visible { outline:3px solid #c7d2fe; outline-offset:2px; }
+    .viewport button { min-width:64px; }
+    .preview-stage { display:flex; justify-content:center; padding:24px 12px; border-radius:20px; background:#f1f5f9; }
+    .frame-wrap { width:640px; max-width:100%; border-radius:16px; overflow:hidden; background:#f8fafc; }
+    iframe { display:block; width:100%; height:1100px; border:0; background:#f8fafc; }
+    @media(max-width:900px) {
+      .intro { align-items:flex-start; flex-direction:column; gap:20px; }
+      .tools { justify-content:flex-start; }
+    }
+    @media(max-width:600px) {
+      .header-inner { padding:12px 16px; }
+      .header-label { display:none; }
+      main { width:calc(100% - 24px); margin:24px auto; }
+      h1 { font-size:24px; line-height:1.2; letter-spacing:-.02em; }
+      .tools { width:100%; gap:8px; }
+      .switcher { flex-wrap:wrap; }
+      button { padding:0 12px; }
+      .preview-stage { padding:8px 0; }
+      iframe { height:1300px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand"><img src="../../../../static/logo_clean.png" alt=""><span>Actjom</span></div>
+      <div class="header-label">Email design review &nbsp;·&nbsp; Taskboard</div>
+    </div>
+  </header>
+  <main>
+    <div class="intro">
+      <div>
+        <h1 id="title">Pengingat tenggat</h1>
+        <p class="subject" id="subject">Tenggat 24 jam lagi: Finalisasi desain dashb…</p>
+      </div>
+      <div class="tools">
+        <div class="switcher" aria-label="Pilih template">
+          <button id="due-button" type="button" aria-pressed="true" onclick="selectTemplate('due')">Sebelum deadline</button>
+          <button id="overdue-button" type="button" aria-pressed="false" onclick="selectTemplate('overdue')">Terlambat</button>
+        </div>
+        <div class="switcher viewport" aria-label="Ukuran preview">
+          <button type="button" aria-pressed="false" onclick="setWidth('375px', this)">Mobile</button>
+          <button type="button" aria-pressed="true" onclick="setWidth('640px', this)">Email</button>
+        </div>
+      </div>
+    </div>
+    <section class="preview-stage" aria-label="Preview email">
+      <div class="frame-wrap" id="frame-wrap">
+        <iframe id="preview" title="Preview email Actjom" src="task-due-reminder.html"></iframe>
+      </div>
+    </section>
+  </main>
+  <script>
+    const previews = {
+      due: {
+        file: 'task-due-reminder.html',
+        title: 'Pengingat tenggat',
+        subject: 'Tenggat 24 jam lagi: Finalisasi desain dashb…'
+      },
+      overdue: {
+        file: 'task-overdue.html',
+        title: 'Pengingat satu kali setelah terlambat',
+        subject: 'Tugas terlambat: Review alur aktivasi worksp…'
+      }
+    };
+    function selectTemplate(key) {
+      const preview = previews[key];
+      document.getElementById('preview').src = preview.file;
+      document.getElementById('title').textContent = preview.title;
+      document.getElementById('subject').textContent = preview.subject;
+      document.getElementById('due-button').setAttribute('aria-pressed', String(key === 'due'));
+      document.getElementById('overdue-button').setAttribute('aria-pressed', String(key === 'overdue'));
+    }
+    function setWidth(width, button) {
+      document.getElementById('frame-wrap').style.width = width;
+      button.parentElement.querySelectorAll('button').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
+  <title>Tugas terlambat: {{taskTitle}}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&amp;display=swap" rel="stylesheet">
+  <style>
+    body, table, td, a { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+    body, table, td { font-family:'Inter',system-ui,-apple-system,sans-serif; }
+    table { border-spacing:0; }
+    img { border:0; outline:none; text-decoration:none; }
+    h1, h2, p, td { overflow-wrap:anywhere; }
+    a:focus-visible { outline:3px solid #c7d2fe; outline-offset:3px; }
+    .primary-action:hover { background:#4338ca !important; }
+    @media only screen and (max-width:480px) {
+      .outer-pad { padding:24px 12px !important; }
+      .email-panel { padding:24px 20px !important; }
+      .email-title { font-size:22px !important; line-height:1.2 !important; letter-spacing:-.015em !important; }
+      .workspace { max-width:250px; }
+      .metadata-cell { display:table-cell !important; width:50% !important; padding:0 8px 14px 0 !important; text-align:left !important; vertical-align:top !important; }
+      .metadata-cell:nth-child(even) { padding-right:0 !important; padding-left:12px !important; }
+      .action-table, .primary-action { width:100% !important; }
+      .primary-action { box-sizing:border-box; }
+      .due-row-label, .due-row-value { display:block !important; width:100% !important; text-align:center !important; }
+      .due-row-value { padding-top:8px !important; }
+    }
+  </style>
+  <!--[if mso]>
+  <style>body,table,td,h1,h2,p,a { font-family:Arial,sans-serif !important; }</style>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:15px;font-weight:500;line-height:1.55;color:#334155;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f8fafc;font-size:1px;line-height:1px;">
+    {{taskTitle}} sudah melewati tenggat di {{boardName}}. Dibuat oleh {{creatorName}}.
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#f8fafc;">
+    <tr>
+      <td align="center" class="outer-pad" style="padding:32px 16px;">
+        <table role="presentation" class="email-shell" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;table-layout:fixed;">
+          <tr>
+            <td align="center" style="padding:0 12px 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                  <td valign="middle" style="padding-right:8px;">
+                    <img src="{{logoUrl}}" width="40" height="40" alt="" style="display:block;width:40px;height:40px;border-radius:12px;">
+                  </td>
+                  <td valign="middle" style="font-size:18px;font-weight:800;line-height:1.3;letter-spacing:-.015em;color:#0f172a;">Actjom</td>
+                </tr>
+              </table>
+              <p class="workspace" style="margin:8px 0 0;font-size:13px;line-height:1.3;font-weight:600;color:#64748b;text-align:center;">{{workspaceName}}</p>
+            </td>
+          </tr>
+          <tr>
+            <td class="email-panel" bgcolor="#ffffff" style="padding:32px;border-radius:20px;background:#ffffff;box-shadow:0 1px 2px rgba(15,23,42,.04),0 2px 8px rgba(15,23,42,.05);">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding:0 0 10px;">
+                    <span style="display:inline-block;padding:6px 12px;border-radius:9999px;background:#fff1f2;color:#be123c;font-size:12px;line-height:1.2;font-weight:600;letter-spacing:.005em;">Terlambat {{overdueDuration}}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:0 0 8px;">
+                    <h1 class="email-title" style="margin:0;font-size:24px;line-height:1.2;font-weight:800;letter-spacing:-.02em;color:#0f172a;">Tugas ini sudah terlambat</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:0 6px 24px;font-size:15px;line-height:1.55;font-weight:500;color:#334155;">
+                    Hai {{recipientName}}, tugas ini sudah melewati tenggat. Silakan perbarui progresnya.
+                  </td>
+                </tr>
+                <tr>
+                  <td align="left" style="padding:0 0 18px;">
+                    <h2 style="margin:0 0 5px;font-size:18px;line-height:1.3;font-weight:800;letter-spacing:-.015em;color:#0f172a;">{{taskTitle}}</h2>
+                    <p style="margin:0;font-size:13px;line-height:1.3;font-weight:600;color:#64748b;">Prioritas {{priority}}</p>
+                    {{taskDescriptionBlock}}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 0 20px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;">
+                      <tr>
+                        <td class="due-row-label" width="55%" valign="middle" style="padding:8px 0 0;font-size:13px;line-height:1.3;font-weight:600;color:#64748b;">Tenggat</td>
+                        <td class="due-row-value" width="45%" align="right" valign="middle" style="padding:8px 0 0;font-size:14px;line-height:1.5;font-weight:600;color:#1e293b;">{{dueAtFormatted}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:0 0 22px;">
+                    <table role="presentation" class="action-table" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" bgcolor="#4f46e5" style="border-radius:9999px;">
+                          <a class="primary-action" href="{{taskUrl}}" style="display:inline-block;min-height:44px;box-sizing:border-box;padding:13px 24px;border-radius:9999px;background:#4f46e5;color:#ffffff;text-align:center;text-decoration:none;font-size:15px;line-height:18px;font-weight:600;letter-spacing:-.005em;">Buka tugas di Actjom</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;">
+                      <tr>
+                        <td class="metadata-cell" width="50%" valign="top" style="padding:0 12px 16px 0;">
+                          <p style="margin:0 0 4px;font-size:13px;line-height:1.3;font-weight:600;color:#64748b;">Board</p>
+                          <p style="margin:0;font-size:14px;line-height:1.5;font-weight:500;color:#1e293b;">{{boardName}}</p>
+                        </td>
+                        <td class="metadata-cell" width="50%" valign="top" style="padding:0 0 16px 12px;">
+                          <p style="margin:0 0 4px;font-size:13px;line-height:1.3;font-weight:600;color:#64748b;">Kolom</p>
+                          <p style="margin:0;font-size:14px;line-height:1.5;font-weight:500;color:#1e293b;">{{columnName}}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="metadata-cell" width="50%" valign="top" style="padding:0 12px 0 0;">
+                          <p style="margin:0 0 4px;font-size:13px;line-height:1.3;font-weight:600;color:#64748b;">PIC</p>
+                          <p style="margin:0;font-size:14px;line-height:1.5;font-weight:500;color:#1e293b;">{{assigneeName}}</p>
+                        </td>
+                        <td class="metadata-cell" width="50%" valign="top" style="padding:0 0 0 12px;">
+                          <p style="margin:0 0 4px;font-size:13px;line-height:1.3;font-weight:600;color:#64748b;">Dibuat oleh</p>
+                          <p style="margin:0;font-size:14px;line-height:1.5;font-weight:500;color:#1e293b;">{{creatorName}}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px 12px 0;text-align:center;">
+              <p style="margin:0 0 4px;font-size:12px;line-height:1.5;font-weight:500;color:#64748b;">Email ini dikirim karena kamu pembuat atau PIC tugas di workspace {{workspaceName}}.</p>
+              <a href="{{notificationSettingsUrl}}" style="display:inline-block;padding:12px 0;font-size:12px;line-height:20px;font-weight:600;color:#4338ca;text-decoration:underline;">Kelola notifikasi email</a>
+              <span style="padding:0 8px;color:#94a3b8;">·</span>
+              <a href="{{appUrl}}" style="display:inline-block;padding:12px 0;font-size:12px;line-height:20px;font-weight:600;color:#4338ca;text-decoration:underline;">Buka Actjom</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
