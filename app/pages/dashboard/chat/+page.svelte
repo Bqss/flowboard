@@ -1,18 +1,20 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import {
     api,
     ApiError,
     type ApiChatAttachment,
-    type ApiChatConversation,
+    type ApiChatInboxConversation,
+    type ApiChatInboxWorkspace,
     type ApiChatMessage,
     type ApiChatMember
   } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Avatar, Badge, Button, IconButton, Input, Skeleton, Tooltip } from '$lib/components/atoms/index.js';
-  import { FormField, SearchInput, toast } from '$lib/components/molecules/index.js';
+  import { Avatar, Badge, Button, IconButton, Input, Skeleton, Switch, Tooltip } from '$lib/components/atoms/index.js';
+  import { ChatVideoPlayer, FormField, SearchInput, toast } from '$lib/components/molecules/index.js';
   import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
@@ -21,6 +23,7 @@
     ArrowLeft01Icon,
     Attachment01Icon,
     BubbleChatIcon,
+    Building06Icon,
     Cancel01Icon,
     Delete02Icon,
     Download04Icon,
@@ -29,9 +32,14 @@
     KanbanIcon,
     MailReply01Icon,
     MoreVerticalIcon,
+    Mic01Icon,
+    PauseIcon,
+    PlayIcon,
+    StopIcon,
     SentIcon,
     Tick02Icon,
     UserGroupIcon,
+    Video01Icon,
     WorkflowSquare01Icon,
     ZoomIcon
   } from '@hugeicons/core-free-icons';
@@ -47,14 +55,18 @@
   const userName = $derived(data.user?.name ?? '');
 
   /* ------------------------------------------------------- state */
-  let conversations = $state<ApiChatConversation[]>([]);
+  let conversations = $state<ApiChatInboxConversation[]>([]);
   let conversationsLoading = $state(true);
+  let conversationsLoadFailed = $state(false);
+  let inboxWorkspaces = $state<ApiChatInboxWorkspace[]>([]);
   let searchQuery = $state('');
   let categoryFilter = $state<'all' | 'board' | 'workflow' | 'group' | 'direct' | 'unread'>('all');
+  let allWorkspacesEnabled = $state(false);
+  let workspaceFilter = $state<string>('all');
 
   let activeConversationId = $state<string | null>(null);
-  let activeConversation = $state<ApiChatConversation | null>(null);
-  let selectedGroup = $state<ApiChatConversation | null>(null);
+  let activeConversation = $state<ApiChatInboxConversation | null>(null);
+  let selectedGroup = $state<ApiChatInboxConversation | null>(null);
   let messages = $state<ApiChatMessage[]>([]);
   let messagesLoading = $state(false);
   let loadingOlder = $state(false);
@@ -67,6 +79,21 @@
   let uploadingAttachment = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
   let lightboxSrc = $state<string | null>(null);
+  let voiceDraftFile = $state<File | null>(null);
+  let voiceDraftUrl = $state<string | null>(null);
+  let voiceDraftAudioEl = $state<HTMLAudioElement | null>(null);
+  let voiceDraftIsPlaying = $state(false);
+  let voiceDraftCurrentTime = $state(0);
+  let voiceDraftDuration = $state(0);
+  let isStartingVoiceRecording = $state(false);
+  let isRecordingVoice = $state(false);
+  let voiceRecordingSeconds = $state(0);
+  let mediaRecorder: MediaRecorder | null = null;
+  let recordingStream: MediaStream | null = null;
+  let recordingChunks: Blob[] = [];
+  let recordingTimer: ReturnType<typeof setInterval> | null = null;
+  let discardRecording = false;
+  let recordingAttempt = 0;
 
   let messageContainerEl = $state<HTMLDivElement | null>(null);
 
@@ -105,6 +132,12 @@
       return displayName.includes(query) || lastBody.includes(query);
     });
 
+    if (!allWorkspacesEnabled && workspaceId) {
+      list = list.filter((c) => c.workspaceId === workspaceId);
+    } else if (allWorkspacesEnabled && workspaceFilter !== 'all') {
+      list = list.filter((c) => c.workspaceId === workspaceFilter);
+    }
+
     // In the main list, hide taskboards and workflows that are assigned to a group!
     list = list.filter((c) => {
       if ((c.kind === 'taskboard' || c.kind === 'workflow') && c.groupId != null) {
@@ -128,6 +161,31 @@
     return list;
   });
 
+  $effect(() => {
+    if (!allWorkspacesEnabled) {
+      workspaceFilter = 'all';
+      if (workspaceId) {
+        if (selectedGroup && selectedGroup.workspaceId !== workspaceId) {
+          selectedGroup = null;
+        }
+        if (activeConversation && activeConversation.workspaceId !== workspaceId) {
+          activeConversationId = null;
+          activeConversation = null;
+          messages = [];
+        }
+      }
+    } else if (workspaceFilter !== 'all') {
+      if (selectedGroup && selectedGroup.workspaceId !== workspaceFilter) {
+        selectedGroup = null;
+      }
+      if (activeConversation && activeConversation.workspaceId !== workspaceFilter) {
+        activeConversationId = null;
+        activeConversation = null;
+        messages = [];
+      }
+    }
+  });
+
   const channelsForSelectedGroup = $derived.by(() => {
     if (!selectedGroup || !selectedGroup.groupId) return [];
     return conversations.filter(
@@ -137,7 +195,7 @@
     );
   });
 
-  function getConversationUnread(conv: ApiChatConversation): number {
+  function getConversationUnread(conv: ApiChatInboxConversation): number {
     if (conv.kind === 'group' && conv.groupId) {
       const channelUnreads = conversations
         .filter((c) => c.groupId === conv.groupId && c.id !== conv.id)
@@ -147,7 +205,7 @@
     return conv.unreadCount || 0;
   }
 
-  function handleRootItemClick(conv: ApiChatConversation) {
+  function handleRootItemClick(conv: ApiChatInboxConversation) {
     if (conv.kind === 'group' && conv.groupId) {
       selectedGroup = conv;
     } else {
@@ -167,68 +225,123 @@
   });
 
   /* ------------------------------------------------------- websocket */
-  let ws: WebSocket | null = null;
-  let wsConnected = $state(false);
-  let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  let wsRetryCount = 0;
+  const wsConnections = new Map<string, WebSocket>();
+  const wsReconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const wsRetryCounts = new Map<string, number>();
+  const onlineUsersByWorkspace = new Map<string, Set<string>>();
+  let connectedWorkspaceIds = $state<Set<string>>(new Set());
   const WS_MAX_RETRIES = 5;
 
-  function connectWs() {
-    if (!workspaceId) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = import.meta.env.DEV ? `${window.location.hostname}:3001` : window.location.host;
-    const url = `${protocol}//${wsHost}/api/chat/ws?workspaceId=${encodeURIComponent(workspaceId)}`;
-    try {
-      ws = new WebSocket(url);
-    } catch {
+  function connectWs(workspaceId: string) {
+    if (wsConnections.has(workspaceId) || !inboxWorkspaces.some((workspace) => workspace.id === workspaceId)) {
       return;
     }
 
-    ws.onopen = () => {
-      wsConnected = true;
-      wsRetryCount = 0;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = import.meta.env.DEV ? `${window.location.hostname}:3001` : window.location.host;
+    const url = `${protocol}//${wsHost}/api/chat/ws?workspaceId=${encodeURIComponent(workspaceId)}`;
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(url);
+    } catch {
+      scheduleWsReconnect(workspaceId);
+      return;
+    }
+    wsConnections.set(workspaceId, socket);
+
+    socket.onopen = () => {
+      if (wsConnections.get(workspaceId) !== socket) return;
+      wsRetryCounts.delete(workspaceId);
+      connectedWorkspaceIds = new Set([...connectedWorkspaceIds, workspaceId]);
     };
 
-    ws.onclose = () => {
-      wsConnected = false;
-      if (wsRetryCount < WS_MAX_RETRIES) {
-        wsRetryCount++;
-        wsReconnectTimer = setTimeout(connectWs, 2500 * wsRetryCount);
-      }
+    socket.onclose = () => {
+      if (wsConnections.get(workspaceId) !== socket) return;
+      wsConnections.delete(workspaceId);
+      connectedWorkspaceIds = new Set(
+        [...connectedWorkspaceIds].filter((connectedId) => connectedId !== workspaceId)
+      );
+      scheduleWsReconnect(workspaceId);
     };
 
-    ws.onerror = () => {
-      wsConnected = false;
-    };
-
-    ws.onmessage = (ev) => {
+    socket.onerror = () => socket.close();
+    socket.onmessage = (event) => {
       try {
-        const payload = JSON.parse(ev.data);
-        handleWsMessage(payload);
+        handleWsMessage(JSON.parse(event.data), workspaceId);
       } catch {
-        // ignore malformed
+        // Ignore malformed payloads.
       }
     };
   }
 
-  function handleWsMessage(data: any) {
+  function scheduleWsReconnect(workspaceId: string) {
+    if (wsReconnectTimers.has(workspaceId) || !inboxWorkspaces.some((workspace) => workspace.id === workspaceId)) {
+      return;
+    }
+    const retryCount = wsRetryCounts.get(workspaceId) ?? 0;
+    if (retryCount >= WS_MAX_RETRIES) return;
+    const nextRetry = retryCount + 1;
+    wsRetryCounts.set(workspaceId, nextRetry);
+    const timer = setTimeout(() => {
+      wsReconnectTimers.delete(workspaceId);
+      connectWs(workspaceId);
+    }, 2500 * nextRetry);
+    wsReconnectTimers.set(workspaceId, timer);
+  }
+
+  function disconnectWs(workspaceId: string) {
+    const timer = wsReconnectTimers.get(workspaceId);
+    if (timer) clearTimeout(timer);
+    wsReconnectTimers.delete(workspaceId);
+    wsRetryCounts.delete(workspaceId);
+    const socket = wsConnections.get(workspaceId);
+    wsConnections.delete(workspaceId);
+    connectedWorkspaceIds = new Set(
+      [...connectedWorkspaceIds].filter((connectedId) => connectedId !== workspaceId)
+    );
+    onlineUsersByWorkspace.delete(workspaceId);
+    onlineUserIds = new Set([...onlineUsersByWorkspace.values()].flatMap((ids) => [...ids]));
+    if (socket) {
+      socket.onclose = null;
+      socket.close();
+    }
+  }
+
+  function syncWorkspaceSockets(workspaces: ApiChatInboxWorkspace[]) {
+    const nextWorkspaceIds = new Set(workspaces.map((workspace) => workspace.id));
+    for (const workspaceId of wsConnections.keys()) {
+      if (!nextWorkspaceIds.has(workspaceId)) disconnectWs(workspaceId);
+    }
+    for (const workspaceId of wsReconnectTimers.keys()) {
+      if (!nextWorkspaceIds.has(workspaceId)) disconnectWs(workspaceId);
+    }
+    inboxWorkspaces = workspaces;
+    for (const workspaceId of nextWorkspaceIds) connectWs(workspaceId);
+  }
+
+  function handleWsMessage(data: any, workspaceId: string) {
     switch (data.type) {
       case 'message:new': {
         const msg = data.message as ApiChatMessage;
         const convId = data.conversationId as string;
+        const conversation = conversations.find(
+          (item) => item.id === convId && item.workspaceId === workspaceId
+        );
+        if (!conversation) break;
 
-        if (activeConversationId === convId) {
-          if (!messages.some((m) => m.id === msg.id)) {
+        const isActive = activeConversation?.id === convId && activeConversation.workspaceId === workspaceId;
+        if (isActive) {
+          if (!messages.some((message) => message.id === msg.id)) {
             messages = [...messages, msg];
             scrollToBottom();
           }
           void api.markChatRead(workspaceId, convId).catch(() => {});
         }
 
-        conversations = conversations.map((c) =>
-          c.id === convId
+        conversations = conversations.map((item) =>
+          item.id === convId && item.workspaceId === workspaceId
             ? {
-                ...c,
+                ...item,
                 lastMessage: {
                   id: msg.id,
                   body: msg.body,
@@ -238,59 +351,63 @@
                   deletedAt: msg.deletedAt
                 },
                 updatedAt: msg.createdAt,
-                unreadCount: activeConversationId === convId ? 0 : (c.unreadCount ?? 0) + 1
+                unreadCount: isActive ? 0 : (item.unreadCount ?? 0) + 1
               }
-            : c
+            : item
         );
-
-        // Re-sort conversation list
         conversations.sort((a, b) => {
-          const tA = new Date(a.lastMessage?.createdAt ?? a.updatedAt).getTime();
-          const tB = new Date(b.lastMessage?.createdAt ?? b.updatedAt).getTime();
-          return tB - tA;
+          const timeA = new Date(a.lastMessage?.createdAt ?? a.updatedAt).getTime();
+          const timeB = new Date(b.lastMessage?.createdAt ?? b.updatedAt).getTime();
+          return timeB - timeA;
         });
         break;
       }
 
       case 'message:edit': {
-        if (activeConversationId === data.conversationId) {
-          messages = messages.map((m) =>
-            m.id === data.messageId ? { ...m, body: data.body, editedAt: data.editedAt } : m
+        if (activeConversation && activeConversation.id === data.conversationId && activeConversation.workspaceId === workspaceId) {
+          messages = messages.map((message) =>
+            message.id === data.messageId
+              ? { ...message, body: data.body, editedAt: data.editedAt }
+              : message
           );
         }
         break;
       }
 
       case 'message:delete': {
-        if (activeConversationId === data.conversationId) {
-          messages = messages.map((m) =>
-            m.id === data.messageId ? { ...m, body: '', deletedAt: data.deletedAt } : m
+        if (activeConversation && activeConversation.id === data.conversationId && activeConversation.workspaceId === workspaceId) {
+          messages = messages.map((message) =>
+            message.id === data.messageId
+              ? { ...message, body: '', deletedAt: data.deletedAt }
+              : message
           );
         }
         break;
       }
 
       case 'reaction:toggle': {
-        if (activeConversationId === data.conversationId) {
-          messages = messages.map((m) => {
-            if (m.id !== data.messageId) return m;
+        if (activeConversation && activeConversation.id === data.conversationId && activeConversation.workspaceId === workspaceId) {
+          messages = messages.map((message) => {
+            if (message.id !== data.messageId) return message;
             if (data.action === 'added') {
-              const existing = m.reactions.find(
-                (r) => r.userId === data.userId && r.reaction === data.reaction
+              const existing = message.reactions.find(
+                (reaction) => reaction.userId === data.userId && reaction.reaction === data.reaction
               );
-              if (existing) return m;
+              if (existing) return message;
               return {
-                ...m,
-                reactions: [...m.reactions, { reaction: data.reaction, userId: data.userId, userName: data.userName }]
-              };
-            } else {
-              return {
-                ...m,
-                reactions: m.reactions.filter(
-                  (r) => !(r.userId === data.userId && r.reaction === data.reaction)
-                )
+                ...message,
+                reactions: [
+                  ...message.reactions,
+                  { reaction: data.reaction, userId: data.userId, userName: data.userName }
+                ]
               };
             }
+            return {
+              ...message,
+              reactions: message.reactions.filter(
+                (reaction) => !(reaction.userId === data.userId && reaction.reaction === data.reaction)
+              )
+            };
           });
         }
         break;
@@ -298,32 +415,30 @@
 
       case 'typing': {
         const convId = data.conversationId as string;
+        if (!conversations.some((item) => item.id === convId && item.workspaceId === workspaceId)) break;
         const typingUserId = data.userId as string;
-        const isTyping = data.isTyping as boolean;
         const current = new Set(typingUsers.get(convId) ?? []);
-        if (isTyping) {
-          current.add(typingUserId);
-        } else {
-          current.delete(typingUserId);
-        }
+        if (data.isTyping) current.add(typingUserId);
+        else current.delete(typingUserId);
         typingUsers = new Map(typingUsers.set(convId, current));
         break;
       }
 
       case 'presence': {
-        onlineUserIds = new Set(data.onlineUserIds as string[]);
+        onlineUsersByWorkspace.set(workspaceId, new Set(data.onlineUserIds as string[]));
+        onlineUserIds = new Set([...onlineUsersByWorkspace.values()].flatMap((ids) => [...ids]));
         break;
       }
     }
   }
 
   /* ------------------------------------------------------- helpers */
-  function conversationDisplayName(conv: ApiChatConversation): string {
+  function conversationDisplayName(conv: ApiChatInboxConversation): string {
     if (conv.kind !== 'direct') return conv.name ?? 'Grup';
     return conv.partner?.name ?? 'Personal';
   }
 
-  function lastMessagePreview(conv: ApiChatConversation): string {
+  function lastMessagePreview(conv: ApiChatInboxConversation): string {
     if (!conv.lastMessage) {
       if (conv.kind === 'taskboard') return 'Obrolan papan tugas';
       if (conv.kind === 'workflow') return 'Obrolan alur kerja';
@@ -363,9 +478,12 @@
   }
 
   function notifyTyping(isTyping: boolean) {
-    if (!ws || !wsConnected || !activeConversationId) return;
+    const conversation = activeConversation;
+    if (!conversation || !activeConversationId) return;
+    const socket = wsConnections.get(conversation.workspaceId);
+    if (!socket || !connectedWorkspaceIds.has(conversation.workspaceId)) return;
     try {
-      ws.send(JSON.stringify({ type: 'typing', conversationId: activeConversationId, isTyping }));
+      socket.send(JSON.stringify({ type: 'typing', conversationId: activeConversationId, isTyping }));
     } catch {
       // ignore
     }
@@ -386,62 +504,88 @@
 
   /* ------------------------------------------------------- data loading */
   async function loadConversations() {
-    if (!workspaceId) return;
+    if (!userId) return;
     conversationsLoading = true;
     try {
-      const res = await api.listChatConversations(workspaceId);
+      const res = await api.listAllChatConversations();
       const seen = new Set<string>();
-      conversations = res.conversations.filter((c) => !seen.has(c.id) && seen.add(c.id));
-    } catch (err) {
+      conversations = res.conversations.filter((conversation) => {
+        const key = `${conversation.workspaceId}:${conversation.id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      conversationsLoadFailed = false;
+      syncWorkspaceSockets(res.workspaces);
+    } catch {
+      conversationsLoadFailed = true;
       toast.error('Gagal memuat daftar obrolan');
     } finally {
       conversationsLoading = false;
     }
   }
 
-  async function selectConversation(conv: ApiChatConversation) {
+  async function selectConversation(conv: ApiChatInboxConversation) {
+    cancelVoiceRecording();
+    clearVoiceDraft();
     activeConversationId = conv.id;
     activeConversation = conv;
     messages = [];
     messagesLoading = true;
     hasOlderMessages = false;
+    loadingOlder = false;
     replyToMessage = null;
     pendingAttachments = [];
+    uploadingAttachment = false;
+
+    const isCurrentConversation = () =>
+      activeConversationId === conv.id && activeConversation?.workspaceId === conv.workspaceId;
 
     try {
       const [detailRes, msgRes] = await Promise.all([
-        api.getChatConversation(workspaceId, conv.id),
-        api.getChatMessages(workspaceId, conv.id)
+        api.getChatConversation(conv.workspaceId, conv.id),
+        api.getChatMessages(conv.workspaceId, conv.id)
       ]);
+      if (!isCurrentConversation()) return;
       roomParticipants = detailRes.participants ?? [];
       messages = msgRes.messages ?? [];
       hasOlderMessages = (msgRes.messages ?? []).length >= 50;
 
-      // Mark read in local & backend
-      await api.markChatRead(workspaceId, conv.id).catch(() => {});
-      conversations = conversations.map((c) =>
-        c.id === conv.id ? { ...c, unreadCount: 0 } : c
+      await api.markChatRead(conv.workspaceId, conv.id).catch(() => {});
+      if (!isCurrentConversation()) return;
+      conversations = conversations.map((conversation) =>
+        conversation.id === conv.id && conversation.workspaceId === conv.workspaceId
+          ? { ...conversation, unreadCount: 0 }
+          : conversation
       );
       scrollToBottom(false);
     } catch {
-      toast.error('Gagal memuat pesan');
+      if (isCurrentConversation()) toast.error('Gagal memuat pesan');
     } finally {
-      messagesLoading = false;
+      if (isCurrentConversation()) messagesLoading = false;
     }
   }
 
   async function loadOlderMessages() {
-    if (!activeConversationId || loadingOlder || !hasOlderMessages || messages.length === 0) return;
+    const conversation = activeConversation;
+    const conversationId = activeConversationId;
+    if (!conversation || conversation.id !== conversationId || loadingOlder || !hasOlderMessages || messages.length === 0) {
+      return;
+    }
     loadingOlder = true;
     const oldest = messages[0];
     const cursor = `${new Date(oldest.createdAt).toISOString()}:${oldest.id}`;
+    const isCurrentConversation = () =>
+      activeConversationId === conversationId &&
+      activeConversation?.workspaceId === conversation.workspaceId;
     try {
-      const res = await api.getChatMessages(workspaceId, activeConversationId, cursor);
+      const res = await api.getChatMessages(conversation.workspaceId, conversationId, cursor);
+      if (!isCurrentConversation()) return;
       if (res.messages.length === 0) {
         hasOlderMessages = false;
       } else {
-        const existingIds = new Set(messages.map((m) => m.id));
-        const fresh = res.messages.filter((m) => !existingIds.has(m.id));
+        const existingIds = new Set(messages.map((message) => message.id));
+        const fresh = res.messages.filter((message) => !existingIds.has(message.id));
         if (fresh.length === 0) {
           hasOlderMessages = false;
         } else {
@@ -451,36 +595,65 @@
     } catch {
       // ignore
     } finally {
-      loadingOlder = false;
+      if (isCurrentConversation()) loadingOlder = false;
     }
   }
-
   async function sendMessage() {
     const text = composerText.trim();
-    if ((!text && pendingAttachments.length === 0) || !activeConversationId || sendingMessage) return;
+    const composerTextAtSend = composerText;
+    const conversation = activeConversation;
+    const conversationId = activeConversationId;
+    if (
+      (!text && pendingAttachments.length === 0 && !voiceDraftFile) ||
+      !conversation ||
+      conversation.id !== conversationId ||
+      sendingMessage ||
+      uploadingAttachment ||
+      isStartingVoiceRecording ||
+      isRecordingVoice
+    ) return;
     sendingMessage = true;
     const clientMessageId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const replyId = replyToMessage?.id;
-    const attachmentIds = pendingAttachments.map((a) => a.id);
+    const voiceFile = voiceDraftFile;
+    const attachmentIds = pendingAttachments.map((attachment) => attachment.id);
+    let uploadingVoiceAttachment = false;
+    const isCurrentConversation = () =>
+      activeConversationId === conversationId &&
+      activeConversation?.workspaceId === conversation.workspaceId;
 
     try {
+      if (voiceFile) {
+        uploadingVoiceAttachment = true;
+        const upload = await api.uploadChatAttachment(conversation.workspaceId, conversationId, voiceFile);
+        attachmentIds.push(upload.attachment.id);
+        if (isCurrentConversation()) {
+          pendingAttachments = [...pendingAttachments, upload.attachment];
+          clearVoiceDraft();
+        }
+        uploadingVoiceAttachment = false;
+      }
+
       const res = await api.sendChatMessage(
-        workspaceId,
-        activeConversationId,
+        conversation.workspaceId,
+        conversationId,
         text,
         clientMessageId,
         replyId,
         attachmentIds
       );
-      if (!messages.some((m) => m.id === res.message.id)) {
-        messages = [...messages, res.message];
+      if (isCurrentConversation()) {
+        if (!messages.some((message) => message.id === res.message.id)) {
+          messages = [...messages, res.message];
+        }
+        if (composerText === composerTextAtSend) composerText = '';
+        if (replyToMessage?.id === replyId) replyToMessage = null;
+        const sentAttachmentIds = new Set(attachmentIds);
+        pendingAttachments = pendingAttachments.filter((attachment) => !sentAttachmentIds.has(attachment.id));
+        scrollToBottom();
       }
-      composerText = '';
-      replyToMessage = null;
-      pendingAttachments = [];
-      scrollToBottom();
     } catch {
-      toast.error('Gagal mengirim pesan');
+      toast.error(uploadingVoiceAttachment ? 'Gagal mengunggah rekaman suara' : 'Gagal mengirim pesan');
     } finally {
       sendingMessage = false;
     }
@@ -489,23 +662,260 @@
   async function handleFileUpload(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file || !activeConversationId) return;
-    uploadingAttachment = true;
-    try {
-      const res = await api.uploadChatAttachment(workspaceId, activeConversationId, file);
-      pendingAttachments = [...pendingAttachments, res.attachment];
-    } catch {
-      toast.error('Gagal mengunggah file');
-    } finally {
-      uploadingAttachment = false;
-      input.value = '';
+    if (!file) return;
+    await uploadAttachment(file);
+    input.value = '';
+  }
+
+  async function handleComposerPaste(event: ClipboardEvent) {
+    const items = event.clipboardData?.items;
+    const conversation = activeConversation;
+    if (!items || !conversation || conversation.id !== activeConversationId) return;
+    const imageFiles = Array.from(items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (imageFiles.length === 0) return;
+
+    event.preventDefault();
+    for (const [index, file] of imageFiles.entries()) {
+      const extension = file.type.split('/')[1]?.replace('+xml', '') || 'png';
+      const image = file.name
+        ? file
+        : new File([file], `pasted-image-${Date.now()}-${index + 1}.${extension}`, { type: file.type });
+      await uploadAttachment(image, conversation);
     }
   }
 
-  async function toggleReaction(msg: ApiChatMessage, reaction: string) {
-    if (!activeConversationId) return;
+  async function uploadAttachment(
+    file: File,
+    conversation: ApiChatInboxConversation | null = activeConversation
+  ) {
+    if (
+      !conversation ||
+      conversation.id !== activeConversationId ||
+      activeConversation?.workspaceId !== conversation.workspaceId
+    ) return;
+    uploadingAttachment = true;
     try {
-      await api.toggleChatReaction(workspaceId, activeConversationId, msg.id, reaction);
+      const res = await api.uploadChatAttachment(conversation.workspaceId, conversation.id, file);
+      if (
+        activeConversationId === conversation.id &&
+        activeConversation?.workspaceId === conversation.workspaceId
+      ) {
+        pendingAttachments = [...pendingAttachments, res.attachment];
+      }
+    } catch {
+      if (
+        activeConversationId === conversation.id &&
+        activeConversation?.workspaceId === conversation.workspaceId
+      ) {
+        toast.error('Gagal mengunggah file');
+      }
+    } finally {
+      if (
+        activeConversationId === conversation.id &&
+        activeConversation?.workspaceId === conversation.workspaceId
+      ) {
+        uploadingAttachment = false;
+      }
+    }
+  }
+  function clearVoiceDraft() {
+    if (voiceDraftAudioEl) {
+      voiceDraftAudioEl.pause();
+      voiceDraftAudioEl.currentTime = 0;
+    }
+    voiceDraftIsPlaying = false;
+    voiceDraftCurrentTime = 0;
+    voiceDraftDuration = 0;
+    voiceDraftFile = null;
+    if (voiceDraftUrl) URL.revokeObjectURL(voiceDraftUrl);
+    voiceDraftUrl = null;
+  }
+
+  function toggleVoiceDraftPlayback() {
+    if (!voiceDraftAudioEl) return;
+    if (voiceDraftIsPlaying) {
+      voiceDraftAudioEl.pause();
+    } else {
+      voiceDraftAudioEl.play().catch(() => {});
+    }
+  }
+
+  function handleVoiceDraftSeek(e: Event) {
+    const target = e.currentTarget as HTMLInputElement;
+    const time = parseFloat(target.value);
+    if (voiceDraftAudioEl && Number.isFinite(time)) {
+      voiceDraftAudioEl.currentTime = time;
+      voiceDraftCurrentTime = time;
+    }
+  }
+
+  function formatVoiceDuration(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+
+  function releaseRecordingResources() {
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+      recordingTimer = null;
+    }
+    recordingStream?.getTracks().forEach((track) => track.stop());
+    recordingStream = null;
+  }
+
+  async function startVoiceRecording() {
+    const conversationId = activeConversationId;
+    if (
+      !conversationId ||
+      isStartingVoiceRecording ||
+      isRecordingVoice ||
+      voiceDraftFile ||
+      uploadingAttachment ||
+      sendingMessage
+    ) return;
+
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === 'undefined'
+    ) {
+      toast.error('Perekaman suara tidak didukung di browser ini');
+      return;
+    }
+
+    const attempt = ++recordingAttempt;
+    isStartingVoiceRecording = true;
+    let stream: MediaStream | null = null;
+    let recorder: MediaRecorder | null = null;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (attempt !== recordingAttempt || activeConversationId !== conversationId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      const preferredType = [
+        'audio/webm;codecs=opus',
+        'audio/ogg;codecs=opus',
+        'audio/mp4'
+      ].find((type) => MediaRecorder.isTypeSupported(type));
+      recorder = new MediaRecorder(stream, preferredType ? { mimeType: preferredType } : undefined);
+      recordingStream = stream;
+      mediaRecorder = recorder;
+      recordingChunks = [];
+      discardRecording = false;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordingChunks.push(event.data);
+      };
+      recorder.onerror = () => {
+        discardRecording = true;
+        toast.error('Perekaman suara terhenti. Coba lagi.');
+        if (recorder && recorder.state !== 'inactive') recorder.stop();
+      };
+      recorder.onstop = () => {
+        const type = recorder?.mimeType || recordingChunks[0]?.type || 'audio/webm';
+        const blob = new Blob(recordingChunks, { type });
+        const shouldDiscard = discardRecording;
+        discardRecording = false;
+        recordingChunks = [];
+        if (mediaRecorder === recorder) mediaRecorder = null;
+        releaseRecordingResources();
+        isRecordingVoice = false;
+        voiceRecordingSeconds = 0;
+
+        if (shouldDiscard) return;
+        if (blob.size === 0) {
+          toast.error('Rekaman kosong. Coba rekam lagi.');
+          return;
+        }
+        if (blob.size > 50 * 1024 * 1024) {
+          toast.error('Rekaman melebihi batas 50 MB. Rekam pesan yang lebih singkat.');
+          return;
+        }
+
+        clearVoiceDraft();
+        const extension = type.includes('ogg') ? 'oga' : type.includes('mp4') ? 'm4a' : 'weba';
+        const file = new File([blob], `voice-message-${Date.now()}.${extension}`, { type });
+        voiceDraftFile = file;
+        voiceDraftUrl = URL.createObjectURL(file);
+        voiceDraftCurrentTime = 0;
+        voiceDraftDuration = voiceRecordingSeconds || 0;
+        voiceDraftIsPlaying = false;
+      };
+
+      recorder.start();
+      isRecordingVoice = true;
+      voiceRecordingSeconds = 0;
+      recordingTimer = setInterval(() => voiceRecordingSeconds += 1, 1000);
+    } catch {
+      if (recorder) {
+        recorder.ondataavailable = null;
+        recorder.onerror = null;
+        recorder.onstop = null;
+        if (recorder.state !== 'inactive') recorder.stop();
+      }
+      if (mediaRecorder === recorder) mediaRecorder = null;
+      if (recordingStream === stream) recordingStream = null;
+      stream?.getTracks().forEach((track) => track.stop());
+      recordingChunks = [];
+      isRecordingVoice = false;
+      if (attempt === recordingAttempt) {
+        toast.error('Tidak bisa mengakses mikrofon. Periksa izin mikrofon lalu coba lagi.');
+      }
+    } finally {
+      if (attempt === recordingAttempt) isStartingVoiceRecording = false;
+    }
+  }
+
+  function stopVoiceRecording(discard = false) {
+    const recorder = mediaRecorder;
+    if (!recorder) return;
+    discardRecording = discard;
+    if (recorder.state !== 'inactive') recorder.stop();
+  }
+
+  function cancelVoiceRecording() {
+    recordingAttempt += 1;
+    isStartingVoiceRecording = false;
+    discardRecording = true;
+    if (mediaRecorder) {
+      stopVoiceRecording(true);
+      return;
+    }
+    isRecordingVoice = false;
+    voiceRecordingSeconds = 0;
+    releaseRecordingResources();
+    recordingChunks = [];
+  }
+
+  onDestroy(() => {
+    for (const workspaceId of new Set([...wsConnections.keys(), ...wsReconnectTimers.keys()])) {
+      disconnectWs(workspaceId);
+    }
+    recordingAttempt += 1;
+    discardRecording = true;
+    if (mediaRecorder) {
+      mediaRecorder.ondataavailable = null;
+      mediaRecorder.onerror = null;
+      mediaRecorder.onstop = null;
+      if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      mediaRecorder = null;
+    }
+    recordingChunks = [];
+    releaseRecordingResources();
+    clearVoiceDraft();
+  });
+
+  async function toggleReaction(msg: ApiChatMessage, reaction: string) {
+    const conversation = activeConversation;
+    if (!conversation || conversation.id !== activeConversationId) return;
+    try {
+      await api.toggleChatReaction(conversation.workspaceId, conversation.id, msg.id, reaction);
       reactionPickerMessageId = null;
     } catch {
       // ignore
@@ -513,15 +923,15 @@
   }
 
   async function confirmDeleteMessage() {
-    if (!activeConversationId || !deleteMessageTarget) return;
+    const conversation = activeConversation;
+    if (!conversation || conversation.id !== activeConversationId || !deleteMessageTarget) return;
     try {
-      await api.deleteChatMessage(workspaceId, activeConversationId, deleteMessageTarget.id);
+      await api.deleteChatMessage(conversation.workspaceId, conversation.id, deleteMessageTarget.id);
       deleteMessageTarget = null;
     } catch {
       toast.error('Gagal menghapus pesan');
     }
   }
-
   /* ------------------------------------------------------- new chat modal */
   async function openNewDirectModal() {
     newDirectOpen = true;
@@ -587,18 +997,44 @@
 
   /* ------------------------------------------------------- lifecycle */
   $effect(() => {
-    if (workspaceId) {
-      loadConversations();
-      connectWs();
+    if (userId) {
+      void loadConversations();
+    } else {
+      conversations = [];
+      conversationsLoadFailed = false;
+      syncWorkspaceSockets([]);
     }
-    return () => {
-      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-      if (ws) {
-        ws.onclose = null;
-        ws.close();
-        ws = null;
-      }
-    };
+  });
+  let handledConversationQuery = '';
+
+  $effect(() => {
+    const requestedConversationId = $page.url.searchParams.get('conversationId');
+    if (!requestedConversationId) {
+      handledConversationQuery = '';
+      return;
+    }
+    const requestedWorkspaceId = $page.url.searchParams.get('workspaceId');
+    if (!requestedWorkspaceId || conversationsLoading) return;
+
+    const key = `${requestedWorkspaceId}:${requestedConversationId}`;
+    if (handledConversationQuery === key) return;
+    const conversation = conversations.find(
+      (item) => item.id === requestedConversationId && item.workspaceId === requestedWorkspaceId
+    );
+    if (!conversation) return;
+    handledConversationQuery = key;
+
+    void selectConversation(conversation).finally(() => {
+      const url = new URL($page.url);
+      if (url.searchParams.get('conversationId') !== requestedConversationId) return;
+      url.searchParams.delete('conversationId');
+      url.searchParams.delete('workspaceId');
+      void goto(`${url.pathname}${url.search}${url.hash}`, {
+        replaceState: true,
+        keepFocus: true,
+        noScroll: true
+      });
+    });
   });
 </script>
 
@@ -722,12 +1158,12 @@
         <h1 class="text-xl font-bold tracking-tight text-ink">Mesej</h1>
         <div class="flex items-center gap-1.5">
           <Tooltip text="Tulis pesan" side="bottom">
-            <IconButton variant="secondary" size="sm" label="Tulis pesan" onclick={openNewDirectModal}>
+            <IconButton variant="card" size="sm" label="Tulis pesan" onclick={openNewDirectModal}>
               <HugeiconsIcon icon={Edit01Icon} size={16} strokeWidth={1.8} />
             </IconButton>
           </Tooltip>
           <Tooltip text="Buat grup" side="bottom">
-            <IconButton variant="secondary" size="sm" label="Buat grup" onclick={openCreateGroupModal}>
+            <IconButton variant="card" size="sm" label="Buat grup" onclick={openCreateGroupModal}>
               <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
             </IconButton>
           </Tooltip>
@@ -736,6 +1172,42 @@
 
       <SearchInput bind:value={searchQuery} placeholder="Cari obrolan…" />
 
+      <!-- Toggler Semua Workspace -->
+      <div class="flex items-center justify-between px-1">
+        <button
+          type="button"
+          onclick={() => (allWorkspacesEnabled = !allWorkspacesEnabled)}
+          class="text-xs font-medium transition-colors {allWorkspacesEnabled ? 'text-ink font-semibold' : 'text-mute hover:text-ink'}"
+        >
+          Semua workspace
+        </button>
+        <Switch bind:checked={allWorkspacesEnabled} size="sm" aria-label="Semua workspace" />
+      </div>
+
+      <!-- Filter Workspace -->
+      {#if allWorkspacesEnabled && inboxWorkspaces.length > 0}
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
+          <button
+            type="button"
+            onclick={() => (workspaceFilter = 'all')}
+            class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors {workspaceFilter === 'all' ? 'bg-ink font-semibold text-white shadow-xs' : 'bg-canvas-sunken font-medium text-mute hover:text-ink'}"
+          >
+            <HugeiconsIcon icon={Building06Icon} size={13} strokeWidth={1.8} class="shrink-0" />
+            <span>Semua</span>
+          </button>
+          {#each inboxWorkspaces as ws (ws.id)}
+            <button
+              type="button"
+              onclick={() => (workspaceFilter = ws.id)}
+              class="inline-flex max-w-44 shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors {workspaceFilter === ws.id ? 'bg-ink font-semibold text-white shadow-xs' : 'bg-canvas-sunken font-medium text-mute hover:text-ink'}"
+              title={ws.name}
+            >
+              <HugeiconsIcon icon={Building06Icon} size={13} strokeWidth={1.8} class="shrink-0" />
+              <span class="truncate">{ws.name}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
       <!-- Filter Kategori -->
       <div class="flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
         <button
@@ -797,6 +1269,14 @@
             </div>
           {/each}
         </div>
+      {:else if conversationsLoadFailed && conversations.length === 0}
+        <div class="grid h-full place-items-center p-6 text-center">
+          <div class="flex flex-col items-center">
+            <p class="text-sm font-semibold text-ink">Gagal memuat obrolan</p>
+            <p class="mt-1 text-xs text-mute">Periksa koneksi Anda lalu coba lagi.</p>
+            <Button variant="ghost" size="sm" onclick={loadConversations} class="mt-2">Coba lagi</Button>
+          </div>
+        </div>
       {:else if filteredConversations.length === 0}
         <div class="grid h-full place-items-center p-6 text-center">
           <div class="flex flex-col items-center">
@@ -840,6 +1320,13 @@
 
               <!-- Detail Text -->
               <div class="min-w-0 flex-1">
+                {#if allWorkspacesEnabled && conv.workspaceName}
+                  <div class="mb-0.5 flex items-center">
+                    <Badge tone="neutral" class="max-w-40 truncate text-[10px] py-0 px-1.5 leading-tight">
+                      {conv.workspaceName}
+                    </Badge>
+                  </div>
+                {/if}
                 <div class="flex items-center justify-between gap-1.5">
                   <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(conv)}</span>
                   <span class="shrink-0 text-[11px] text-faint">
@@ -894,7 +1381,11 @@
         <div class="flex items-center gap-3 min-w-0">
           <button
             type="button"
-            onclick={() => (activeConversationId = null)}
+            onclick={() => {
+              cancelVoiceRecording();
+              clearVoiceDraft();
+              activeConversationId = null;
+            }}
             class="flex size-8 md:hidden items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink"
             aria-label="Kembali"
           >
@@ -922,17 +1413,22 @@
             />
           {/if}
 
-          <div class="min-w-0 flex-1 truncate">
+          <div class="min-w-0 flex-1">
             <h2 class="truncate text-base font-bold text-ink leading-tight">
               {conversationDisplayName(activeConversation!)}
             </h2>
-            <p class="truncate text-xs text-mute">
-              {#if activeConversation?.kind === 'direct'}
-                {activeConversation.partner?.id && onlineUserIds.has(activeConversation.partner.id) ? 'Online' : 'Offline'}
-              {:else}
-                {roomParticipants.length} anggota
+            <div class="mt-1 flex min-w-0 items-center gap-2">
+              {#if allWorkspacesEnabled && activeConversation?.workspaceName}
+                <Badge tone="neutral" class="max-w-36 truncate">{activeConversation.workspaceName}</Badge>
               {/if}
-            </p>
+              <p class="truncate text-xs text-mute">
+                {#if activeConversation?.kind === 'direct'}
+                  {activeConversation.partner?.id && onlineUserIds.has(activeConversation.partner.id) ? 'Online' : 'Offline'}
+                {:else}
+                  {roomParticipants.length} anggota
+                {/if}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -975,6 +1471,10 @@
         {:else}
           {#each messages as msg (msg.id)}
             {@const isOwn = msg.senderId === userId}
+            {@const visualAttachments = !msg.deletedAt && msg.attachments ? msg.attachments.filter((att) => att.fileType.startsWith('image/') || att.fileType.startsWith('video/')) : []}
+            {@const nonVisualAttachments = !msg.deletedAt && msg.attachments ? msg.attachments.filter((att) => !att.fileType.startsWith('image/') && !att.fileType.startsWith('video/')) : []}
+            {@const hasVisualMedia = visualAttachments.length > 0}
+            {@const hasCaption = Boolean(!msg.deletedAt && msg.body && msg.body.trim().length > 0)}
             <div class="group flex flex-col {isOwn ? 'items-end' : 'items-start'}">
               {#if !isOwn && activeConversation?.kind !== 'direct'}
                 <span class="mb-1 text-[11px] font-semibold text-mute px-1">
@@ -984,54 +1484,147 @@
 
               <div class="relative flex max-w-[85%] sm:max-w-[70%] items-end gap-1.5">
                 <!-- Message Bubble -->
-                <div
-                  class="rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-xs {isOwn ? 'bg-primary text-white rounded-br-sm' : 'bg-card border border-hairline text-ink rounded-bl-sm'}"
-                >
-                  {#if msg.deletedAt}
-                    <span class="italic opacity-60 text-xs">Pesan ini telah dihapus</span>
-                  {:else}
+                {#if hasVisualMedia}
+                  <!-- Visual Media Bubble: Flush on top/sides, padding only on caption below (Image #1, #2, #3) -->
+                  <div
+                    class="overflow-hidden rounded-2xl shadow-xs {isOwn ? 'bg-[#2563eb] text-white rounded-br-sm' : 'bg-card border border-hairline text-ink rounded-bl-sm'}"
+                  >
                     {#if msg.replyToMessageId}
-                      <div class="mb-1.5 rounded-lg border-l-2 border-primary-border/60 bg-black/5 dark:bg-white/5 p-2 text-xs opacity-80">
+                      <div class="m-2 mb-1.5 rounded-lg border-l-2 border-primary-border/60 bg-black/5 dark:bg-white/5 p-2 text-xs opacity-80">
                         <span class="font-bold block">{msg.replyToSenderName ?? 'Balasan'}</span>
                         <span class="truncate block">{msg.replyToBody ?? 'Pesan'}</span>
                       </div>
                     {/if}
 
-                    <p class="whitespace-pre-wrap break-words">{msg.body}</p>
+                    <!-- Media at top (no outer padding on top/left/right) -->
+                    <div class="space-y-0.5">
+                      {#each visualAttachments as att, attIdx (att.id)}
+                        {#if att.fileType.startsWith('image/')}
+                          <button
+                            type="button"
+                            onclick={() => (lightboxSrc = att.filePath)}
+                            class="group/img relative block w-full overflow-hidden text-left focus:outline-hidden"
+                          >
+                            <img
+                              src={att.filePath}
+                              alt={att.fileName}
+                              class="max-h-80 w-full object-contain bg-black/5 dark:bg-white/5 transition-opacity group-hover/img:opacity-95"
+                              loading="lazy"
+                            />
+                            <div class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/img:opacity-100 bg-black/20">
+                              <div class="flex size-8 items-center justify-center rounded-full bg-black/60 text-white">
+                                <HugeiconsIcon icon={ZoomIcon} size={16} strokeWidth={2} />
+                              </div>
+                            </div>
+                            {#if !hasCaption && nonVisualAttachments.length === 0 && attIdx === visualAttachments.length - 1}
+                              <span class="pointer-events-none absolute bottom-2.5 right-2.5 rounded-md bg-black/75 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-xs tabular-nums">
+                                {formatDate(msg.createdAt)}
+                              </span>
+                            {/if}
+                          </button>
+                        {:else if att.fileType.startsWith('video/')}
+                          <ChatVideoPlayer
+                            src={att.filePath}
+                            fileName={att.fileName}
+                            hasCaption={hasCaption || nonVisualAttachments.length > 0}
+                            timestamp={formatDate(msg.createdAt)}
+                          />
+                        {/if}
+                      {/each}
+                    </div>
 
-                    {#if msg.attachments && msg.attachments.length > 0}
-                      <div class="mt-2 space-y-1.5">
-                        {#each msg.attachments as att (att.id)}
-                          {#if att.fileType.startsWith('image/')}
-                            <button
-                              type="button"
-                              onclick={() => (lightboxSrc = att.filePath)}
-                              class="block overflow-hidden rounded-lg border border-hairline/60"
-                            >
-                              <img src={att.filePath} alt={att.fileName} class="max-h-48 rounded object-cover" />
-                            </button>
+                    <!-- Non-visual attachments (audio / documents) if mixed -->
+                    {#if nonVisualAttachments.length > 0}
+                      <div class="px-3 pt-2 space-y-1.5">
+                        {#each nonVisualAttachments as att (att.id)}
+                          {#if att.fileType.startsWith('audio/')}
+                            <audio
+                              src={att.filePath}
+                              controls
+                              preload="metadata"
+                              aria-label={`Putar rekaman suara dari ${msg.senderName}`}
+                              class="block h-10 w-full min-w-[220px] max-w-[280px]"
+                            ></audio>
                           {:else}
                             <a
                               href={att.filePath}
                               target="_blank"
                               rel="noreferrer"
                               download={att.fileName}
-                              class="flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 p-2 text-xs font-medium hover:underline"
+                              class="flex items-center gap-2 rounded-lg p-2 text-xs font-medium transition-colors {isOwn ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 text-ink'}"
                             >
                               <HugeiconsIcon icon={File02Icon} size={16} />
                               <span class="truncate">{att.fileName}</span>
-                              <HugeiconsIcon icon={Download04Icon} size={14} class="ml-auto opacity-70" />
+                              <HugeiconsIcon icon={Download04Icon} size={14} class="ml-auto opacity-70 shrink-0" />
                             </a>
                           {/if}
                         {/each}
                       </div>
                     {/if}
-                  {/if}
 
-                  <span class="mt-1 block text-right text-[10px] opacity-70">
-                    {formatDate(msg.createdAt)}
-                  </span>
-                </div>
+                    <!-- Caption at bottom with padding -->
+                    {#if hasCaption}
+                      <div class="px-3.5 pt-2 pb-1.5">
+                        <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{msg.body}</p>
+                        <span class="mt-1 block text-right text-[11px] font-medium tabular-nums {isOwn ? 'text-white/95' : 'text-mute'}">
+                          {formatDate(msg.createdAt)}
+                        </span>
+                      </div>
+                    {/if}
+                  </div>
+                {:else}
+                  <!-- Standard Text / File Bubble: Normal padding -->
+                  <div
+                    class="rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-xs {isOwn ? 'bg-[#2563eb] text-white rounded-br-sm' : 'bg-card border border-hairline text-ink rounded-bl-sm'}"
+                  >
+                    {#if msg.deletedAt}
+                      <span class="italic opacity-60 text-xs">Pesan ini telah dihapus</span>
+                    {:else}
+                      {#if msg.replyToMessageId}
+                        <div class="mb-1.5 rounded-lg border-l-2 border-primary-border/60 bg-black/5 dark:bg-white/5 p-2 text-xs opacity-80">
+                          <span class="font-bold block">{msg.replyToSenderName ?? 'Balasan'}</span>
+                          <span class="truncate block">{msg.replyToBody ?? 'Pesan'}</span>
+                        </div>
+                      {/if}
+
+                      {#if msg.attachments && msg.attachments.length > 0}
+                        <div class="space-y-1.5">
+                          {#each msg.attachments as att (att.id)}
+                            {#if att.fileType.startsWith('audio/')}
+                              <audio
+                                src={att.filePath}
+                                controls
+                                preload="metadata"
+                                aria-label={`Putar rekaman suara dari ${msg.senderName}`}
+                                class="block h-10 w-full min-w-[220px] max-w-[280px]"
+                              ></audio>
+                            {:else}
+                              <a
+                                href={att.filePath}
+                                target="_blank"
+                                rel="noreferrer"
+                                download={att.fileName}
+                                class="flex items-center gap-2 rounded-lg p-2 text-xs font-medium transition-colors {isOwn ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 text-ink'}"
+                              >
+                                <HugeiconsIcon icon={File02Icon} size={16} />
+                                <span class="truncate">{att.fileName}</span>
+                                <HugeiconsIcon icon={Download04Icon} size={14} class="ml-auto opacity-70 shrink-0" />
+                              </a>
+                            {/if}
+                          {/each}
+                        </div>
+                      {/if}
+
+                      {#if msg.body && msg.body.trim().length > 0}
+                        <p class="{msg.attachments && msg.attachments.length > 0 ? 'mt-2' : ''} whitespace-pre-wrap break-words">{msg.body}</p>
+                      {/if}
+                    {/if}
+
+                    <span class="mt-1 block text-right text-[11px] font-medium tabular-nums {isOwn ? 'text-white/95' : 'text-mute'}">
+                      {formatDate(msg.createdAt)}
+                    </span>
+                  </div>
+                {/if}
 
                 <!-- Action Button Hover Menu -->
                 <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
@@ -1091,17 +1684,89 @@
             </IconButton>
           </div>
         {/if}
+        {#if voiceDraftUrl}
+          <div class="mb-2 flex items-center gap-2.5 rounded-xl border border-hairline bg-canvas-sunken p-2.5 shadow-xs">
+            <audio
+              bind:this={voiceDraftAudioEl}
+              src={voiceDraftUrl}
+              preload="metadata"
+              ontimeupdate={() => {
+                if (voiceDraftAudioEl) voiceDraftCurrentTime = voiceDraftAudioEl.currentTime;
+              }}
+              onloadedmetadata={() => {
+                if (voiceDraftAudioEl && Number.isFinite(voiceDraftAudioEl.duration) && voiceDraftAudioEl.duration > 0) {
+                  voiceDraftDuration = voiceDraftAudioEl.duration;
+                }
+              }}
+              onended={() => {
+                voiceDraftIsPlaying = false;
+                voiceDraftCurrentTime = 0;
+                if (voiceDraftAudioEl) voiceDraftAudioEl.currentTime = 0;
+              }}
+              onpause={() => (voiceDraftIsPlaying = false)}
+              onplay={() => (voiceDraftIsPlaying = true)}
+            ></audio>
+            <span class="shrink-0 text-xs font-semibold text-ink">Pratinjau suara</span>
+            <button
+              type="button"
+              onclick={toggleVoiceDraftPlayback}
+              class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-colors hover:bg-primary-hover focus:outline-hidden"
+              aria-label={voiceDraftIsPlaying ? 'Jeda rekaman' : 'Putar rekaman'}
+            >
+              {#if voiceDraftIsPlaying}
+                <HugeiconsIcon icon={PauseIcon} size={14} strokeWidth={2.2} />
+              {:else}
+                <HugeiconsIcon icon={PlayIcon} size={14} strokeWidth={2.2} class="translate-x-0.5" />
+              {/if}
+            </button>
+            <span class="shrink-0 text-xs tabular-nums text-mute font-medium">
+              {formatVoiceDuration(Math.floor(voiceDraftCurrentTime))} / {formatVoiceDuration(Math.floor(voiceDraftDuration || voiceRecordingSeconds || 0))}
+            </span>
+            <input
+              type="range"
+              min="0"
+              max={voiceDraftDuration || voiceRecordingSeconds || 1}
+              step="0.05"
+              value={voiceDraftCurrentTime}
+              oninput={handleVoiceDraftSeek}
+              class="h-1.5 flex-1 cursor-pointer accent-primary"
+              aria-label="Posisi rekaman suara"
+            />
+            <IconButton
+              variant="ghost"
+              size="sm"
+              label="Hapus rekaman suara"
+              onclick={clearVoiceDraft}
+              disabled={sendingMessage}
+            >
+              <HugeiconsIcon icon={Cancel01Icon} size={14} />
+            </IconButton>
+          </div>
+        {/if}
 
         {#if pendingAttachments.length > 0}
           <div class="mb-2 flex flex-wrap gap-2">
             {#each pendingAttachments as att (att.id)}
               <div class="flex items-center gap-1.5 rounded-lg border border-hairline bg-canvas-sunken px-2 py-1 text-xs text-ink">
-                <HugeiconsIcon icon={File02Icon} size={14} />
+                {#if att.fileType.startsWith('image/')}
+                  <img src={att.filePath} alt={att.fileName} class="size-9 rounded object-cover" />
+                {:else if att.fileType.startsWith('audio/')}
+                  <audio
+                    src={att.filePath}
+                    controls
+                    preload="metadata"
+                    aria-label={`Putar ${att.fileName}`}
+                    class="h-8 w-44 max-w-full"
+                  ></audio>
+                {:else}
+                  <HugeiconsIcon icon={File02Icon} size={14} />
+                {/if}
                 <span class="max-w-[120px] truncate">{att.fileName}</span>
                 <button
                   type="button"
                   onclick={() => (pendingAttachments = pendingAttachments.filter((a) => a.id !== att.id))}
-                  class="text-mute hover:text-ink"
+                  disabled={sendingMessage}
+                  class="text-mute hover:text-ink disabled:opacity-40"
                 >
                   <HugeiconsIcon icon={Cancel01Icon} size={12} />
                 </button>
@@ -1129,15 +1794,56 @@
             size="md"
             label="Lampirkan file"
             onclick={() => fileInputEl?.click()}
-            disabled={uploadingAttachment}
+            disabled={uploadingAttachment || sendingMessage}
           >
             <HugeiconsIcon icon={Attachment01Icon} size={18} strokeWidth={1.8} />
           </IconButton>
+          {#if isRecordingVoice}
+            <span
+              class="flex items-center gap-1.5 text-xs font-semibold text-status-urgent-ink"
+              role="timer"
+              aria-label={`Durasi rekaman ${formatVoiceDuration(voiceRecordingSeconds)}`}
+            >
+              <span class="size-2 rounded-full bg-status-urgent animate-pulse"></span>
+              {formatVoiceDuration(voiceRecordingSeconds)}
+            </span>
+            <IconButton
+              variant="ghost"
+              size="md"
+              label="Batalkan rekaman suara"
+              onclick={() => stopVoiceRecording(true)}
+            >
+              <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
+            </IconButton>
+            <IconButton
+              variant="primary"
+              size="md"
+              label="Selesai merekam suara"
+              onclick={() => stopVoiceRecording()}
+            >
+              <HugeiconsIcon icon={StopIcon} size={18} strokeWidth={1.8} />
+            </IconButton>
+          {:else}
+            <IconButton
+              variant="ghost"
+              size="md"
+              label={isStartingVoiceRecording ? 'Meminta izin mikrofon' : 'Rekam pesan suara'}
+              onclick={startVoiceRecording}
+              disabled={isStartingVoiceRecording || uploadingAttachment || sendingMessage || voiceDraftFile !== null}
+            >
+              {#if isStartingVoiceRecording}
+                <span class="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true"></span>
+              {:else}
+                <HugeiconsIcon icon={Mic01Icon} size={18} strokeWidth={1.8} />
+              {/if}
+            </IconButton>
+          {/if}
 
           <Input
             bind:value={composerText}
             oninput={handleComposerInput}
             placeholder="Tulis pesan… (Tekan Enter untuk kirim)"
+            onpaste={handleComposerPaste}
             class="h-10 flex-1 rounded-xl"
           />
 
@@ -1145,7 +1851,13 @@
             type="submit"
             variant="primary"
             size="md"
-            disabled={(!composerText.trim() && pendingAttachments.length === 0) || sendingMessage}
+            disabled={
+              (!composerText.trim() && pendingAttachments.length === 0 && !voiceDraftFile) ||
+              sendingMessage ||
+              uploadingAttachment ||
+              isStartingVoiceRecording ||
+              isRecordingVoice
+            }
             class="rounded-xl px-4"
           >
             <HugeiconsIcon icon={SentIcon} size={18} strokeWidth={1.8} />
@@ -1241,7 +1953,7 @@
   title="Hapus Pesan?"
   description="Pesan ini akan dihapus untuk semua peserta percakapan."
   confirmLabel="Hapus"
-  tone="destructive"
+  destructive={true}
   onconfirm={confirmDeleteMessage}
   oncancel={() => (deleteMessageTarget = null)}
 />
