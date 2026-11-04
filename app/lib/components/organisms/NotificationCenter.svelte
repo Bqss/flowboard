@@ -10,6 +10,7 @@
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		items: NotificationItem[];
+		unreadCount?: number;
 		title?: string;
 		emptyText?: string;
 		markAllReadText?: string;
@@ -25,6 +26,7 @@
 	let {
 		ref = $bindable(null),
 		items,
+		unreadCount: unreadCountProp,
 		title = 'Notifikasi',
 		emptyText = 'Tidak ada notifikasi terbaru.',
 		markAllReadText = 'Tandai dibaca',
@@ -39,7 +41,7 @@
 	}: Props = $props();
 
 	let open = $state(false);
-	const unread = $derived(items.filter((n) => n.unread).length);
+	const unread = $derived(unreadCountProp ?? items.filter((n) => n.unread).length);
 
 	function setOpen(next: boolean) {
 		open = next;
