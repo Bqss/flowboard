@@ -111,6 +111,23 @@ const chatWsPlugin = (): Plugin => ({
             return new Response('Unauthorized', { status: 401 });
           }
 
+          const port = server.config.server?.port ?? 3000;
+          const credentials = accessToken
+            ? { authorization: `Bearer ${accessToken}` }
+            : { cookie };
+          let workspaceResponse: Response;
+          try {
+            workspaceResponse = await fetch(
+              `http://localhost:${port}/api/workspaces/${encodeURIComponent(workspaceId)}`,
+              { headers: credentials }
+            );
+          } catch {
+            return new Response('Forbidden', { status: 403 });
+          }
+          if (!workspaceResponse.ok) {
+            return new Response('Forbidden', { status: 403 });
+          }
+
           if (srv.upgrade(req, { data: { userId, workspaceId } })) {
             return undefined;
           }

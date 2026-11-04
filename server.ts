@@ -17,6 +17,7 @@ import { env } from '@config/env';
 import { getUserByMobileAccessToken } from '@services/mobile-auth';
 import { getUserBySession } from '@services/auth';
 import { startScheduler } from '@services/scheduler';
+import { getMembership } from '@services/workspace';
 import { subscribe, unsubscribe, handleClientMessage, type ChatSocket } from '@services/chatSocket';
 
 // Resolved at runtime (after `vite build`). The computed specifier keeps tsc
@@ -87,6 +88,19 @@ const server = Bun.serve<{
         ws.close(4001, 'Unauthorized');
         return;
       }
+
+      let membership;
+      try {
+        membership = await getMembership(workspaceId, user.id);
+      } catch {
+        ws.close(4003, 'Workspace access denied');
+        return;
+      }
+      if (!membership) {
+        ws.close(4003, 'Workspace access denied');
+        return;
+      }
+
       const { onlineUsers } = subscribe(ws as unknown as ChatSocket, workspaceId, user.id);
       ws.send(JSON.stringify({ type: 'connected', userId: user.id, onlineUsers }));
       ws.send(JSON.stringify({ type: 'presence:state', userIds: onlineUsers }));
