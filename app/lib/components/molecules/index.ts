@@ -36,6 +36,7 @@ import AlertInline from './AlertInline.svelte';
 import Toast from './Toast.svelte';
 import { toast, type ToastItem, type ToastTone } from './toast-state.svelte.js';
 import EmptyStateBlock from './EmptyStateBlock.svelte';
+import ChatVideoPlayer from './ChatVideoPlayer.svelte';
 import CopyToClipboard from './CopyToClipboard.svelte';
 import Rating from './Rating.svelte';
 import FilterPill from './FilterPill.svelte';
@@ -101,5 +102,6 @@ export {
 	MultiSelectCombobox,
 	TaskPicPicker,
 	RichTextEditor,
-	RichTextContent
+	RichTextContent,
+	ChatVideoPlayer
 };
