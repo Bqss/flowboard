@@ -113,6 +113,8 @@
   let taskToDelete = $state<{ id: string; title: string } | null>(null);
   let deletingTask = $state(false);
   let commentDraft = $state('');
+  let commentMentionIds = $state<string[]>([]);
+  let commentMentionsOpen = $state(false);
   let postingComment = $state(false);
   let deletingCommentId = $state<string | null>(null);
   let commentComposerOpen = $state(false);
@@ -270,11 +272,28 @@
       avatarUrl: member.avatarUrl ?? undefined
     }))
   );
+  const mentionOptions = $derived.by(() => {
+    const groupId = board?.workspaceMemberGroupId;
+    const groupMemberIds = groupId
+      ? new Set(groups.find((group) => group.id === groupId)?.members.map((member) => member.id) ?? [])
+      : null;
+    return members
+      .filter((member) => !groupMemberIds || member.role === 'owner' || groupMemberIds.has(member.id))
+      .map((member) => ({
+        value: member.id,
+        label: member.name,
+        avatarUrl: member.avatarUrl ?? undefined
+      }));
+  });
   const selectedMembers = $derived(
     taskAssigneeValues
       .map((id) => members.find((member) => member.id === id))
       .filter((member): member is ApiWorkspaceMember => Boolean(member))
   );
+  const formatMentionedNames = (userIds: string[]) =>
+    [...new Set(userIds)]
+      .map((userId) => members.find((member) => member.id === userId)?.name ?? tr('taskboard.unknownMember'))
+      .join(', ');
 
 
   const priorityOptions = $derived([
@@ -611,6 +630,35 @@
       loadBoard();
     }
   });
+  let handledTaskQuery = '';
+  $effect(() => {
+    const taskId = page.url.searchParams.get('task');
+    if (!taskId) {
+      handledTaskQuery = '';
+      return;
+    }
+    if (loadingData || !board) return;
+
+    const requestedWorkspaceId = page.url.searchParams.get('workspaceId');
+    if (requestedWorkspaceId && requestedWorkspaceId !== data.workspace?.id) return;
+    const taskColumn = columns.find((column) => column.tasks.some((task) => task.id === taskId));
+    if (!taskColumn) return;
+
+    const key = `${requestedWorkspaceId ?? data.workspace?.id ?? ''}:${taskId}`;
+    if (handledTaskQuery === key) return;
+    handledTaskQuery = key;
+    void openTask(taskColumn.id, taskId).finally(() => {
+      const url = new URL(page.url);
+      if (url.searchParams.get('task') !== taskId) return;
+      url.searchParams.delete('task');
+      url.searchParams.delete('workspaceId');
+      void goto(`${url.pathname}${url.search}${url.hash}`, {
+        replaceState: true,
+        keepFocus: true,
+        noScroll: true
+      });
+    });
+  });
 
   async function handleCardMove(cardId: string, _fromColumnId: string, toColumnId: string) {
     if (!data.workspace?.id || !boardId) return;
@@ -686,6 +734,8 @@
     detailLoading = true;
     detailError = null;
     commentDraft = '';
+    commentMentionIds = [];
+    commentMentionsOpen = false;
     commentImageError = null;
     commentComposerOpen = false;
     editingCommentId = null;
@@ -739,6 +789,8 @@
     taskDetail = null;
     detailError = null;
     commentDraft = '';
+    commentMentionIds = [];
+    commentMentionsOpen = false;
     commentImageError = null;
     commentComposerOpen = false;
     editingCommentId = null;
@@ -924,6 +976,8 @@
 
   function cancelCommentComposer() {
     commentDraft = '';
+    commentMentionIds = [];
+    commentMentionsOpen = false;
     commentComposerOpen = false;
     commentImageError = null;
   }
@@ -1013,7 +1067,8 @@
     postingComment = true;
     try {
       const res = await api.createTaskComment(data.workspace.id, boardId, taskId, {
-        content: commentDraft.trim()
+        content: commentDraft.trim(),
+        mentionedUserIds: commentMentionIds
       });
       if (taskDetail?.id === taskId) {
         const nextComments = [...taskDetail.comments, res.comment];
@@ -2141,6 +2196,32 @@
               placeholder="Write a comment…"
               onimageupload={uploadCommentImage}
             />
+            <div class="mt-2 space-y-1">
+              <TaskPicPicker
+                bind:values={commentMentionIds}
+                bind:open={commentMentionsOpen}
+                options={mentionOptions}
+              >
+                {#snippet trigger({ open, toggle })}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onclick={toggle}
+                    aria-haspopup="listbox"
+                    aria-expanded={open}
+                  >
+                    <span class="font-bold text-primary">@</span>
+                    {tr('taskboard.mentionTeammates')}
+                  </Button>
+                {/snippet}
+              </TaskPicPicker>
+              <p class="text-xs text-mute">{tr('taskboard.mentionHelper')}</p>
+              {#if commentMentionIds.length > 0}
+                <p class="text-xs text-primary">
+                  {tr('taskboard.mentionedPeople', { names: formatMentionedNames(commentMentionIds) })}
+                </p>
+              {/if}
+            </div>
             {#if commentImageError}
               <p class="mt-2 text-sm text-status-urgent">{commentImageError}</p>
             {/if}
@@ -2209,6 +2290,11 @@
                 </div>
               {:else}
                 <RichTextContent value={comment.content} class="rounded-xl bg-card px-8 py-2 !text-[15px] !leading-6" />
+                {#if comment.mentionedUserIds.length > 0}
+                  <p class="px-8 text-xs text-primary">
+                    {tr('taskboard.mentionedPeople', { names: formatMentionedNames(comment.mentionedUserIds) })}
+                  </p>
+                {/if}
                 {#if canEditComment(comment)}
                   <div class="flex items-center gap-1 pl-2 text-[11px] leading-4">
                     <Button
