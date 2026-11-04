@@ -7,6 +7,8 @@ import {
   shouldNotifyInApp
 } from './notification-settings';
 import { sendEmail } from './email';
+import { broadcastToUsers } from '@services/chatSocket';
+import { sendWebPushNotification } from '@services/web-push';
 
 
 /** Returns the userId of the first workspace owner, or null if none. */
@@ -34,13 +36,15 @@ export const createNotification = async (input: {
   workspaceId: string;
   userId: string;
   cardId?: string | null;
+  conversationId?: string | null;
+  boardId?: string | null;
+  taskId?: string | null;
   type: NotificationType;
   title: string;
   body: string;
 }) => {
   const settings = await getNotificationSettings(input.workspaceId, input.userId);
 
-  // In-app notification — skip if user disabled this event type.
   let row = null;
   if (shouldNotifyInApp(settings, input.type)) {
     [row] = await db
@@ -49,6 +53,9 @@ export const createNotification = async (input: {
         workspaceId: input.workspaceId,
         userId: input.userId,
         cardId: input.cardId ?? null,
+        conversationId: input.conversationId ?? null,
+        boardId: input.boardId ?? null,
+        taskId: input.taskId ?? null,
         type: input.type,
         title: input.title,
         body: input.body
@@ -56,8 +63,37 @@ export const createNotification = async (input: {
       .returning();
   }
 
-  // Email notification — skip if user disabled email for this event type,
-  // or if digest mode is on (digest batches are sent by a separate scheduler).
+  if (row) {
+    broadcastToUsers(input.workspaceId, [input.userId], { type: 'notification:new', notification: row });
+
+    if (
+      input.type === 'chat_message' ||
+      input.type === 'task_assigned' ||
+      input.type === 'task_comment' ||
+      input.type === 'task_mention'
+    ) {
+      const url =
+        input.type === 'chat_message' && input.conversationId
+          ? `/dashboard/chat?workspaceId=${encodeURIComponent(input.workspaceId)}&conversationId=${encodeURIComponent(input.conversationId)}`
+          : input.boardId && input.taskId
+            ? `/dashboard/boards/${encodeURIComponent(input.boardId)}?workspaceId=${encodeURIComponent(input.workspaceId)}&task=${encodeURIComponent(input.taskId)}`
+            : '/dashboard';
+      const title = input.title;
+
+      void sendWebPushNotification(input.userId, {
+        notificationId: row.id,
+        workspaceId: row.workspaceId,
+        type: input.type,
+        appBody: input.body,
+        title,
+        body: input.body,
+        url
+      }).catch((error) => {
+        console.error('[notification] web push preparation failed:', error);
+      });
+    }
+  }
+
   if (shouldNotifyEmail(settings, input.type) && !settings.emailDigest) {
     const email = await getUserEmail(input.userId);
     if (email) {

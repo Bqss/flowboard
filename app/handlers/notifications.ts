@@ -6,6 +6,12 @@ import {
   markNotificationRead
 } from '@services/notification';
 import { getNotificationSettings, upsertNotificationSettings } from '@services/notification-settings';
+import {
+  getWebPushConfig,
+  removePushSubscription,
+  savePushSubscription,
+  WebPushServiceError
+} from '@services/web-push';
 
 type WorkspaceParams = { workspaceId: string };
 type NotificationParams = WorkspaceParams & { notificationId: string };
@@ -19,7 +25,15 @@ type NotificationSettingsBody = {
   emailCardOverdue?: boolean;
   emailHandover?: boolean;
   emailDigest?: boolean;
+  soundEnabled?: boolean;
 };
+
+type PushSubscriptionBody = {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+};
+type PushSubscriptionEndpointBody = { endpoint: string };
+
 
 export async function list({ user, workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
   if (!user || !workspace || !membership) {
@@ -37,6 +51,9 @@ export async function list({ user, workspace, membership, set }: Ctx<unknown, Wo
       title: row.title,
       body: row.body,
       cardId: row.cardId,
+      conversationId: row.conversationId,
+      boardId: row.boardId,
+      taskId: row.taskId,
       read: row.read,
       createdAt: row.createdAt
     })),
@@ -83,6 +100,52 @@ export async function getSettings({ user, workspace, membership, set }: Ctx<unkn
 
   const settings = await getNotificationSettings(workspace.id, user.id);
   return { settings };
+}
+
+export async function getPushConfig({ user, workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  return getWebPushConfig();
+}
+
+export async function subscribePush({
+  user,
+  workspace,
+  membership,
+  body,
+  set
+}: Ctx<PushSubscriptionBody, WorkspaceParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+
+  try {
+    return await savePushSubscription(user.id, body);
+  } catch (error) {
+    if (error instanceof WebPushServiceError) {
+      set.status =
+        error.code === 'unavailable' ? 503 : error.code === 'endpoint_in_use' ? 409 : 400;
+      return { error: error.message };
+    }
+    throw error;
+  }
+}
+
+export async function unsubscribePush({
+  user,
+  workspace,
+  membership,
+  body,
+  set
+}: Ctx<PushSubscriptionEndpointBody, WorkspaceParams>) {
+  if (!user || !workspace || !membership) {
+    set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  return removePushSubscription(user.id, body.endpoint);
 }
 
 export async function updateSettings({

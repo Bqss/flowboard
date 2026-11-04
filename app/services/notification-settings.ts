@@ -11,6 +11,7 @@ export type NotificationPreferenceInput = {
   emailCardOverdue?: boolean;
   emailHandover?: boolean;
   emailDigest?: boolean;
+  soundEnabled?: boolean;
 };
 
 export type PublicNotificationSettings = {
@@ -23,6 +24,7 @@ export type PublicNotificationSettings = {
   emailCardOverdue: boolean;
   emailHandover: boolean;
   emailDigest: boolean;
+  soundEnabled: boolean;
 };
 
 const toPublic = (row: NotificationSettings): PublicNotificationSettings => ({
@@ -34,7 +36,8 @@ const toPublic = (row: NotificationSettings): PublicNotificationSettings => ({
   emailCustomerReplied: row.emailCustomerReplied,
   emailCardOverdue: row.emailCardOverdue,
   emailHandover: row.emailHandover,
-  emailDigest: row.emailDigest
+  emailDigest: row.emailDigest,
+  soundEnabled: row.soundEnabled
 });
 
 const DEFAULTS: PublicNotificationSettings = {
@@ -46,7 +49,8 @@ const DEFAULTS: PublicNotificationSettings = {
   emailCustomerReplied: false,
   emailCardOverdue: true,
   emailHandover: true,
-  emailDigest: false
+  emailDigest: false,
+  soundEnabled: true
 };
 
 export const getNotificationSettings = async (
@@ -90,6 +94,8 @@ export const upsertNotificationSettings = async (
     emailCardOverdue: input.emailCardOverdue ?? existing?.emailCardOverdue ?? DEFAULTS.emailCardOverdue,
     emailHandover: input.emailHandover ?? existing?.emailHandover ?? DEFAULTS.emailHandover,
     emailDigest: input.emailDigest ?? existing?.emailDigest ?? DEFAULTS.emailDigest,
+    soundEnabled: input.soundEnabled ?? existing?.soundEnabled ?? DEFAULTS.soundEnabled,
+
     updatedAt: new Date()
   };
 
