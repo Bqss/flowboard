@@ -593,8 +593,22 @@ export const UpdateNotificationSettingsSchema = t.Object({
   emailCustomerReplied: t.Optional(t.Boolean()),
   emailCardOverdue: t.Optional(t.Boolean()),
   emailHandover: t.Optional(t.Boolean()),
-  emailDigest: t.Optional(t.Boolean())
+  emailDigest: t.Optional(t.Boolean()),
+  soundEnabled: t.Optional(t.Boolean())
 });
+
+export const PushSubscriptionSchema = t.Object({
+  endpoint: t.String({ minLength: 1, maxLength: 2048 }),
+  keys: t.Object({
+    p256dh: t.String({ minLength: 1, maxLength: 200 }),
+    auth: t.String({ minLength: 1, maxLength: 200 })
+  })
+});
+
+export const PushSubscriptionEndpointSchema = t.Object({
+  endpoint: t.String({ minLength: 1, maxLength: 2048 })
+});
+
 
 /* --------------------------------------------------------------- onboarding */
 
@@ -757,8 +771,13 @@ export const MoveTaskSchema = t.Object({
 });
 
 export const CreateTaskCommentSchema = t.Object({
+  content: t.String({ minLength: 1, maxLength: 2000 }),
+  mentionedUserIds: t.Optional(t.Array(t.String({ format: 'uuid' }), { maxItems: 50 }))
+});
+export const UpdateTaskCommentSchema = t.Object({
   content: t.String({ minLength: 1, maxLength: 2000 })
 });
+
 
 export const TaskAttachmentSchema = t.Object({
   file: t.File()

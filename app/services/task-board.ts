@@ -9,13 +9,17 @@ import {
   taskBoards,
   taskColumns,
   taskComments,
+  taskCommentMentions,
   tasks,
   users,
   workspaceMemberGroupMembers,
+  workspaceMembers,
   type TaskBoard,
   type TaskPriority,
   type TaskRecurrence
 } from '@db';
+import { createNotification } from '@services/notification';
+import { resolveTaskCommentNotificationRecipients } from './notification-targets';
 import { createScopedChatConversation } from './workspace';
 
 export class TaskBoardError extends Error {
@@ -182,13 +186,93 @@ const logActivity = async (input: {
   });
 };
 
-const ensureAssigneeExists = async (assigneeId: string) => {
-  const [row] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.id, assigneeId))
+type TaskNotificationBoardContext = {
+  workspaceId: string;
+  ownerId: string;
+  workspaceMemberGroupId: string | null;
+};
+
+const getTaskNotificationBoardContext = async (
+  boardId: string
+): Promise<TaskNotificationBoardContext | null> => {
+  const [board] = await db
+    .select({
+      workspaceId: taskBoards.workspaceId,
+      ownerId: taskBoards.ownerId,
+      workspaceMemberGroupId: taskBoards.workspaceMemberGroupId
+    })
+    .from(taskBoards)
+    .where(eq(taskBoards.id, boardId))
     .limit(1);
-  if (!row) throw new TaskBoardError('Assignee not found.', 'not_found');
+  return board ?? null;
+};
+
+const getBoardAccessibleUserIds = async (
+  board: TaskNotificationBoardContext,
+  userIds: string[]
+): Promise<Set<string>> => {
+  const candidates = [...new Set(userIds)];
+  if (candidates.length === 0) return new Set();
+
+  const members = await db
+    .select({ userId: workspaceMembers.userId, role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, board.workspaceId),
+        inArray(workspaceMembers.userId, candidates)
+      )
+    );
+
+  if (!board.workspaceMemberGroupId) return new Set(members.map((member) => member.userId));
+
+  const groupMembers = await db
+    .select({ userId: workspaceMemberGroupMembers.userId })
+    .from(workspaceMemberGroupMembers)
+    .where(
+      and(
+        eq(workspaceMemberGroupMembers.groupId, board.workspaceMemberGroupId),
+        inArray(workspaceMemberGroupMembers.userId, candidates)
+      )
+    );
+  const groupMemberIds = new Set(groupMembers.map((member) => member.userId));
+  return new Set(
+    members
+      .filter((member) => member.role === 'owner' || groupMemberIds.has(member.userId))
+      .map((member) => member.userId)
+  );
+};
+
+const ensureBoardUsersCanAccess = async (
+  board: TaskNotificationBoardContext,
+  userIds: string[],
+  message: string
+) => {
+  const accessible = await getBoardAccessibleUserIds(board, userIds);
+  if (userIds.some((userId) => !accessible.has(userId))) {
+    throw new TaskBoardError(message, 'forbidden');
+  }
+};
+
+const notifyTaskAssignee = async (
+  board: TaskNotificationBoardContext,
+  task: { id: string; boardId: string; title: string; assigneeId: string | null },
+  actorId: string | null | undefined
+) => {
+  if (!task.assigneeId || task.assigneeId === actorId) return;
+  try {
+    await createNotification({
+      workspaceId: board.workspaceId,
+      userId: task.assigneeId,
+      boardId: task.boardId,
+      taskId: task.id,
+      type: 'task_assigned',
+      title: 'Task assigned to you',
+      body: `You were assigned “${task.title}”.`
+    });
+  } catch (error) {
+    console.error('[notification] task assignment notification failed:', error);
+  }
 };
 
 const parseDueAt = (dueAt: string): Date => {
@@ -543,6 +627,8 @@ export const createTask = async (
   },
   actor?: { userId: string }
 ) => {
+  const boardContext = await getTaskNotificationBoardContext(boardId);
+  if (!boardContext) throw new TaskBoardError('Board not found.', 'not_found');
   const columns = await listColumns(boardId);
   if (columns.length === 0) throw new TaskBoardError('Board has no columns.');
 
@@ -550,8 +636,9 @@ export const createTask = async (
     ? (columns.find((column) => column.id === input.columnId) ?? null)
     : columns[0];
   if (!target) throw new TaskBoardError('Column not found.', 'not_found');
-  if (input.assigneeId) await ensureAssigneeExists(input.assigneeId);
-
+  if (input.assigneeId) {
+    await ensureBoardUsersCanAccess(boardContext, [input.assigneeId], 'Assignee must have access to this board.');
+  }
 
   const [last] = await db
     .select({ position: tasks.position })
@@ -587,6 +674,7 @@ export const createTask = async (
     actorId: actor?.userId ?? null,
     taskId: task.id
   });
+  await notifyTaskAssignee(boardContext, task, actor?.userId);
 
   return task;
 };
@@ -725,9 +813,11 @@ export const updateTask = async (
 ) => {
   const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
-
-  if (input.assigneeId) await ensureAssigneeExists(input.assigneeId);
-
+  const boardContext = await getTaskNotificationBoardContext(boardId);
+  if (!boardContext) throw new TaskBoardError('Board not found.', 'not_found');
+  if (input.assigneeId) {
+    await ensureBoardUsersCanAccess(boardContext, [input.assigneeId], 'Assignee must have access to this board.');
+  }
   const [updated] = await db
     .update(tasks)
     .set({
@@ -759,6 +849,9 @@ export const updateTask = async (
       actorId: actor?.userId ?? null,
       taskId: updated.id
     });
+  }
+  if (updated && updated.assigneeId && updated.assigneeId !== task.assigneeId) {
+    await notifyTaskAssignee(boardContext, updated, actor?.userId);
   }
 
   return updated ?? null;
@@ -999,12 +1092,26 @@ export const listTaskComments = async (
       : await selectComments
           .orderBy(desc(taskComments.createdAt))
           .limit(Math.min(Math.max(limit, 1), 100));
+  const mentionRows =
+    rows.length > 0
+      ? await db
+          .select({ commentId: taskCommentMentions.commentId, userId: taskCommentMentions.userId })
+          .from(taskCommentMentions)
+          .where(inArray(taskCommentMentions.commentId, rows.map((row) => row.comment.id)))
+      : [];
+  const mentionsByComment = new Map<string, string[]>();
+  for (const mention of mentionRows) {
+    const userIds = mentionsByComment.get(mention.commentId) ?? [];
+    userIds.push(mention.userId);
+    mentionsByComment.set(mention.commentId, userIds);
+  }
 
   return (limit === undefined ? rows : [...rows].reverse()).map((row) => ({
     id: row.comment.id,
     content: row.comment.content,
     authorId: row.comment.userId,
     authorName: row.authorName,
+    mentionedUserIds: mentionsByComment.get(row.comment.id) ?? [],
     createdAt: row.comment.createdAt
   }));
 };
@@ -1012,19 +1119,36 @@ export const listTaskComments = async (
 export const createTaskComment = async (
   boardId: string,
   taskId: string,
-  input: { content: string },
+  input: { content: string; mentionedUserIds?: string[] },
   actor: TaskBoardActor
 ) => {
   const task = await getTaskInBoard(boardId, taskId, actor);
   if (!task) throw new TaskBoardError('Task not found.', 'not_found');
+  const boardContext = await getTaskNotificationBoardContext(boardId);
+  if (!boardContext) throw new TaskBoardError('Board not found.', 'not_found');
 
   const content = input.content.trim();
   if (!content) throw new TaskBoardError('Comment must not be empty.');
+
+  const mentionedUserIds = [...new Set(input.mentionedUserIds ?? [])].filter(
+    (userId) => userId !== actor.userId
+  );
+  await ensureBoardUsersCanAccess(
+    boardContext,
+    mentionedUserIds,
+    'Mentioned users must have access to this board.'
+  );
 
   const [comment] = await db
     .insert(taskComments)
     .values({ taskId, userId: actor.userId, content })
     .returning();
+
+  if (mentionedUserIds.length > 0) {
+    await db.insert(taskCommentMentions).values(
+      mentionedUserIds.map((userId) => ({ commentId: comment.id, userId }))
+    );
+  }
 
   const [author] = await db
     .select({ name: users.name })
@@ -1040,11 +1164,46 @@ export const createTaskComment = async (
     taskId
   });
 
+  const candidateUserIds = [
+    task.assigneeId,
+    task.createdById,
+    ...mentionedUserIds
+  ].filter((userId): userId is string => Boolean(userId));
+  const accessibleUserIds = await getBoardAccessibleUserIds(boardContext, candidateUserIds);
+  const recipients = resolveTaskCommentNotificationRecipients({
+    actorId: actor.userId,
+    assigneeId: task.assigneeId,
+    creatorId: task.createdById,
+    mentionedUserIds
+  }).filter((recipient) => accessibleUserIds.has(recipient.userId));
+
+  await Promise.all(
+    recipients.map(async (recipient) => {
+      try {
+        await createNotification({
+          workspaceId: boardContext.workspaceId,
+          userId: recipient.userId,
+          boardId,
+          taskId,
+          type: recipient.type,
+          title:
+            recipient.type === 'task_mention'
+              ? 'You were mentioned in a task comment'
+              : 'New comment on a task',
+          body: `${author?.name ?? 'A teammate'} commented on “${task.title}”.`
+        });
+      } catch (error) {
+        console.error('[notification] task comment notification failed:', error);
+      }
+    })
+  );
+
   return {
     id: comment.id,
     content: comment.content,
     authorId: comment.userId,
     authorName: author?.name ?? null,
+    mentionedUserIds,
     createdAt: comment.createdAt
   };
 };
@@ -1097,12 +1256,18 @@ export const updateTaskComment = async (
     actorId: actor.userId,
     taskId
   });
+  const mentionRows = await db
+    .select({ userId: taskCommentMentions.userId })
+    .from(taskCommentMentions)
+    .where(eq(taskCommentMentions.commentId, commentId));
+
 
   return {
     id: updated.id,
     content: updated.content,
     authorId: updated.userId,
     authorName: author?.name ?? null,
+    mentionedUserIds: mentionRows.map((mention) => mention.userId),
     createdAt: updated.createdAt
   };
 

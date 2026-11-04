@@ -119,6 +119,7 @@ type MoveTaskBody = {
 
 type CreateCommentBody = {
   content: string;
+  mentionedUserIds?: string[];
 };
 type UploadAttachmentBody = {
   file: File;

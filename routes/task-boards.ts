@@ -9,6 +9,7 @@ import {
   CreateTaskBoardSchema,
   CreateTaskColumnSchema,
   CreateTaskCommentSchema,
+  UpdateTaskCommentSchema,
   CreateTaskLabelSchema,
   CompleteTaskSchema,
   CreateTaskSchema,
@@ -160,7 +161,7 @@ export const createTaskBoardsRoutes = () => {
         })
         .patch('/tasks/:taskId/comments/:commentId', taskBoardHandlers.updateCommentHandler, {
           params: TaskBoardCommentParam,
-          body: CreateTaskCommentSchema
+          body: UpdateTaskCommentSchema
         })
         .delete('/tasks/:taskId/comments/:commentId', taskBoardHandlers.deleteCommentHandler, {
           params: TaskBoardCommentParam
