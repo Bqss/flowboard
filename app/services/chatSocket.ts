@@ -1,4 +1,4 @@
-import { db, chatParticipants } from '@db';
+import { db, chatParticipants, type NotificationType } from '@db';
 import { and, eq, isNull } from 'drizzle-orm';
 
 /**
@@ -13,6 +13,23 @@ import { and, eq, isNull } from 'drizzle-orm';
  */
 
 export type ChatSocketEvent =
+  | {
+      type: 'notification:new';
+      notification: {
+        id: string;
+        workspaceId: string;
+        userId: string;
+        type: NotificationType;
+        title: string;
+        body: string;
+        cardId: string | null;
+        conversationId: string | null;
+        boardId: string | null;
+        taskId: string | null;
+        read: boolean;
+        createdAt: Date;
+      };
+    }
   | { type: 'message:new'; conversationId: string; message: unknown }
   | { type: 'message:edit'; conversationId: string; messageId: string; body: string; editedAt: string }
   | { type: 'message:delete'; conversationId: string; messageId: string; deletedAt: string }

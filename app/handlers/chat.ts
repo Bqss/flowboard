@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import type { Ctx } from '@core';
 import {
   addParticipant,
+  countAllChatUnread,
   countUnread,
   createAttachment,
   createGroupRoom,
@@ -10,6 +11,7 @@ import {
   findOrCreateDirect,
   getConversationDetail,
   getMessages,
+  listAllChatConversations,
   listConversations,
   listWorkspaceMembersForChat,
   markRead,
@@ -45,6 +47,22 @@ const hasWorkspaceAccess = (
 } => Boolean(ctx.user && ctx.workspace && ctx.membership);
 
 /* ------------------------------------------------------- conversations */
+
+export async function listAllChatInboxHandler(ctx: Ctx<unknown, Record<string, string>>) {
+  if (!ctx.user) {
+    ctx.set.status = 401;
+    return { error: 'Unauthorized' };
+  }
+  return await listAllChatConversations(ctx.user.id, ctx.query.search);
+}
+
+export async function getAllChatUnreadHandler(ctx: Ctx) {
+  if (!ctx.user) {
+    ctx.set.status = 401;
+    return { error: 'Unauthorized' };
+  }
+  return { unread: await countAllChatUnread(ctx.user.id) };
+}
 
 export async function listConversationsHandler(ctx: Ctx<unknown, WorkspaceParams>) {
   if (!hasWorkspaceAccess(ctx)) {

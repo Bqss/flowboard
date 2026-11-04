@@ -11,8 +11,11 @@ import {
   workspaceMemberGroups,
   workspaceMembers
 } from '@db';
-import { createWorkspaceMemberGroup } from '@services/workspace';
+import { createWorkspaceMemberGroup, listWorkspacesForUser } from '@services/workspace';
 import { broadcastToUsers } from '@services/chatSocket';
+import { createNotification } from '@services/notification';
+import { mergeWorkspaceConversations, type ChatInboxWorkspace } from './chatInbox';
+export { mergeWorkspaceConversations, type ChatInboxWorkspace } from './chatInbox';
 
 const THREAD_LIMIT = 50;
 const LIST_LIMIT = 50;
@@ -345,6 +348,38 @@ export const countUnread = async (workspaceId: string, userId: string) => {
     );
 
   return row?.count ?? 0;
+};
+
+export type ChatInboxConversation = ConversationListItem & {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceSlug: string;
+};
+
+export const listAllChatConversations = async (
+  userId: string,
+  search?: string
+): Promise<{ workspaces: ChatInboxWorkspace[]; conversations: ChatInboxConversation[] }> => {
+  const workspaces = await listWorkspacesForUser(userId);
+  if (workspaces.length === 0) return { workspaces: [], conversations: [] };
+
+  const batches = await Promise.all(
+    workspaces.map(async ({ id, name, slug }) => ({
+      workspace: { id, name, slug },
+      conversations: await listConversations(id, userId, search)
+    }))
+  );
+
+  return {
+    workspaces: workspaces.map(({ id, name, slug }) => ({ id, name, slug })),
+    conversations: mergeWorkspaceConversations(batches)
+  };
+};
+
+export const countAllChatUnread = async (userId: string): Promise<number> => {
+  const workspaces = await listWorkspacesForUser(userId);
+  const counts = await Promise.all(workspaces.map(({ id }) => countUnread(id, userId)));
+  return counts.reduce((total, count) => total + count, 0);
 };
 
 /* ------------------------------------------------------- direct: find-or-create */
@@ -1095,6 +1130,38 @@ export const sendMessage = async (
     conversationId,
     message: result
   });
+  if (inserted) {
+    const preview = trimmed
+      ? trimmed.length > 140
+        ? `${trimmed.slice(0, 137)}…`
+        : trimmed
+      : linkedAttachments.length > 0
+        ? 'Sent an attachment.'
+        : 'New message.';
+    const senderName = sender?.name ?? 'Someone';
+    const conversationTitle =
+      conversation.name && conversation.kind !== 'direct'
+        ? `${senderName} (${conversation.name})`
+        : senderName;
+    await Promise.all(
+      participantIds
+        .filter((participantId) => participantId !== userId)
+        .map(async (participantId) => {
+          try {
+            await createNotification({
+              workspaceId,
+              userId: participantId,
+              conversationId,
+              type: 'chat_message',
+              title: conversationTitle,
+              body: preview
+            });
+          } catch (error) {
+            console.error('[notification] chat message notification failed:', error);
+          }
+        })
+    );
+  }
 
   return result;
 };

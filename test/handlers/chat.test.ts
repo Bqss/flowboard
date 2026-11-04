@@ -33,6 +33,10 @@ const sendMessageMock = mock(
 );
 const listConversationsMock = mock(() => Promise.resolve([]));
 const countUnreadMock = mock(() => Promise.resolve(0));
+const listAllChatConversationsMock = mock(() =>
+  Promise.resolve({ workspaces: [], conversations: [] })
+);
+const countAllChatUnreadMock = mock(() => Promise.resolve(0));
 const listWorkspaceMembersForChatMock = mock(() => Promise.resolve([]));
 const getMessagesMock = mock(() => Promise.resolve([]));
 const editMessageMock = mock(() => Promise.resolve(true));
@@ -50,6 +54,8 @@ mock.module('@services/chat', () => ({
   sendMessage: sendMessageMock,
   listConversations: listConversationsMock,
   countUnread: countUnreadMock,
+  listAllChatConversations: listAllChatConversationsMock,
+  countAllChatUnread: countAllChatUnreadMock,
   listWorkspaceMembersForChat: listWorkspaceMembersForChatMock,
   getMessages: getMessagesMock,
   editMessage: editMessageMock,
@@ -66,6 +72,8 @@ mock.module('@services/chat', () => ({
 const {
   createDirectHandler,
   createGroupHandler,
+  listAllChatInboxHandler,
+  getAllChatUnreadHandler,
   sendMessageHandler,
   getMessagesHandler,
   editMessageHandler,
@@ -117,6 +125,8 @@ beforeEach(() => {
   deleteMessageMock.mockClear();
   toggleReactionMock.mockClear();
   markReadMock.mockClear();
+  listAllChatConversationsMock.mockClear();
+  countAllChatUnreadMock.mockClear();
 });
 
 test('sendChatMessage trims message text before persistence', async () => {
@@ -248,4 +258,22 @@ test('markRead requires auth', async () => {
   expect(ctx.set.status).toBe(403);
   expect(result).toEqual({ error: 'Forbidden' });
   expect(markReadMock).not.toHaveBeenCalled();
+});
+
+test('chat inbox requires authentication without calling its service', async () => {
+  const ctx = context({ user: null, query: { search: 'private' } });
+  const result = await listAllChatInboxHandler(ctx as never);
+
+  expect(ctx.set.status).toBe(401);
+  expect(result).toEqual({ error: 'Unauthorized' });
+  expect(listAllChatConversationsMock).not.toHaveBeenCalled();
+});
+
+test('aggregate chat unread requires authentication without calling its service', async () => {
+  const ctx = context({ user: null });
+  const result = await getAllChatUnreadHandler(ctx as never);
+
+  expect(ctx.set.status).toBe(401);
+  expect(result).toEqual({ error: 'Unauthorized' });
+  expect(countAllChatUnreadMock).not.toHaveBeenCalled();
 });

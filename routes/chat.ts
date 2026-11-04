@@ -33,7 +33,14 @@ export const createChatRoutes = () => {
       }
     });
 
-  return new Elysia({ prefix: '/workspaces/:workspaceId/chat' })
+  const inboxRoutes = new Elysia({ prefix: '/chat' })
+    .use(createRequireAuth())
+    .get('/inbox', chat.listAllChatInboxHandler)
+    .get('/inbox/unread', chat.getAllChatUnreadHandler);
+
+  return new Elysia()
+    .use(inboxRoutes)
+    .use(new Elysia({ prefix: '/workspaces/:workspaceId/chat' })
     .use(createRequireAuth())
     .use(workspaceMemberGuard)
 
@@ -102,5 +109,5 @@ export const createChatRoutes = () => {
     // Read state
     .post('/conversations/:conversationId/read', chat.markReadHandler, {
       params: ChatConversationParam
-    });
+    }));
 };
