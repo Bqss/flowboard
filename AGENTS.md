@@ -209,6 +209,13 @@ bun run db:seed
 > The user runs their own dev server. Do not start one via `hub start`, `bash`, or any other mechanism.
 > For UI verification, connect to the user's existing server (typically `localhost:3000`) — do not spawn a new process.
 
+### Browser verification
+
+- Use the Playwright MCP browser tools for UI/browser verification. Do not use the `agent-browser` CLI unless the user explicitly requests it.
+- Connect only to the user's existing server; never start a dev server for browser testing.
+- When finished, close every Playwright tab/page opened for the task (`browser_tabs` to close extra tabs, then `browser_close` for the final page). If an `agent-browser` session was used, run `agent-browser close --all`.
+- Do not kill the user's regular Chrome or the OMP-managed MCP host processes. After the final close, do not make more browser calls that could reopen a blank page.
+
 ```bash
 bun run check        # Typecheck & Svelte check (safe to run)
 bun run build        # Production build (only if explicitly asked)
