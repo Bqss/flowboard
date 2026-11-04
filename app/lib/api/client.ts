@@ -245,6 +245,7 @@ export type ApiTaskComment = {
   content: string;
   authorId: string | null;
   authorName: string | null;
+  mentionedUserIds: string[];
   createdAt: string;
 };
 
@@ -357,10 +358,23 @@ export type ApiWorkflowSetupStage = {
 
 export type ApiNotification = {
   id: string;
-  type: 'wa_failed' | 'customer_replied' | 'card_overdue' | 'handover';
+  type:
+    | 'wa_failed'
+    | 'customer_replied'
+    | 'card_overdue'
+    | 'card_due_soon'
+    | 'handover'
+    | 'workflow_action'
+    | 'chat_message'
+    | 'task_assigned'
+    | 'task_comment'
+    | 'task_mention';
   title: string;
   body: string;
   cardId: string | null;
+  conversationId: string | null;
+  boardId: string | null;
+  taskId: string | null;
   read: boolean;
   createdAt: string;
 };
@@ -375,6 +389,7 @@ export type ApiNotificationSettings = {
   emailCardOverdue: boolean;
   emailHandover: boolean;
   emailDigest: boolean;
+  soundEnabled: boolean;
 };
 
 export type ApiMcpScopeMode = 'all' | 'selected';
@@ -586,6 +601,13 @@ export type ApiChatConversation = {
   } | null;
   unreadCount: number;
   updatedAt: string;
+};
+
+export type ApiChatInboxWorkspace = { id: string; name: string; slug: string };
+export type ApiChatInboxConversation = ApiChatConversation & {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceSlug: string;
 };
 
 export type ApiChatConversationDetail = {
@@ -869,6 +891,15 @@ export const api = {
       method: 'DELETE',
       fetch: fetchFn
     }),
+
+  listAllChatConversations: (search?: string, fetchFn?: FetchLike) =>
+    request<{ workspaces: ApiChatInboxWorkspace[]; conversations: ApiChatInboxConversation[] }>(
+      `/chat/inbox${search ? `?search=${encodeURIComponent(search)}` : ''}`,
+      { fetch: fetchFn }
+    ),
+
+  getAllChatUnread: (fetchFn?: FetchLike) =>
+    request<{ unread: number }>('/chat/inbox/unread', { fetch: fetchFn }),
 
   listChatConversations: (workspaceId: string, search?: string, fetchFn?: FetchLike) =>
     request<{ conversations: ApiChatConversation[] }>(
@@ -1479,6 +1510,29 @@ export const api = {
       `/workspaces/${workspaceId}/notifications/settings`,
       { method: 'PUT', body: JSON.stringify(body), fetch: fetchFn }
     ),
+  getPushConfig: (workspaceId: string, fetchFn?: FetchLike) =>
+    request<{ enabled: boolean; publicKey: string | null }>(
+      `/workspaces/${workspaceId}/notifications/push-config`,
+      { fetch: fetchFn }
+    ),
+
+  savePushSubscription: (
+    workspaceId: string,
+    body: { endpoint: string; keys: { p256dh: string; auth: string } },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ id: string }>(`/workspaces/${workspaceId}/notifications/push-subscription`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      fetch: fetchFn
+    }),
+
+  removePushSubscription: (workspaceId: string, endpoint: string, fetchFn?: FetchLike) =>
+    request<{ ok: true }>(`/workspaces/${workspaceId}/notifications/push-subscription`, {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+      fetch: fetchFn
+    }),
 
   /* ------------------------------------------------------------- MCP API keys */
 
@@ -2074,7 +2128,7 @@ export const api = {
     workspaceId: string,
     boardId: string,
     taskId: string,
-    body: { content: string },
+    body: { content: string; mentionedUserIds?: string[] },
     fetchFn?: FetchLike
   ) =>
     request<{ comment: ApiTaskComment }>(
