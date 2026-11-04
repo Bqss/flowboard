@@ -14,6 +14,7 @@
     Alert02Icon,
     BellRingIcon
   } from '@hugeicons/core-free-icons';
+  import { playNotificationSound, unlockNotificationSound } from '$lib/notifications/sound.js';
   import type { LayoutData } from '../$types';
 
   let { data }: { data: LayoutData } = $props();
@@ -68,6 +69,32 @@
   let notifSaving = $state(false);
   let notifSuccess = $state<string | null>(null);
   let notifError = $state<string | null>(null);
+  let pushConfig = $state<{ enabled: boolean; publicKey: string | null } | null>(null);
+  let pushStatus = $state<
+    'loading' | 'active' | 'inactive' | 'unsupported' | 'unconfigured' | 'denied' | 'error'
+  >('loading');
+  let pushError = $state<string | null>(null);
+  let pushBusy = $state(false);
+  const pushStatusText = $derived.by(() => {
+    switch (pushStatus) {
+      case 'active':
+        return tr('settings.pushEnabled');
+      case 'inactive':
+        return tr('settings.pushDisabled');
+      case 'unsupported':
+        return tr('settings.pushUnsupported');
+      case 'unconfigured':
+        return tr('settings.pushNotConfigured');
+      case 'denied':
+        return tr('settings.pushPermissionDenied');
+      case 'loading':
+        return tr('settings.pushLoading');
+      default:
+        return tr('settings.pushError');
+    }
+  });
+
+
 
   async function loadNotifSettings() {
     const workspaceId = data.workspace?.id;
@@ -106,9 +133,139 @@
       notifSaving = false;
     }
   }
+  const serviceWorkerUrl = `/sw.js?v=${encodeURIComponent(__FLOWBOARD_VERSION__)}`;
+
+  const ensureServiceWorkerRegistration = async () => {
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    if (registration?.active) return registration;
+    await navigator.serviceWorker.register(serviceWorkerUrl, { scope: '/' });
+    return navigator.serviceWorker.ready;
+  };
+
+  const base64UrlToArrayBuffer = (value: string): ArrayBuffer => {
+    const padded = value + '='.repeat((4 - (value.length % 4)) % 4);
+    const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+    const binary = window.atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    const buffer = new ArrayBuffer(bytes.length);
+    new Uint8Array(buffer).set(bytes);
+    return buffer;
+  };
+
+  async function loadBrowserPushStatus() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    pushStatus = 'loading';
+    pushError = null;
+    try {
+      const config = await api.getPushConfig(workspaceId);
+      pushConfig = config;
+      if (
+        typeof window === 'undefined' ||
+        !window.isSecureContext ||
+        !('Notification' in window) ||
+        !('serviceWorker' in navigator) ||
+        !('PushManager' in window)
+      ) {
+        pushStatus = 'unsupported';
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        pushStatus = 'denied';
+        return;
+      }
+      if (!config.enabled || !config.publicKey) {
+        pushStatus = 'unconfigured';
+        return;
+      }
+      const registration = await ensureServiceWorkerRegistration();
+      pushStatus = (await registration.pushManager.getSubscription()) ? 'active' : 'inactive';
+    } catch (error) {
+      pushError = error instanceof ApiError ? error.message : tr('settings.pushError');
+      pushStatus = 'error';
+    }
+  }
+
+  async function enableBrowserPush() {
+    const workspaceId = data.workspace?.id;
+    const publicKey = pushConfig?.publicKey;
+    if (!workspaceId || !publicKey || pushBusy || typeof Notification === 'undefined') return;
+    pushBusy = true;
+    pushError = null;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        pushStatus = permission === 'denied' ? 'denied' : 'inactive';
+        return;
+      }
+
+      const registration = await ensureServiceWorkerRegistration();
+      const subscription =
+        (await registration.pushManager.getSubscription()) ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64UrlToArrayBuffer(publicKey)
+        }));
+      const serialized = subscription.toJSON();
+      const keys = serialized.keys;
+      if (!serialized.endpoint || !keys?.p256dh || !keys.auth) {
+        throw new Error('Browser returned an incomplete push subscription.');
+      }
+
+      await api.savePushSubscription(workspaceId, {
+        endpoint: serialized.endpoint,
+        keys: { p256dh: keys.p256dh, auth: keys.auth }
+      });
+      pushStatus = 'active';
+    } catch (error) {
+      pushError = error instanceof ApiError ? error.message : tr('settings.pushError');
+      pushStatus = 'error';
+    } finally {
+      pushBusy = false;
+    }
+  }
+
+  async function disableBrowserPush() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId || pushBusy || !('serviceWorker' in navigator)) return;
+    pushBusy = true;
+    pushError = null;
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/');
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription) {
+        await api.removePushSubscription(workspaceId, subscription.endpoint);
+        await subscription.unsubscribe();
+      }
+      pushStatus = 'inactive';
+    } catch (error) {
+      pushError = error instanceof ApiError ? error.message : tr('settings.pushError');
+      pushStatus = 'error';
+    } finally {
+      pushBusy = false;
+    }
+  }
+
+  async function testNotificationSound() {
+    try {
+      await unlockNotificationSound();
+      playNotificationSound();
+      notifSuccess = tr('settings.soundTested');
+      notifError = null;
+    } catch {
+      notifError = tr('settings.pushError');
+    }
+  }
+
 
   $effect(() => {
-    if (data.workspace?.id) loadNotifSettings();
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) return;
+    void loadNotifSettings();
+    void loadBrowserPushStatus();
   });
 
   async function updateProfile() {
@@ -395,6 +552,52 @@
             <span class="text-sm font-normal leading-relaxed text-mute block">{tr('settings.emailDigestHelper')}</span>
           </span>
         </label>
+
+        <label class="flex items-start gap-3 rounded-xl border border-hairline bg-lane/45 p-4">
+          <Checkbox
+            checked={notifSettings.soundEnabled}
+            onchange={() => {
+              notifSettings = { ...notifSettings!, soundEnabled: !notifSettings!.soundEnabled };
+            }}
+          />
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium text-ink">{tr('settings.soundAlerts')}</span>
+            <span class="text-sm font-normal leading-relaxed text-mute block">{tr('settings.soundAlertsHelper')}</span>
+          </span>
+          <Button variant="secondary" size="sm" type="button" onclick={() => void testNotificationSound()}>
+            {tr('settings.testSound')}
+          </Button>
+        </label>
+
+        <div class="flex flex-col gap-3 rounded-xl border border-hairline bg-lane/45 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0">
+            <h3 class="text-sm font-medium text-ink">{tr('settings.browserPushTitle')}</h3>
+            <p class="mt-1 text-sm font-normal leading-relaxed text-mute">{tr('settings.browserPushHelper')}</p>
+            <p class="mt-2 text-xs text-mute">{pushStatusText}</p>
+            {#if pushError}
+              <p class="mt-2 text-xs text-status-urgent-ink">{pushError}</p>
+            {/if}
+          </div>
+          {#if pushStatus === 'active'}
+            <Button
+              variant="secondary"
+              type="button"
+              loading={pushBusy}
+              onclick={() => void disableBrowserPush()}
+            >
+              {tr('settings.disablePush')}
+            </Button>
+          {:else if pushStatus === 'inactive' || (pushStatus === 'error' && pushConfig?.enabled)}
+            <Button
+              variant="secondary"
+              type="button"
+              loading={pushBusy}
+              onclick={() => void enableBrowserPush()}
+            >
+              {tr('settings.enablePush')}
+            </Button>
+          {/if}
+        </div>
 
         {#if notifError}
           <div class="flex items-center gap-2 text-sm text-status-urgent-ink">
