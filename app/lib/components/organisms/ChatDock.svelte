@@ -3,7 +3,7 @@
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Avatar, Badge, Button, Skeleton } from '$lib/components/atoms/index.js';
-  import { SearchInput, AlertInline } from '$lib/components/molecules/index.js';
+  import { SearchInput, AlertInline, ChatVideoPlayer } from '$lib/components/molecules/index.js';
   import { ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
@@ -1357,7 +1357,9 @@
                                 </div>
                               </button>
                             {:else if isVideoType(att.fileType)}
-                              <video src={att.filePath} controls class="max-h-32 max-w-[180px] rounded-lg"></video>
+                            <div class="max-h-48 max-w-[240px] overflow-hidden rounded-lg">
+                              <ChatVideoPlayer src={att.filePath} fileName={att.fileName} />
+                            </div>
                             {:else}
                               <div class="flex items-center gap-1.5 rounded-lg border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
                                 <HugeiconsIcon icon={File02Icon} size={14} strokeWidth={1.8} />
@@ -1848,7 +1850,9 @@
                             </div>
                           </button>
                         {:else if isVideoType(att.fileType)}
-                          <video src={att.filePath} controls class="max-h-32 max-w-[180px] rounded-lg"></video>
+                          <div class="max-h-48 max-w-[240px] overflow-hidden rounded-lg">
+                            <ChatVideoPlayer src={att.filePath} fileName={att.fileName} />
+                          </div>
                         {:else}
                           <div class="flex items-center gap-1.5 rounded-lg border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
                             <HugeiconsIcon icon={File02Icon} size={14} strokeWidth={1.8} />
