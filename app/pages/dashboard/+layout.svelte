@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto, invalidateAll } from '$app/navigation';
   import { api, ApiError } from '$lib/api/client';
-  import type { ApiAccount } from '$lib/api/client';
+  import type { ApiAccount, ApiNotification } from '$lib/api/client';
   import type { LayoutData } from '../$types';
   import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget, Dialog } from '$lib/components/organisms/index.js';
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
@@ -10,6 +10,7 @@
   import { DropdownMenu, FormField, toast, type MenuItem } from '$lib/components/molecules/index.js';
   import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
   import { locale, locales, setLocale } from '$lib/i18n/index.js';
+  import { playNotificationSound, unlockNotificationSound } from '$lib/notifications/sound.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Home09Icon,
@@ -38,6 +39,117 @@
 
   const tr = (key: string, values?: Record<string, string | number>) =>
     dashboardText($locale, key, values);
+
+  const isNotificationType = (value: unknown): value is ApiNotification['type'] => {
+    switch (value) {
+      case 'wa_failed':
+      case 'customer_replied':
+      case 'card_overdue':
+      case 'card_due_soon':
+      case 'handover':
+      case 'workflow_action':
+      case 'chat_message':
+      case 'task_assigned':
+      case 'task_comment':
+      case 'task_mention':
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  const isNullableString = (value: unknown): value is string | null =>
+    value === null || typeof value === 'string';
+
+  const isWorkspaceNotification = (
+    value: unknown
+  ): value is ApiNotification & { workspaceId: string } => {
+    if (!value || typeof value !== 'object') return false;
+    return (
+      'id' in value &&
+      typeof value.id === 'string' &&
+      'workspaceId' in value &&
+      typeof value.workspaceId === 'string' &&
+      'type' in value &&
+      isNotificationType(value.type) &&
+      'title' in value &&
+      typeof value.title === 'string' &&
+      'body' in value &&
+      typeof value.body === 'string' &&
+      'cardId' in value &&
+      isNullableString(value.cardId) &&
+      'conversationId' in value &&
+      isNullableString(value.conversationId) &&
+      'boardId' in value &&
+      isNullableString(value.boardId) &&
+      'taskId' in value &&
+      isNullableString(value.taskId) &&
+      'read' in value &&
+      typeof value.read === 'boolean' &&
+      'createdAt' in value &&
+      typeof value.createdAt === 'string'
+    );
+  };
+
+  type PushNotificationAlert = {
+    notificationId: string;
+    workspaceId: string;
+    type: ApiNotification['type'];
+    title: string;
+    body: string;
+    appBody: string;
+    url: string;
+  };
+
+  const readPushNotificationAlert = (value: unknown): PushNotificationAlert | null => {
+    if (!value || typeof value !== 'object') return null;
+    if (
+      !('notificationId' in value) ||
+      typeof value.notificationId !== 'string' ||
+      !('workspaceId' in value) ||
+      typeof value.workspaceId !== 'string' ||
+      !('type' in value) ||
+      !isNotificationType(value.type) ||
+      !('title' in value) ||
+      typeof value.title !== 'string' ||
+      !('body' in value) ||
+      typeof value.body !== 'string' ||
+      !('url' in value) ||
+      typeof value.url !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      notificationId: value.notificationId,
+      workspaceId: value.workspaceId,
+      type: value.type,
+      title: value.title,
+      body: value.body,
+      appBody: 'appBody' in value && typeof value.appBody === 'string' ? value.appBody : value.body,
+      url: value.url
+    };
+  };
+
+  const notificationTitle = (item: Pick<ApiNotification, 'type' | 'title'>) => {
+    switch (item.type) {
+      case 'chat_message':
+        return item.title || tr('notifications.chatMessage');
+      case 'task_assigned':
+        return tr('notifications.taskAssigned');
+      case 'task_comment':
+        return tr('notifications.taskComment');
+      case 'task_mention':
+        return tr('notifications.taskMention');
+      default:
+        return item.title;
+    }
+  };
+
+  const isAudibleNotification = (type: ApiNotification['type']) =>
+    type === 'chat_message' ||
+    type === 'task_assigned' ||
+    type === 'task_comment' ||
+    type === 'task_mention';
   const themeLabels = $derived({
     light: tr('shell.themeLight'),
     dark: tr('shell.themeDark'),
@@ -49,6 +161,13 @@
   let switchingWorkspace = $state(false);
   let switchingAccount = $state(false);
   let notificationItems = $state<NotificationItem[]>([]);
+  let notificationUnreadCount = $state(0);
+  let soundAlertsEnabled = $state(false);
+  const seenNotificationIds = new Map<string, Set<string>>();
+  const notificationBaselineWorkspaces = new Set<string>();
+  let notificationLoadSequence = 0;
+  let handledPushReadKey = '';
+  let handledNotificationWorkspaceSwitchKey = '';
   let accounts = $state<ApiAccount[]>([]);
   let sidebarCollapsed = $state(false);
   let workspaces = $state<
@@ -62,10 +181,10 @@
   let unreadMessageCount = $state(0);
   let unreadRefreshSequence = 0;
 
-  async function loadUnreadMessages(workspaceId: string) {
+  async function loadUnreadMessages() {
     const requestSequence = ++unreadRefreshSequence;
     try {
-      const result = await api.getChatUnread(workspaceId);
+      const result = await api.getAllChatUnread();
       if (requestSequence === unreadRefreshSequence) {
         unreadMessageCount = result.unread;
       }
@@ -75,81 +194,97 @@
   }
 
   $effect(() => {
-    const workspaceId = data.workspace?.id;
     const userId = data.user?.id;
+    const workspaceIds = workspaces.map((workspace) => workspace.id);
 
-    if (!workspaceId || !userId) {
+    if (!userId) {
       unreadRefreshSequence += 1;
       unreadMessageCount = 0;
       return;
     }
 
     let disposed = false;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let retryCount = 0;
+    const sockets = new Map<string, WebSocket>();
+    const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const retryCounts = new Map<string, number>();
     const maxRetries = 5;
+    const membershipWorkspaceIds = new Set(workspaceIds);
 
-    const scheduleReconnect = () => {
-      if (disposed || retryCount >= maxRetries) return;
-      retryCount += 1;
-      reconnectTimer = setTimeout(connect, 2500 * retryCount);
+    const scheduleReconnect = (workspaceId: string) => {
+      if (
+        disposed ||
+        reconnectTimers.has(workspaceId) ||
+        !membershipWorkspaceIds.has(workspaceId)
+      ) return;
+      const retryCount = retryCounts.get(workspaceId) ?? 0;
+      if (retryCount >= maxRetries) return;
+      const nextRetry = retryCount + 1;
+      retryCounts.set(workspaceId, nextRetry);
+      const timer = setTimeout(() => {
+        reconnectTimers.delete(workspaceId);
+        connect(workspaceId);
+      }, 2500 * nextRetry);
+      reconnectTimers.set(workspaceId, timer);
     };
 
-    const connect = () => {
-      if (disposed) return;
+    const connect = (workspaceId: string) => {
+      if (disposed || sockets.has(workspaceId) || !membershipWorkspaceIds.has(workspaceId)) return;
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsHost = import.meta.env.DEV ? `${window.location.hostname}:3001` : window.location.host;
       const url = `${protocol}//${wsHost}/api/chat/ws?workspaceId=${encodeURIComponent(workspaceId)}`;
 
+      let socket: WebSocket;
       try {
         socket = new WebSocket(url);
       } catch {
-        scheduleReconnect();
+        scheduleReconnect(workspaceId);
         return;
       }
+      sockets.set(workspaceId, socket);
 
       socket.onopen = () => {
-        retryCount = 0;
-        void loadUnreadMessages(workspaceId);
+        if (sockets.get(workspaceId) !== socket) return;
+        retryCounts.delete(workspaceId);
+        void loadUnreadMessages();
       };
-
       socket.onmessage = (event) => {
         try {
-          const payload = JSON.parse(event.data) as {
-            type?: string;
-            userId?: string;
-            message?: { senderId?: string };
-          };
-
-          const senderId = payload.message?.senderId;
-          if (payload.type === 'message:new' && senderId && senderId !== userId) {
-            unreadMessageCount += 1;
-          } else if (payload.type === 'read' && payload.userId === userId) {
-            void loadUnreadMessages(workspaceId);
+          const payload: unknown = JSON.parse(event.data);
+          if (!payload || typeof payload !== 'object' || !('type' in payload)) return;
+          if (payload.type === 'notification:new' && 'notification' in payload) {
+            const notification = isWorkspaceNotification(payload.notification)
+              ? payload.notification
+              : null;
+            if (notification) handleIncomingNotification(notification);
+          }
+          if (
+            payload.type === 'message:new' ||
+            payload.type === 'message:delete' ||
+            payload.type === 'read'
+          ) {
+            void loadUnreadMessages();
           }
         } catch {
           // Ignore malformed socket payloads.
         }
       };
 
-      socket.onerror = () => {
-        socket?.close();
-      };
-
+      socket.onerror = () => socket.close();
       socket.onclose = () => {
-        if (!disposed) scheduleReconnect();
+        if (sockets.get(workspaceId) !== socket) return;
+        sockets.delete(workspaceId);
+        scheduleReconnect(workspaceId);
       };
     };
 
-    void loadUnreadMessages(workspaceId);
-    connect();
+    void loadUnreadMessages();
+    for (const workspaceId of workspaceIds) connect(workspaceId);
 
     return () => {
       disposed = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (socket) {
+      for (const timer of reconnectTimers.values()) clearTimeout(timer);
+      for (const socket of sockets.values()) {
         socket.onclose = null;
         socket.close();
       }
@@ -330,9 +465,24 @@
   const sidebarItems = $derived(adminMode ? adminNavItems : navItems);
   const sidebarSettingsItems = $derived(adminMode ? [] : settingsItems);
 
+  async function clearCurrentPushSubscription() {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/');
+      const subscription = await registration?.pushManager.getSubscription();
+      if (!subscription) return;
+      await api.removePushSubscription(workspaceId, subscription.endpoint).catch(() => undefined);
+      await subscription.unsubscribe().catch(() => false);
+    } catch {
+      // Do not prevent sign-out or account switching if browser push cleanup fails.
+    }
+  }
+
   async function logout() {
     loggingOut = true;
     try {
+      await clearCurrentPushSubscription();
       await api.logout();
       await invalidateAll();
       await goto('/login');
@@ -355,6 +505,39 @@
       switchingWorkspace = false;
     }
   }
+  async function switchNotificationWorkspace(workspaceId: string) {
+    if (!data.user || workspaceId === data.workspace?.id || switchingWorkspace) return;
+    switchingWorkspace = true;
+    try {
+      await api.switchWorkspace(workspaceId);
+      await invalidateAll();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : tr('shell.switchWorkspace'));
+    } finally {
+      switchingWorkspace = false;
+    }
+  }
+
+  $effect(() => {
+    const targetWorkspaceId = $page.url.pathname.startsWith('/dashboard/boards/')
+      ? $page.url.searchParams.get('workspaceId')
+      : null;
+    const currentWorkspaceId = data.workspace?.id;
+    if (
+      !data.user ||
+      !targetWorkspaceId ||
+      targetWorkspaceId === currentWorkspaceId ||
+      switchingWorkspace ||
+      !workspaces.some((workspace) => workspace.id === targetWorkspaceId)
+    ) {
+      return;
+    }
+    const key = `${targetWorkspaceId}:${currentWorkspaceId ?? ''}`;
+    if (handledNotificationWorkspaceSwitchKey === key) return;
+    handledNotificationWorkspaceSwitchKey = key;
+    void switchNotificationWorkspace(targetWorkspaceId);
+  });
+
 
   function openCreateWorkspace() {
     newWorkspaceName = '';
@@ -385,6 +568,7 @@
 
     switchingAccount = true;
     try {
+      await clearCurrentPushSubscription();
       await api.switchAccount(accountId);
       await invalidateAll();
       await goto('/dashboard');
@@ -413,17 +597,121 @@
 
   const canSwitchWorkspace = $derived(Boolean(data.user));
 
+  const seenForWorkspace = (workspaceId: string) => {
+    let seen = seenNotificationIds.get(workspaceId);
+    if (!seen) {
+      seen = new Set<string>();
+      seenNotificationIds.set(workspaceId, seen);
+    }
+    return seen;
+  };
+
+  const notificationTargetUrl = (item: ApiNotification, workspaceId: string) => {
+    if (item.type === 'chat_message' && item.conversationId) {
+      return `/dashboard/chat?workspaceId=${encodeURIComponent(workspaceId)}&conversationId=${encodeURIComponent(item.conversationId)}`;
+    }
+    if (item.boardId && item.taskId) {
+      return `/dashboard/boards/${encodeURIComponent(item.boardId)}?workspaceId=${encodeURIComponent(workspaceId)}&task=${encodeURIComponent(item.taskId)}`;
+    }
+    return null;
+  };
+
+  async function openNotification(
+    item: ApiNotification,
+    workspaceId: string,
+    targetUrl?: string
+  ) {
+    if (!item.read) {
+      await api.markNotificationRead(workspaceId, item.id).catch(() => undefined);
+    }
+    if (workspaceId === data.workspace?.id) await loadNotifications();
+    const target = targetUrl ?? notificationTargetUrl(item, workspaceId);
+    if (target) await goto(target);
+  }
+
+  function showNotificationAlert(
+    item: ApiNotification,
+    workspaceId: string,
+    targetUrl?: string
+  ) {
+    if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+
+    toast.info(notificationTitle(item), {
+      description: item.body,
+      duration: 7000,
+      action: {
+        label: tr('shell.openNotification'),
+        onclick: () => {
+          void openNotification(item, workspaceId, targetUrl);
+        }
+      }
+    });
+    if (soundAlertsEnabled && isAudibleNotification(item.type)) playNotificationSound();
+  }
+
+  function handleIncomingNotification(notification: ApiNotification & { workspaceId: string }) {
+    const seen = seenForWorkspace(notification.workspaceId);
+    if (seen.has(notification.id)) return;
+    seen.add(notification.id);
+
+    if (!notification.read && notification.workspaceId === data.workspace?.id) {
+      notificationUnreadCount += 1;
+    }
+    showNotificationAlert(notification, notification.workspaceId);
+    if (notification.workspaceId === data.workspace?.id) void loadNotifications();
+  }
+
+  function handlePushNotificationAlert(alert: PushNotificationAlert) {
+    const seen = seenForWorkspace(alert.workspaceId);
+    if (seen.has(alert.notificationId)) return;
+    seen.add(alert.notificationId);
+
+    const notification: ApiNotification = {
+      id: alert.notificationId,
+      type: alert.type,
+      title: alert.title,
+      body: alert.appBody,
+      cardId: null,
+      conversationId: null,
+      boardId: null,
+      taskId: null,
+      read: false,
+      createdAt: new Date().toISOString()
+    };
+    if (alert.workspaceId === data.workspace?.id) notificationUnreadCount += 1;
+    showNotificationAlert(notification, alert.workspaceId, alert.url);
+    if (alert.workspaceId === data.workspace?.id) void loadNotifications();
+  }
+
   async function loadNotifications() {
-    if (!data.workspace?.id) {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) {
       notificationItems = [];
+      notificationUnreadCount = 0;
       return;
     }
 
+    const requestSequence = ++notificationLoadSequence;
+    const isBaseline = !notificationBaselineWorkspaces.has(workspaceId);
+    const seen = seenForWorkspace(workspaceId);
     try {
-      const res = await api.listNotifications(data.workspace.id);
+      const res = await api.listNotifications(workspaceId);
+      if (requestSequence !== notificationLoadSequence || data.workspace?.id !== workspaceId) return;
+      notificationUnreadCount = res.unread;
+
+      if (!isBaseline) {
+        for (const item of [...res.notifications].reverse()) {
+          if (seen.has(item.id)) continue;
+          seen.add(item.id);
+          if (!item.read) showNotificationAlert(item, workspaceId);
+        }
+      }
+      for (const item of res.notifications) seen.add(item.id);
+      notificationBaselineWorkspaces.add(workspaceId);
+
       notificationItems = res.notifications.map((item) => ({
         id: item.id,
-        title: item.title,
+        title: notificationTitle(item),
         body: item.body,
         time: new Date(item.createdAt).toLocaleString(dashboardIntlLocale($locale), {
           day: 'numeric',
@@ -432,21 +720,22 @@
           minute: '2-digit'
         }),
         unread: !item.read,
-        onselect: async () => {
-          if (!data.workspace?.id || item.read) return;
-          await api.markNotificationRead(data.workspace.id, item.id);
-          await loadNotifications();
+        onselect: () => {
+          void openNotification(item, workspaceId);
         }
       }));
     } catch {
-      notificationItems = [];
+      // Keep the last known list and unread count when the refresh fails.
     }
   }
 
-
   $effect(() => {
     $locale;
-    if (!data.workspace?.id) return;
+    if (!data.workspace?.id) {
+      notificationItems = [];
+      notificationUnreadCount = 0;
+      return;
+    }
     void loadNotifications();
 
     const timer = setInterval(() => {
@@ -457,6 +746,94 @@
       clearInterval(timer);
     };
   });
+
+  $effect(() => {
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) {
+      soundAlertsEnabled = false;
+      return;
+    }
+
+    let disposed = false;
+    void api
+      .getNotificationSettings(workspaceId)
+      .then(({ settings }) => {
+        if (!disposed && data.workspace?.id === workspaceId) {
+          soundAlertsEnabled = settings.soundEnabled;
+        }
+      })
+      .catch(() => {
+        if (!disposed) soundAlertsEnabled = false;
+      });
+
+    return () => {
+      disposed = true;
+    };
+  });
+
+  $effect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const handleServiceWorkerMessage = (event: MessageEvent<unknown>) => {
+      const message = event.data;
+      if (
+        !message ||
+        typeof message !== 'object' ||
+        !('type' in message) ||
+        message.type !== 'FLOWBOARD_PUSH_NOTIFICATION' ||
+        !('notification' in message)
+      ) {
+        return;
+      }
+      const alert = readPushNotificationAlert(message.notification);
+      if (alert) handlePushNotificationAlert(alert);
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+  });
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const unlockAudio = () => {
+      void unlockNotificationSound().catch(() => undefined);
+    };
+    window.addEventListener('pointerdown', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  });
+  $effect(() => {
+    const notificationId = $page.url.searchParams.get('notificationId');
+    const workspaceId = $page.url.searchParams.get('notificationWorkspaceId');
+    if (!data.user || !notificationId || !workspaceId) return;
+
+    const key = `${workspaceId}:${notificationId}`;
+    if (handledPushReadKey === key) return;
+    handledPushReadKey = key;
+
+    void (async () => {
+      await api.markNotificationRead(workspaceId, notificationId).catch(() => undefined);
+      if (workspaceId === data.workspace?.id) void loadNotifications();
+
+      const url = new URL($page.url);
+      url.searchParams.delete('notificationId');
+      url.searchParams.delete('notificationWorkspaceId');
+      if (
+        $page.url.searchParams.get('notificationId') === notificationId &&
+        $page.url.searchParams.get('notificationWorkspaceId') === workspaceId
+      ) {
+        await goto(`${url.pathname}${url.search}${url.hash}`, {
+          replaceState: true,
+          keepFocus: true,
+          noScroll: true
+        });
+      }
+    })();
+  });
+
 
   async function markAllNotificationsRead() {
     if (!data.workspace?.id) return;
@@ -691,6 +1068,7 @@
         </div>
         <NotificationCenter
           items={notificationItems}
+          unreadCount={notificationUnreadCount}
           title={tr('shell.notifications')}
           emptyText={tr('shell.emptyNotifications')}
           markAllReadText={tr('shell.markRead')}
