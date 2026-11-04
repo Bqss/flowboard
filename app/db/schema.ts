@@ -31,7 +31,11 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'card_overdue',
   'card_due_soon',
   'handover',
-  'workflow_action'
+  'workflow_action',
+  'chat_message',
+  'task_assigned',
+  'task_comment',
+  'task_mention'
 ]);
 export const urgencyEnum = pgEnum('urgency', ['high', 'medium', 'low']);
 export const deadlineUnitEnum = pgEnum('deadline_unit', ['hours', 'days']);
@@ -642,6 +646,9 @@ export const notifications = pgTable('notifications', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   cardId: uuid('card_id').references(() => cards.id, { onDelete: 'set null' }),
+  conversationId: uuid('conversation_id').references(() => chatConversations.id, { onDelete: 'set null' }),
+  boardId: uuid('board_id').references(() => taskBoards.id, { onDelete: 'set null' }),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
   type: notificationTypeEnum('type').notNull(),
   title: text('title').notNull(),
   body: text('body').notNull(),
@@ -668,11 +675,28 @@ export const notificationSettings = pgTable(
     emailCardOverdue: boolean('email_card_overdue').notNull().default(true),
     emailHandover: boolean('email_handover').notNull().default(true),
     emailDigest: boolean('email_digest').notNull().default(false),
+    soundEnabled: boolean('sound_enabled').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [uniqueIndex('notification_settings_workspace_user_idx').on(table.workspaceId, table.userId)]
 );
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('push_subscriptions_user_idx').on(table.userId)]
+);
+
 
 export const plans = pgTable(
   'plans',
@@ -1087,6 +1111,21 @@ export const taskComments = pgTable(
   },
   (table) => [index('task_comments_task_created_idx').on(table.taskId, table.createdAt)]
 );
+export const taskCommentMentions = pgTable(
+  'task_comment_mentions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    commentId: uuid('comment_id')
+      .notNull()
+      .references(() => taskComments.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [uniqueIndex('task_comment_mentions_comment_user_idx').on(table.commentId, table.userId)]
+);
+
 
 export const taskActivities = pgTable(
   'task_activities',
