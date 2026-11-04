@@ -48,6 +48,10 @@ export const env = {
   // Email transport (Resend API). When empty, email sending is skipped (dev).
   emailFrom: process.env.EMAIL_FROM ?? 'ActJom <no-reply@flowboard.app>',
   emailResendApiKey: process.env.RESEND_API_KEY ?? '',
+  // Web Push remains unavailable until both VAPID keys are configured.
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY?.trim() ?? '',
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY?.trim() ?? '',
+  vapidSubject: process.env.VAPID_SUBJECT?.trim() || 'mailto:no-reply@flowboard.app',
   // Days of read-only grace after a subscription becomes past_due / canceled before hard block.
   billingGraceDays: Number(process.env.BILLING_GRACE_DAYS ?? 7)
   ,
