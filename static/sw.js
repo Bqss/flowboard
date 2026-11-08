@@ -78,7 +78,9 @@ self.addEventListener('push', (event) => {
         badge,
         tag: `flowboard:${notification.notificationId}`,
         renotify: false,
-        data: notification
+        silent: false,
+        vibrate: [100],
+        data: notification,
       });
     })
   );

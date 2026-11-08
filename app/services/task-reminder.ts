@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, isNull, lte, lt, gt } from 'drizzle-orm';
-import { db, taskBoards, taskColumns, tasks, users, workspaces } from '@db';
+import { db, taskBoards, taskColumns, tasks, users, workspaces, type NotificationType } from '@db';
 import { env } from '@config/env';
 import { sendEmail } from './email';
 import {
@@ -9,6 +9,7 @@ import {
   formatOverdueDuration
 } from '../resources/notifications/renderer';
 import { isWithinTaskReminderWindow } from './task-reminder-policy';
+import { createNotification } from './notification';
 
 type UserSummary = {
   id: string;
@@ -65,9 +66,40 @@ const resolveTaskRecipients = (
   return recipients;
 };
 
+const createTaskDeadlineNotifications = async (input: {
+  workspaceId: string;
+  boardId: string;
+  task: { id: string; title: string; createdById: string | null; assigneeId: string | null };
+  type: Extract<NotificationType, 'task_due_soon' | 'task_overdue'>;
+  title: string;
+  body: string;
+}) => {
+  const recipients = [...new Set(
+    [input.task.assigneeId, input.task.createdById].filter(
+      (userId): userId is string => Boolean(userId)
+    )
+  )];
+
+  await Promise.all(
+    recipients.map((userId) =>
+      createNotification({
+        workspaceId: input.workspaceId,
+        userId,
+        boardId: input.boardId,
+        taskId: input.task.id,
+        type: input.type,
+        title: input.title,
+        body: input.body
+      }).catch((error) => {
+        console.error(`[task-reminder] failed to create ${input.type} notification for ${userId}:`, error);
+      })
+    )
+  );
+};
+
 /**
- * Process tasks approaching their deadline and send reminder emails.
- * Sent to both creator and assignee.
+ * Process tasks approaching deadlines and notify creators and assignees.
+ * Creates in-app/browser-push alerts and sends the existing reminder emails.
  */
 export const processTaskDueSoonReminders = async (): Promise<number> => {
   const now = new Date();
@@ -116,6 +148,15 @@ export const processTaskDueSoonReminders = async (): Promise<number> => {
   for (const row of dueSoonTasks) {
     const { task, board, column, workspaceName } = row;
     const recipients = resolveTaskRecipients(task.createdById, task.assigneeId, userMap);
+    const timeRemaining = formatTimeRemaining(task.dueAt!, now);
+    await createTaskDeadlineNotifications({
+      workspaceId: board.workspaceId,
+      boardId: board.id,
+      task,
+      type: 'task_due_soon',
+      title: 'Task deadline approaching',
+      body: `Task “${task.title}” is due ${timeRemaining}.`
+    });
 
     if (recipients.length === 0) {
       // Mark as notified anyway to avoid infinite retries when no recipients exist
@@ -129,8 +170,7 @@ export const processTaskDueSoonReminders = async (): Promise<number> => {
     const creator = task.createdById ? userMap.get(task.createdById) : null;
     const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
 
-    const taskUrl = `${env.appUrl}/dashboard/task-boards/${board.id}?task=${task.id}`;
-    const timeRemaining = formatTimeRemaining(task.dueAt!, now);
+    const taskUrl = `${env.appUrl}/dashboard/boards/${board.id}?workspaceId=${board.workspaceId}&task=${task.id}`;
 
     for (const recipient of recipients) {
       const emailContent = renderTaskDueReminderEmail({
@@ -216,6 +256,15 @@ export const processTaskOverdueReminders = async (): Promise<number> => {
   for (const row of overdueTasks) {
     const { task, board, column, workspaceName } = row;
     const recipients = resolveTaskRecipients(task.createdById, task.assigneeId, userMap);
+    const overdueDuration = formatOverdueDuration(task.dueAt!, now);
+    await createTaskDeadlineNotifications({
+      workspaceId: board.workspaceId,
+      boardId: board.id,
+      task,
+      type: 'task_overdue',
+      title: 'Task is overdue',
+      body: `Task “${task.title}” is overdue by ${overdueDuration}.`
+    });
 
     if (recipients.length === 0) {
       await db
@@ -228,8 +277,7 @@ export const processTaskOverdueReminders = async (): Promise<number> => {
     const creator = task.createdById ? userMap.get(task.createdById) : null;
     const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
 
-    const taskUrl = `${env.appUrl}/dashboard/task-boards/${board.id}?task=${task.id}`;
-    const overdueDuration = formatOverdueDuration(task.dueAt!, now);
+    const taskUrl = `${env.appUrl}/dashboard/boards/${board.id}?workspaceId=${board.workspaceId}&task=${task.id}`;
 
     for (const recipient of recipients) {
       const emailContent = renderTaskOverdueEmail({

@@ -68,9 +68,11 @@ export const createNotification = async (input: {
 
     if (
       input.type === 'chat_message' ||
-      input.type === 'task_assigned' ||
+      input.type === 'chat_reaction' ||
       input.type === 'task_comment' ||
-      input.type === 'task_mention'
+      input.type === 'task_mention' ||
+      input.type === 'task_due_soon' ||
+      input.type === 'task_overdue'
     ) {
       const url =
         input.type === 'chat_message' && input.conversationId
