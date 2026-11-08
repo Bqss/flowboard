@@ -8,7 +8,8 @@
     PinOffIcon,
     Edit02Icon,
     Delete02Icon,
-    SmileIcon
+    SmileIcon,
+    InformationCircleIcon
   } from '@hugeicons/core-free-icons';
 
   type Props = {
@@ -24,6 +25,7 @@
     onpin?: (msg: ApiChatMessage) => void;
     onedit?: (msg: ApiChatMessage) => void;
     ondelete?: (msg: ApiChatMessage) => void;
+    oninfo?: (msg: ApiChatMessage) => void;
     onclose?: () => void;
   };
 
@@ -40,12 +42,13 @@
     onpin,
     onedit,
     ondelete,
+    oninfo,
     onclose
   }: Props = $props();
 
   let panel = $state<HTMLElement | null>(null);
   const MENU_WIDTH = 192;
-  const MENU_HEIGHT = 210;
+  const MENU_HEIGHT = 246;
 
   // Compute position synchronously on first paint to eliminate any layout shift / position jump
   const adjustedX = $derived.by(() => {
@@ -205,6 +208,20 @@
     <!-- 4. Edit (Hanya pesan sendiri & maks 3 jam) -->
     {#if isOwn && !isDeleted}
       <div class="my-1 h-px bg-hairline" role="separator"></div>
+      {#if oninfo}
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-ink transition-colors hover:bg-lane"
+          onclick={() => {
+            close(true);
+            oninfo?.(message);
+          }}
+        >
+          <HugeiconsIcon icon={InformationCircleIcon} size={15} strokeWidth={1.8} class="text-mute" />
+          <span>Info Pesan</span>
+        </button>
+      {/if}
       {#if canEdit}
         <button
           type="button"

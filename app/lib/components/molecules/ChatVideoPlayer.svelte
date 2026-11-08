@@ -7,15 +7,19 @@
     Maximize02Icon,
     Minimize02Icon
   } from '@hugeicons/core-free-icons';
+  import MessageTicks from '$lib/components/atoms/MessageTicks.svelte';
+  import type { ChatMessageStatus } from '$lib/api/client.js';
 
   type Props = {
     src: string;
     fileName?: string;
     hasCaption?: boolean;
     timestamp?: string;
+    /** Read-receipt status for own messages; renders ticks next to the timestamp */
+    status?: ChatMessageStatus;
   };
 
-  let { src, fileName: _fileName, hasCaption = false, timestamp }: Props = $props();
+  let { src, fileName: _fileName, hasCaption = false, timestamp, status }: Props = $props();
 
   let videoEl = $state<HTMLVideoElement | null>(null);
   let containerEl = $state<HTMLDivElement | null>(null);
@@ -175,7 +179,10 @@
   <!-- Timestamp Overlay on bottom-right if no caption (WhatsApp style, Image #3) -->
   {#if !hasCaption && timestamp && !isPlaying}
     <div class="pointer-events-none absolute bottom-2.5 right-2.5 rounded-md bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white shadow-xs backdrop-blur-xs tabular-nums">
-      {timestamp}
+      <span class="inline-flex items-center gap-1">
+        {timestamp}
+        {#if status}<MessageTicks {status} tone="onPrimary" size={12} />{/if}
+      </span>
     </div>
   {/if}
 
