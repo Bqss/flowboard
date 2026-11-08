@@ -10,14 +10,16 @@
     type ApiChatInboxConversation,
     type ApiChatInboxWorkspace,
     type ApiChatMessage,
-    type ApiChatMember
+    type ApiChatMember,
+    type ApiChatReceiptCursor
   } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Avatar, Badge, Button, IconButton, Input, Skeleton, Switch, Tooltip } from '$lib/components/atoms/index.js';
+  import { Avatar, Badge, Button, IconButton, Input, MessageTicks, Skeleton, Switch, Tooltip } from '$lib/components/atoms/index.js';
   import { ChatAudioPlayer, ChatForwardDialog, ChatMessageContextMenu, ChatReactionPicker, ChatStickerPicker, ChatVideoPlayer, FormField, SearchInput, toast } from '$lib/components/molecules/index.js';
   import { formatStickerMessage, isStickerMessage, parseSticker, type ChatSticker } from '$lib/chat/stickers.js';
-  import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
+  import { applyLegacyReadEvent, applyReceiptEvent, getMessageStatus } from '$lib/chat/receipts.js';
+  import { Dialog, ConfirmDialog, ChatMessageInfoDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Add01Icon,
@@ -78,6 +80,10 @@
   let activeConversation = $state<ApiChatInboxConversation | null>(null);
   let selectedGroup = $state<ApiChatInboxConversation | null>(null);
   let messages = $state<ApiChatMessage[]>([]);
+  let receiptCursors = $state<ApiChatReceiptCursor[]>([]);
+  let infoOpen = $state(false);
+
+  let infoMessage = $state<ApiChatMessage | null>(null);
   let messagesLoading = $state(false);
   let loadingOlder = $state(false);
   let hasOlderMessages = $state(false);
@@ -492,6 +498,20 @@
         break;
       }
 
+      case 'receipt': {
+        if (activeConversation && activeConversation.id === data.conversationId && activeConversation.workspaceId === workspaceId) {
+          receiptCursors = applyReceiptEvent(receiptCursors, data);
+        }
+        break;
+      }
+
+      case 'read': {
+        if (activeConversation && activeConversation.id === data.conversationId && activeConversation.workspaceId === workspaceId) {
+          receiptCursors = applyLegacyReadEvent(receiptCursors, data.userId);
+        }
+        break;
+      }
+
       case 'reaction:toggle': {
         if (activeConversation && activeConversation.id === data.conversationId && activeConversation.workspaceId === workspaceId) {
           messages = messages.map((message) => {
@@ -664,6 +684,7 @@
     activeConversationId = conv.id;
     activeConversation = conv;
     messages = [];
+    receiptCursors = [];
     messagesLoading = true;
     hasOlderMessages = false;
     loadingOlder = false;
@@ -683,6 +704,7 @@
       activeConversationDetail = detailRes;
       roomParticipants = detailRes.participants ?? [];
       messages = msgRes.messages ?? [];
+      receiptCursors = msgRes.receipts ?? [];
       hasOlderMessages = (msgRes.messages ?? []).length >= 50;
 
       await api.markChatRead(conv.workspaceId, conv.id).catch(() => {});
@@ -2111,8 +2133,9 @@
                               </div>
                             </div>
                             {#if !hasCaption && nonVisualAttachments.length === 0 && attIdx === visualAttachments.length - 1}
-                              <span class="pointer-events-none absolute bottom-2.5 right-2.5 rounded-md bg-black/75 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-xs tabular-nums">
+                              <span class="pointer-events-none absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-md bg-black/75 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-xs tabular-nums">
                                 {formatDate(msg.createdAt)}
+                                {#if isOwn && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="onPrimary" />{/if}
                               </span>
                             {/if}
                           </button>
@@ -2122,6 +2145,7 @@
                             fileName={att.fileName}
                             hasCaption={hasCaption || nonVisualAttachments.length > 0}
                             timestamp={formatDate(msg.createdAt)}
+                            status={isOwn && !msg.deletedAt ? getMessageStatus(msg, receiptCursors) : undefined}
                           />
                         {/if}
                       {/each}
@@ -2160,8 +2184,9 @@
                     {#if hasCaption}
                       <div class="px-3.5 pt-2 pb-1.5">
                         <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{msg.body}</p>
-                        <span class="mt-1 block text-right text-[11px] font-medium tabular-nums {isOwn ? 'text-white/95' : 'text-mute'}">
+                        <span class="mt-1 flex items-center justify-end gap-1 text-[11px] font-medium tabular-nums {isOwn ? 'text-white/95' : 'text-mute'}">
                           {formatDate(msg.createdAt)}
+                          {#if isOwn && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="onPrimary" />{/if}
                         </span>
                       </div>
                     {/if}
@@ -2214,8 +2239,9 @@
                         </span>
                       {/if}
                     </button>
-                    <span class="mt-0.5 text-[10px] text-mute font-medium tabular-nums px-1">
+                    <span class="mt-0.5 flex items-center gap-1 text-[10px] text-mute font-medium tabular-nums px-1">
                       {formatDate(msg.createdAt)}
+                      {#if isOwn && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="neutral" />{/if}
                     </span>
                   </div>
                 {:else}
@@ -2307,8 +2333,9 @@
                       {/if}
                     {/if}
 
-                    <span class="mt-1 block text-right text-[11px] font-medium tabular-nums {isOwn ? 'text-white/95' : 'text-mute'}">
+                    <span class="mt-1 flex items-center justify-end gap-1 text-[11px] font-medium tabular-nums {isOwn ? 'text-white/95' : 'text-mute'}">
                       {formatDate(msg.createdAt)}
+                      {#if isOwn && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="onPrimary" />{/if}
                     </span>
                   </div>
                 {/if}
@@ -2838,7 +2865,12 @@
   onpin={togglePinMessage}
   onedit={startEditMessage}
   ondelete={(msg) => (deleteMessageTarget = msg)}
+  oninfo={(msg) => {
+    infoMessage = msg;
+    infoOpen = true;
+  }}
 />
+<ChatMessageInfoDialog bind:open={infoOpen} message={infoMessage} receipts={receiptCursors} />
 <ChatForwardDialog
   bind:open={forwardDialogOpen}
   message={forwardSourceMessage}
