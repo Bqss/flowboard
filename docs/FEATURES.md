@@ -39,6 +39,7 @@ Status: **v1** kecuali ditandai nanti.
 - 2.3 Editor manual (stage + checklist + action + rule)
 - 2.4 Wizard AI: cerita proses → draf → preview → simpan (lalu edit manual)
 - 2.5 Generate draf template WA saat setup (teks tetap template, bukan chat live)
+- 2.6 Daftar workflow dapat difilter berdasarkan label.
 
 ## 3. Checklist + action
 
@@ -57,6 +58,7 @@ Status: **v1** kecuali ditandai nanti.
 - 4.4 Drag & drop antar stage (dengan gate 3.5)
 - 4.5 Assign / reassign assignee per card
 - 4.6 Komentar pada detail task mendukung gambar melalui tombol upload dan paste dari clipboard
+- 4.7 Daftar papan tugas dapat difilter berdasarkan label.
 
 ## 5. Masukkan pelanggan (`createCard`)
 
@@ -77,14 +79,20 @@ Status: **v1** kecuali ditandai nanti.
 ## 7. Reminder (ke staff)
 
 - 7.1 Overdue in-app (bell + highlight card)
-- 7.2 Email reminder task belum selesai: H-2 jam; email overdue satu kali setelah tenggat ke creator dan assignee. Digest / WA ke staff belum tersedia.
+- 7.2 Email reminder task belum selesai: H-2 jam; email overdue satu kali selepas tenggat kepada creator dan assignee. Reminder H-2 dan overdue juga menghasilkan notifikasi in-app/PWA yang automatik memicu Buzz.
 - 7.3 Template email taskboard Actjom: Inter dan token `docs/DESIGN.md`, surface rounded tanpa garis aksen/pemisah, serta tombol pill indigo. Preview reminder dan overdue tersedia di `app/resources/notifications/static/index.html`.
   - Inter dimuat seperti website; email client yang tidak mendukung web font menggunakan fallback sans-serif.
+
+- 7.4 Mesej chat masuk, tugasan assigned, komen, mention, hampir tenggat dan overdue menghantar alert automatik dengan nada notifikasi ringkas dan toast. Peranti mobile yang menyokongnya boleh menerima satu getaran ringkas, tanpa animasi skrin. Toast mesej baharu hanya memaparkan teks dan pratonton; perbualan dibuka melalui inbox Mesej. Mesej sendiri tidak memicu Buzz. Kawalan bunyi tersedia dalam Settings.
 
 ## 8. Dashboard
 
 - 8.1 Stat: Urgent/Pending, In Progress, Waiting Action, Completed
 - 8.2 Filter per workflow
+- 8.3 Inbox Mesej lintas workspace hanya menampilkan percakapan yang diikuti pengguna; badge navigasi menjumlahkan pesan belum dibaca dari seluruh workspace anggota.
+- 8.4 Chat di `/dashboard/chat` mendukung paste gambar dari clipboard dan rekaman suara dengan pratinjau sebelum dikirim sebagai lampiran.
+- 8.5 Menu klik kanan pada gelembung mesej di `/dashboard/chat` dan ChatDock menyediakan Balas, Teruskan, Semat/Lepas Sematan, Edit (hingga 3 jam) dan Hapus; pada skrin sentuh, gunakan butang tindakan.
+- 8.6 Satu ahli hanya boleh mempunyai satu reaction pada setiap mesej; reaction baharu menggantikan reaction lama, dan reaction ditoggle untuk membuangnya. Reaction menghantar notifikasi in-app serta web push kepada pemilik mesej.
 
 ## 9. Estafet
 
@@ -118,6 +126,8 @@ Bukan Owner workspace. Ini operator Flowboard (tim internal).
 - Instalasi melalui web manifest dan prompt pemasangan aplikasi.
 - Service Worker menyimpan aset statis; API dan dokumen HTML autentik tidak dicache.
 - Pembaruan Service Worker mengikuti versi `package.json`, menunggu pilihan pengguna di banner sebelum aktif, lalu memuat ulang aplikasi.
+- Browser push untuk mesej dan tugasan apabila web/PWA berada di latar belakang; pengguna mengaktifkannya pada setiap peranti. Deployment perlu mengkonfigurasi `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` dan `VAPID_SUBJECT`.
+- Bunyi Push Web latar belakang mengikut tetapan pemberitahuan browser/OS; push meminta satu getaran ringkas pada peranti yang menyokongnya. Nada khusus aplikasi tidak dapat dimainkan apabila tiada halaman terbuka.
 
 ## 13. Di luar v1
 
