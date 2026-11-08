@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import {
   db,
   chatConversations,
