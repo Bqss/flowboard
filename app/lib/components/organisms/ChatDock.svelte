@@ -1,15 +1,26 @@
 <script lang="ts">
-  import { api, ApiError, type ApiChatAttachment, type ApiChatConversation, type ApiChatMessage, type ApiChatMember } from '$lib/api/client';
+  import { api, type ApiChatAttachment, type ApiChatConversation, type ApiChatMessage, type ApiChatMember } from '$lib/api/client';
+  import { isStickerMessage, parseSticker, type ChatSticker } from '$lib/chat/stickers.js';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Avatar, Badge, Button, Skeleton } from '$lib/components/atoms/index.js';
-  import { SearchInput, AlertInline, ChatVideoPlayer } from '$lib/components/molecules/index.js';
+  import {
+    SearchInput,
+    AlertInline,
+    ChatVideoPlayer,
+    ChatAudioPlayer,
+    ChatStickerPicker,
+    ChatReactionPicker,
+    ChatMessageContextMenu,
+    ChatForwardDialog,
+    toast
+  } from '$lib/components/molecules/index.js';
   import { ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     BubbleChatIcon,
     SentIcon,
-    ArrowUp01Icon,
+    ArrowDown01Icon,
     Add01Icon,
     Attachment01Icon,
     Download04Icon,
@@ -27,7 +38,12 @@
     UserGroupIcon,
     KanbanIcon,
     WorkflowSquare01Icon,
-    AlertCircleIcon
+    AlertCircleIcon,
+    SmileIcon,
+    PinIcon,
+    PinOffIcon,
+    Forward01Icon,
+    Edit02Icon
   } from '@hugeicons/core-free-icons';
 
   type Props = {
@@ -306,6 +322,12 @@
 
   // Message action menu
   let openMenuMessageId = $state<string | null>(null);
+  let contextMenuOpen = $state(false);
+  let contextMenuMessage = $state<ApiChatMessage | null>(null);
+  let contextMenuX = $state(0);
+  let contextMenuY = $state(0);
+  let forwardSourceMessage = $state<ApiChatMessage | null>(null);
+  let forwardDialogOpen = $state(false);
 
   // Delete confirmation
   let deleteTargetId = $state<string | null>(null);
@@ -381,13 +403,13 @@
 
         if (!target && contextType && contextId && workspaceId) {
           try {
-            const res = await api.createChatConversation(workspaceId, {
+            const res = await (api as any).createChatConversation?.(workspaceId, {
               kind: contextType as any,
               contextType,
               contextId,
               name: contextType === 'workflow' ? 'Chat Workflow' : 'Chat Board'
             });
-            if (res.conversation) {
+            if (res?.conversation) {
               await loadConversations();
               target = conversations.find((c) => c.id === res.conversation?.id);
             }
@@ -508,12 +530,21 @@
           messages = messages.map((m) => {
             if (m.id !== data.messageId) return m;
             if (data.action === 'added') {
-              const exists = m.reactions.some((r) => r.userId === data.userId && r.reaction === data.reaction);
-              if (exists) return m;
-              return { ...m, reactions: [...m.reactions, { reaction: data.reaction, userId: data.userId, userName: '' }] };
-            } else {
-              return { ...m, reactions: m.reactions.filter((r) => !(r.userId === data.userId && r.reaction === data.reaction)) };
+              const reactionsWithoutUser = m.reactions.filter((r) => r.userId !== data.userId);
+              return {
+                ...m,
+                reactions: [
+                  ...reactionsWithoutUser,
+                  { reaction: data.reaction, userId: data.userId, userName: data.userName ?? '' }
+                ]
+              };
             }
+            return {
+              ...m,
+              reactions: m.reactions.filter(
+                (r) => !(r.userId === data.userId && r.reaction === data.reaction)
+              )
+            };
           });
         }
         break;
@@ -677,7 +708,11 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void handleSend();
+      if (editingMessageId) {
+        void saveEdit();
+      } else {
+        void handleSend();
+      }
     }
   }
 
@@ -693,26 +728,26 @@
 
   function startEdit(msg: ApiChatMessage) {
     editingMessageId = msg.id;
-    editText = msg.body;
+    composerText = msg.body;
     openMenuMessageId = null;
     replyToMessage = null;
   }
 
   async function saveEdit() {
-    if (!editingMessageId || !activeConversationId || !editText.trim()) return;
+    if (!editingMessageId || !activeConversationId || !composerText.trim()) return;
     try {
-      await api.editChatMessage(workspaceId, activeConversationId, editingMessageId, editText.trim());
+      await api.editChatMessage(workspaceId, activeConversationId, editingMessageId, composerText.trim());
       messages = messages.map((m) =>
-        m.id === editingMessageId ? { ...m, body: editText.trim(), editedAt: new Date().toISOString() } : m
+        m.id === editingMessageId ? { ...m, body: composerText.trim(), editedAt: new Date().toISOString() } : m
       );
       editingMessageId = null;
-      editText = '';
+      composerText = '';
     } catch { /* silent */ }
   }
 
   function cancelEdit() {
     editingMessageId = null;
-    editText = '';
+    composerText = '';
   }
 
   async function confirmDelete() {
@@ -731,16 +766,174 @@
     reactionPickerMessageId = null;
     try {
       const res = await api.toggleChatReaction(workspaceId, activeConversationId, msg.id, reaction);
-      // Update reactions locally
       messages = messages.map((m) => {
         if (m.id !== msg.id) return m;
-        if (res.action === 'added') {
-          return { ...m, reactions: [...m.reactions, { reaction, userId, userName }] };
-        } else {
-          return { ...m, reactions: m.reactions.filter((r) => !(r.reaction === reaction && r.userId === userId)) };
-        }
+        const reactionsWithoutUser = m.reactions.filter((r) => r.userId !== userId);
+        return {
+          ...m,
+          reactions: res.action === 'added'
+            ? [...reactionsWithoutUser, { reaction, userId, userName }]
+            : reactionsWithoutUser
+        };
       });
-    } catch { /* silent */ }
+    } catch {
+      // The realtime event or next conversation refresh will reconcile the failed action.
+    }
+  }
+  function openMessageContextMenu(msg: ApiChatMessage, x: number, y: number) {
+    openMenuMessageId = null;
+    contextMenuMessage = msg;
+    contextMenuX = x;
+    contextMenuY = y;
+    contextMenuOpen = true;
+  }
+
+  function handleMessageContextMenu(event: MouseEvent, msg: ApiChatMessage) {
+    event.preventDefault();
+    openMessageContextMenu(msg, event.clientX, event.clientY);
+  }
+
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  let holdStartX = 0;
+  let holdStartY = 0;
+
+  let holdJustTriggered = false;
+
+  function handleBubblePointerDown(event: PointerEvent, msg: ApiChatMessage) {
+    if (msg.deletedAt) return;
+    holdStartX = event.clientX;
+    holdStartY = event.clientY;
+    holdJustTriggered = false;
+    const targetEl = event.currentTarget as HTMLElement;
+    if (holdTimer) clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => {
+      holdJustTriggered = true;
+      reactionPickerMessageId = msg.id;
+      const rect = targetEl.getBoundingClientRect();
+      const isMobile = window.innerWidth < 640;
+      const isOwn = isOwnMessage(msg);
+      const menuX = isMobile
+        ? (isOwn ? Math.max(12, rect.right - 192) : Math.max(12, rect.left))
+        : (isOwn ? rect.right - 192 : rect.left);
+      const menuY = rect.bottom + 6;
+      openMessageContextMenu(msg, menuX, menuY);
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate(40); } catch {}
+      }
+      setTimeout(() => {
+        holdJustTriggered = false;
+      }, 400);
+    }, 450);
+  }
+
+  function handleBubblePointerMove(event: PointerEvent) {
+    if (!holdTimer) return;
+    const dist = Math.hypot(event.clientX - holdStartX, event.clientY - holdStartY);
+    if (dist > 10) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+  }
+
+  function handleBubbleMouseDown(event: MouseEvent, msg: ApiChatMessage) {
+    if (event.button !== 0) return;
+    handleBubblePointerDown(event as unknown as PointerEvent, msg);
+  }
+
+  function handleBubblePointerUp(event?: Event) {
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+    if (holdJustTriggered && event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  function handleBubbleClick(event: MouseEvent) {
+    if (holdJustTriggered) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+  function scrollToRepliedMessage(replyId?: string | null) {
+    if (!replyId) return;
+    const el = document.getElementById(`dock-msg-${replyId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+  const pinnedMessages = $derived.by(() => {
+    return messages.filter((m) => Boolean(m.pinnedAt) && !m.deletedAt);
+  });
+  let activePinnedIndex = $state(0);
+
+  $effect(() => {
+    if (activePinnedIndex >= pinnedMessages.length) {
+      activePinnedIndex = 0;
+    }
+  });
+
+  const currentPinnedMessage = $derived.by(() => {
+    if (pinnedMessages.length === 0) return null;
+    return pinnedMessages[activePinnedIndex] ?? pinnedMessages[0];
+  });
+
+  function handlePinnedBannerClick() {
+    if (!currentPinnedMessage) return;
+    const targetId = currentPinnedMessage.id;
+    const el = document.getElementById(`dock-msg-${targetId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (pinnedMessages.length > 1) {
+      activePinnedIndex = (activePinnedIndex + 1) % pinnedMessages.length;
+    }
+  }
+
+  function handleMessageContainerScroll() {
+    if (pinnedMessages.length <= 1 || !threadContainer) return;
+    const containerTop = threadContainer.getBoundingClientRect().top;
+    for (let i = 0; i < pinnedMessages.length; i++) {
+      const el = document.getElementById(`dock-msg-${pinnedMessages[i].id}`);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        if (elRect.top < containerTop + 40) {
+          continue;
+        } else {
+          activePinnedIndex = i;
+          return;
+        }
+      }
+    }
+  }
+
+  async function togglePinMessage(msg: ApiChatMessage) {
+    if (!activeConversationId) return;
+    try {
+      const result = await api.togglePinChatMessage(workspaceId, activeConversationId, msg.id);
+      messages = messages.map((message) =>
+        message.id === msg.id
+          ? { ...message, pinnedAt: result.pinnedAt, pinnedById: result.pinnedById }
+          : message
+      );
+    } catch {
+      toast.error('Gagal mengubah sematan pesan');
+    }
+  }
+
+  function openForwardDialog(msg: ApiChatMessage) {
+    forwardSourceMessage = msg;
+    forwardDialogOpen = true;
+  }
+
+  async function forwardMessageTo(targetConversationIds: string[]) {
+    const message = forwardSourceMessage;
+    if (!activeConversationId || !message) return;
+    await api.forwardChatMessage(workspaceId, activeConversationId, message.id, targetConversationIds);
+    toast.success('Pesan berhasil diteruskan');
+    void loadConversations();
   }
 
   /* ------------------------------------------------------- new direct */
@@ -917,6 +1110,11 @@
     }
     if (conv.lastMessage.deletedAt) return tr('chat.deleted');
     const prefix = conv.lastMessage.senderId === userId ? tr('chat.youPrefix', { message: '' }).replace(': ', '') + ': ' : '';
+    if (isStickerMessage(conv.lastMessage.body)) {
+      const sticker = parseSticker(conv.lastMessage.body);
+      const display = sticker && !sticker.url.startsWith('http') ? ` ${sticker.url}` : '';
+      return prefix + '🎨 Stiker' + display;
+    }
     return prefix + conv.lastMessage.body;
   }
 
@@ -943,18 +1141,43 @@
     }
   }
 
-  function reactionCounts(msg: ApiChatMessage): Array<{ reaction: string; count: number; reactedByMe: boolean }> {
-    const grouped = new Map<string, { count: number; reactedByMe: boolean }>();
+  function reactionCounts(msg: ApiChatMessage): Array<{ reaction: string; count: number; reactedByMe: boolean; userNames: string[] }> {
+    const grouped = new Map<string, { count: number; reactedByMe: boolean; userNames: string[] }>();
     for (const r of msg.reactions ?? []) {
       const existing = grouped.get(r.reaction);
       if (existing) {
         existing.count++;
         if (r.userId === userId) existing.reactedByMe = true;
+        if (r.userName) existing.userNames.push(r.userName);
       } else {
-        grouped.set(r.reaction, { count: 1, reactedByMe: r.userId === userId });
+        grouped.set(r.reaction, { count: 1, reactedByMe: r.userId === userId, userNames: r.userName ? [r.userName] : [] });
       }
     }
     return Array.from(grouped.entries()).map(([reaction, info]) => ({ reaction, ...info }));
+  }
+
+  function myReactionsForMsg(msg: ApiChatMessage): string[] {
+    return msg.reactions?.filter((r) => r.userId === userId).map((r) => r.reaction) ?? [];
+  }
+
+  let stickerPickerOpenMobile = $state(false);
+  let stickerPickerOpenDesktop = $state(false);
+  let mobileActionsOpen = $state(false);
+  let mobileActionsEl = $state<HTMLDivElement | null>(null);
+
+
+  async function handleSendSticker(sticker: { url: string; name: string }) {
+    if (!activeConversationId) return;
+    const clientMessageId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const payload = `sticker:${sticker.url}|${sticker.name}`;
+    try {
+      const res = await api.sendChatMessage(workspaceId, activeConversationId, payload, clientMessageId);
+      if (!messages.some((m) => m.id === res.message.id)) {
+        messages = [...messages, res.message];
+      }
+    } catch {
+      // ignore
+    }
   }
 
   function backToList() {
@@ -1042,7 +1265,99 @@
     }
   });
 </script>
+<svelte:window
+  onclick={(e) => {
+    if (mobileActionsOpen && mobileActionsEl && !mobileActionsEl.contains(e.target as Node)) {
+      mobileActionsOpen = false;
+    }
+  }}
+  onkeydown={(e) => {
+    if (e.key === 'Escape' && mobileActionsOpen) {
+      mobileActionsOpen = false;
+    }
+  }}
+/>
 
+
+        {#snippet groupChannelsContent()}
+          <div class="min-h-0 flex-1 overflow-y-auto">
+            {#if selectedGroup}
+              <button
+                type="button"
+                onclick={() => openConversation(selectedGroup!)}
+                class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {selectedGroup.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
+              >
+                <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
+                  #
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate text-sm font-semibold text-ink">General</span>
+                    <span class="shrink-0 text-[11px] text-faint">
+                      {selectedGroup.lastMessage ? formatDate(selectedGroup.lastMessage.createdAt) : formatDate(selectedGroup.updatedAt)}
+                    </span>
+                  </div>
+                  <div class="mt-0.5 flex items-center justify-between gap-2">
+                    <span class="truncate text-xs {selectedGroup.lastMessage ? 'text-mute' : 'text-faint italic'}">
+                      {lastMessagePreview(selectedGroup)}
+                    </span>
+                    {#if selectedGroup.unreadCount > 0}
+                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                        {formatUnread(selectedGroup.unreadCount)}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+              </button>
+            {/if}
+
+            {#each channelsForSelectedGroup as channel (channel.id)}
+              <button
+                type="button"
+                onclick={() => openConversation(channel)}
+                class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {channel.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
+              >
+                {#if channel.kind === 'taskboard'}
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                    <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
+                  </div>
+                {:else if channel.kind === 'workflow'}
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                    <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+                  </div>
+                {:else}
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
+                    #
+                  </div>
+                {/if}
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(channel)}</span>
+                    <span class="shrink-0 text-[11px] text-faint">
+                      {channel.lastMessage ? formatDate(channel.lastMessage.createdAt) : formatDate(channel.updatedAt)}
+                    </span>
+                  </div>
+                  <div class="mt-0.5 flex items-center justify-between gap-2">
+                    <span class="truncate text-xs {channel.lastMessage ? 'text-mute' : 'text-faint italic'}">
+                      {lastMessagePreview(channel)}
+                    </span>
+                    {#if channel.unreadCount > 0}
+                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                        {formatUnread(channel.unreadCount)}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+              </button>
+            {/each}
+
+            {#if channelsForSelectedGroup.length === 0}
+              <div class="p-6 text-center">
+                <p class="text-xs text-mute font-medium">Belum ada papan tugas atau alur kerja yang ditugaskan ke grup ini.</p>
+              </div>
+            {/if}
+          </div>
+        {/snippet}
 <!-- Collapsed: floating buttons -->
 {#if dockMode === 'collapsed'}
   <!-- Floating chat dock removed; chat is accessible via right sidebar -->
@@ -1175,85 +1490,6 @@
             {/if}
           </div>
         {/snippet}
-        {#snippet groupChannelsContent()}
-          <div class="min-h-0 flex-1 overflow-y-auto">
-            {#if selectedGroup}
-              <button
-                type="button"
-                onclick={() => openConversation(selectedGroup!)}
-                class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {selectedGroup.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
-              >
-                <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
-                  #
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="truncate text-sm font-semibold text-ink">General</span>
-                    <span class="shrink-0 text-[11px] text-faint">
-                      {selectedGroup.lastMessage ? formatDate(selectedGroup.lastMessage.createdAt) : formatDate(selectedGroup.updatedAt)}
-                    </span>
-                  </div>
-                  <div class="mt-0.5 flex items-center justify-between gap-2">
-                    <span class="truncate text-xs {selectedGroup.lastMessage ? 'text-mute' : 'text-faint italic'}">
-                      {lastMessagePreview(selectedGroup)}
-                    </span>
-                    {#if selectedGroup.unreadCount > 0}
-                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
-                        {formatUnread(selectedGroup.unreadCount)}
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-              </button>
-            {/if}
-
-            {#each channelsForSelectedGroup as channel (channel.id)}
-              <button
-                type="button"
-                onclick={() => openConversation(channel)}
-                class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {channel.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
-              >
-                {#if channel.kind === 'taskboard'}
-                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-                    <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
-                  </div>
-                {:else if channel.kind === 'workflow'}
-                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
-                    <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
-                  </div>
-                {:else}
-                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
-                    #
-                  </div>
-                {/if}
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(channel)}</span>
-                    <span class="shrink-0 text-[11px] text-faint">
-                      {channel.lastMessage ? formatDate(channel.lastMessage.createdAt) : formatDate(channel.updatedAt)}
-                    </span>
-                  </div>
-                  <div class="mt-0.5 flex items-center justify-between gap-2">
-                    <span class="truncate text-xs {channel.lastMessage ? 'text-mute' : 'text-faint italic'}">
-                      {lastMessagePreview(channel)}
-                    </span>
-                    {#if channel.unreadCount > 0}
-                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
-                        {formatUnread(channel.unreadCount)}
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-              </button>
-            {/each}
-
-            {#if channelsForSelectedGroup.length === 0}
-              <div class="p-6 text-center">
-                <p class="text-xs text-mute font-medium">Belum ada papan tugas atau alur kerja yang ditugaskan ke grup ini.</p>
-              </div>
-            {/if}
-          </div>
-        {/snippet}
         {@render listContent()}
       {:else if dockMode === 'groupChannels' && selectedGroup}
         {@render groupChannelsContent()}
@@ -1277,7 +1513,58 @@
               </Button>
             </div>
           {:else}
-            <div bind:this={threadContainer} class="min-h-0 flex-1 overflow-y-auto bg-canvas-sunken/30 px-3 py-3">
+            {#if currentPinnedMessage}
+              <!-- Pinned message banner -->
+              <div class="relative z-20 flex items-center justify-between gap-2 border-b border-hairline bg-card/95 px-3 py-1.5 shadow-2xs backdrop-blur-md">
+                <button
+                  type="button"
+                  onclick={handlePinnedBannerClick}
+                  class="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer group/pin"
+                  title="Klik untuk melihat pesan yang disematkan"
+                >
+                  <div class="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
+                    <HugeiconsIcon icon={PinIcon} size={13} strokeWidth={2.2} />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs font-bold text-ink leading-tight truncate group-hover/pin:text-primary transition-colors">
+                        {currentPinnedMessage.senderName}
+                      </span>
+                      {#if pinnedMessages.length > 1}
+                        <span class="text-[9px] font-semibold text-mute bg-canvas-sunken px-1 rounded-full tabular-nums">
+                          {activePinnedIndex + 1}/{pinnedMessages.length}
+                        </span>
+                      {/if}
+                    </div>
+                    <p class="truncate text-[11px] text-mute leading-tight">
+                      {currentPinnedMessage.body || '📎 Lampiran'}
+                    </p>
+                  </div>
+                </button>
+                <div class="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      togglePinMessage(currentPinnedMessage);
+                    }}
+                    class="flex size-6 items-center justify-center rounded text-mute hover:bg-status-urgent-soft hover:text-status-urgent transition-colors cursor-pointer"
+                    title="Lepas sematan"
+                    aria-label="Lepas sematan pesan"
+                  >
+                    <HugeiconsIcon icon={PinOffIcon} size={13} strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
+            {/if}
+            <div bind:this={threadContainer} onscroll={handleMessageContainerScroll} class="min-h-0 flex-1 overflow-y-auto bg-canvas-sunken/30 px-3 py-3">
+              {#if editingMessageId}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  class="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px] transition-opacity duration-200 animate-in fade-in"
+                  onclick={cancelEdit}
+                ></div>
+              {/if}
               {#if hasOlderMessages}
                 <button type="button" onclick={() => loadMessages(true)} disabled={loadingOlder} class="mx-auto mb-3 block rounded-full bg-card px-4 py-1.5 text-xs font-semibold text-primary shadow-control hover:bg-primary-soft disabled:opacity-50">
                   {loadingOlder ? '…' : tr('chat.loadOlder')}
@@ -1328,16 +1615,31 @@
                 </div>
               {:else}
                 {#each messages as msg (msg.id)}
-                  <div class="mb-2 flex {isOwnMessage(msg) ? 'justify-end' : 'justify-start'}">
+                  <div
+                    id={`dock-msg-${msg.id}`}
+                    class="mb-2 flex {isOwnMessage(msg) ? 'justify-end' : 'justify-start'} {editingMessageId === msg.id ? 'relative z-40' : ''}"
+                    role="group"
+                    aria-label={`Pesan dari ${msg.senderName}`}
+                  >
                     <div class="max-w-[80%]">
                       {#if msg.replyToMessageId}
-                        <div class="mb-1 rounded-lg border-l-2 border-primary/40 bg-canvas-sunken/50 px-2.5 py-1 text-xs text-mute">
+                        <button
+                          type="button"
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            scrollToRepliedMessage(msg.replyToMessageId);
+                          }}
+                          class="mb-1 w-full text-left rounded-lg border-l-[3.5px] border-primary bg-canvas-sunken/80 hover:bg-canvas-sunken p-2 text-xs transition-colors cursor-pointer select-none outline-none focus:outline-none"
+                          title="Lihat pesan asal"
+                          aria-label={`Lihat pesan asal dari ${msg.replyToSenderName ?? 'pengirim'}`}
+                        >
                           {#if msg.replyToDeleted}
-                            {tr('chat.replyDeleted')}
+                            <span class="text-mute italic">{tr('chat.replyDeleted')}</span>
                           {:else}
-                            <span class="font-medium">{msg.replyToSenderName}: </span>{msg.replyToBody}
+                            <span class="font-bold text-primary block truncate">{msg.replyToSenderName}:</span>
+                            <span class="text-mute truncate block">{msg.replyToBody}</span>
                           {/if}
-                        </div>
+                        </button>
                       {/if}
                       {#if !isOwnMessage(msg) && threadIsGroup}
                         <div class="mb-0.5 flex items-center gap-1.5">
@@ -1360,6 +1662,14 @@
                             <div class="max-h-48 max-w-[240px] overflow-hidden rounded-lg">
                               <ChatVideoPlayer src={att.filePath} fileName={att.fileName} />
                             </div>
+                            {:else if att.fileType.startsWith('audio/')}
+                              <audio
+                                src={att.filePath}
+                                controls
+                                preload="metadata"
+                                aria-label="Putar rekaman suara"
+                                class="block h-9 w-full min-w-[200px] max-w-[260px]"
+                              ></audio>
                             {:else}
                               <div class="flex items-center gap-1.5 rounded-lg border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
                                 <HugeiconsIcon icon={File02Icon} size={14} strokeWidth={1.8} />
@@ -1373,22 +1683,68 @@
                           {/each}
                         </div>
                       {/if}
-                      <div class="group relative rounded-2xl px-3.5 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'}">
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                      {#if isStickerMessage(msg.body) && !msg.deletedAt}
+                        {@const sticker = parseSticker(msg.body)}
+                        <div class="my-1 flex flex-col {isOwnMessage(msg) ? 'items-end' : 'items-start'}">
+                          {#if sticker}
+                            {#if sticker.url.startsWith('http')}
+                              <button type="button" onclick={() => (lightboxSrc = sticker.url)} class="group/btn relative block focus:outline-none cursor-pointer" title={sticker.name}>
+                                <img src={sticker.url} alt={sticker.name} class="size-24 sm:size-28 object-contain select-none drop-shadow-md transition-transform duration-150 group-hover/btn:scale-108" loading="lazy" />
+                              </button>
+                            {:else}
+                              <span class="text-5xl sm:text-6xl select-none leading-none py-1 block drop-shadow-sm transition-transform duration-150 hover:scale-110 cursor-pointer" title={sticker.name}>
+                                {sticker.url}
+                              </span>
+                            {/if}
+                          {/if}
+                        </div>
+                      {:else}
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                      <div
+                        class="group relative min-w-[96px] rounded-2xl pl-3.5 pr-3.5 sm:pr-9 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'} {editingMessageId === msg.id ? 'ring-2 ring-primary ring-offset-2' : ''}"
+                        onclick={handleBubbleClick}
+                        oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
+                        onpointerdown={(event) => handleBubblePointerDown(event, msg)}
+                        onpointermove={handleBubblePointerMove}
+                        onpointerup={handleBubblePointerUp}
+                        onpointercancel={handleBubblePointerUp}
+                        onmousedown={(event) => handleBubbleMouseDown(event, msg)}
+                        onmouseup={handleBubblePointerUp}
+                        onmouseleave={handleBubblePointerUp}
+                      >
+                        {#if !msg.deletedAt}
+                          <button
+                            type="button"
+                            onclick={(event) => {
+                              event.stopPropagation();
+                              const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                              openMessageContextMenu(msg, rect.right - 192, rect.bottom + 4);
+                            }}
+                            class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-5.5 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs {isOwnMessage(msg) ? 'bg-black/20 text-white/90 hover:bg-black/35 hover:text-white' : 'bg-card/90 text-mute hover:bg-canvas-sunken hover:text-ink border border-hairline/70'}"
+                            aria-label={tr('chat.moreOptions')}
+                            title={tr('chat.moreOptions')}
+                          >
+                            <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={2.4} />
+                          </button>
+                        {/if}
                         {#if msg.deletedAt}
                           <span class="italic text-faint">{tr('chat.deleted')}</span>
-                        {:else if editingMessageId === msg.id}
-                          <div class="flex flex-col gap-2">
-                            <textarea bind:value={editText} rows="2" class="w-full resize-none rounded-lg border border-hairline bg-card px-2 py-1 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"></textarea>
-                            <div class="flex gap-1.5">
-                              <button type="button" onclick={saveEdit} class="flex size-7 items-center justify-center rounded-lg bg-primary-soft text-primary hover:bg-primary-soft-hover"><HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} /></button>
-                              <button type="button" onclick={cancelEdit} class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute hover:text-ink"><HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} /></button>
-                            </div>
-                          </div>
                         {:else}
-                          {#if msg.body}<span class="whitespace-pre-wrap break-words">{msg.body}</span>{/if}
+                          {#if msg.body}
+                            {#if msg.body.startsWith('💥 BUZZ!')}
+                              <div class="my-0.5 flex items-center gap-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 text-xs font-bold {isOwnMessage(msg) ? 'text-white' : 'text-amber-900 dark:text-amber-200'}">
+                                <span>💥</span>
+                                <span class="whitespace-pre-wrap break-words">{msg.body}</span>
+                              </div>
+                            {:else}
+                              <span class="whitespace-pre-wrap break-words">{msg.body}</span>
+                            {/if}
+                          {/if}
                           {#if msg.editedAt}<span class="ml-1 text-[10px] {isOwnMessage(msg) ? 'text-white/60' : 'text-faint'}">({tr('chat.edited')})</span>{/if}
                         {/if}
                       </div>
+                    {/if}
                       <!-- Reactions -->
                       {#if !msg.deletedAt && reactionCounts(msg).length > 0}
                         <div class="mt-1 flex flex-wrap gap-1">
@@ -1400,36 +1756,19 @@
                         </div>
                       {/if}
                       <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}</div>
-                      <!-- Action menu trigger -->
-                      {#if !msg.deletedAt}
-                        <button type="button" onclick={() => (openMenuMessageId = openMenuMessageId === msg.id ? null : msg.id)} class="absolute -top-1 {isOwnMessage(msg) ? '-left-7' : '-right-7'} flex size-6 items-center justify-center rounded-full bg-card text-faint opacity-0 shadow-control transition-opacity hover:text-ink group-hover:opacity-100" aria-label={tr('chat.moreOptions')}>
-                          <HugeiconsIcon icon={MoreVerticalIcon} size={14} strokeWidth={2} />
-                        </button>
-                        {#if openMenuMessageId === msg.id}
-                          <div class="absolute z-10 mt-1 {isOwnMessage(msg) ? 'left-0' : 'right-0'} top-full rounded-lg border border-hairline bg-card py-1 shadow-popover">
-                            <button type="button" onclick={() => startReply(msg)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-body hover:bg-canvas-sunken"><HugeiconsIcon icon={MailReply01Icon} size={14} strokeWidth={1.8} />{tr('chat.reply')}</button>
-                            <button type="button" onclick={() => (reactionPickerMessageId = reactionPickerMessageId === msg.id ? null : msg.id)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-body hover:bg-canvas-sunken"><span class="text-sm">😊</span>{tr('chat.reactionsLabel')}</button>
-                            {#if isOwnMessage(msg)}
-                              <button type="button" onclick={() => startEdit(msg)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-body hover:bg-canvas-sunken"><HugeiconsIcon icon={Edit01Icon} size={14} strokeWidth={1.8} />{tr('chat.edit')}</button>
-                              <button type="button" onclick={() => (deleteTargetId = msg.id)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-status-urgent-ink hover:bg-status-urgent-soft"><HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />{tr('chat.delete')}</button>
-                            {/if}
-                          </div>
-                          {#if reactionPickerMessageId === msg.id}
-                            <div class="absolute z-20 mt-1 {isOwnMessage(msg) ? 'left-0' : 'right-0'} top-full mt-8 flex gap-1 rounded-lg border border-hairline bg-card p-1.5 shadow-popover">
-                              {#each ALLOWED_REACTIONS as r}
-                                <button type="button" onclick={() => handleReaction(msg, r)} class="flex size-7 items-center justify-center rounded-md text-base hover:bg-canvas-sunken">{r}</button>
-                              {/each}
-                            </div>
-                          {/if}
-                        {/if}
-                      {/if}
                     </div>
                   </div>
                 {/each}
               {/if}
             </div>
             <!-- Composer -->
-            {#if replyToMessage}
+            {#if editingMessageId}
+              <div class="flex items-center gap-2 border-t border-hairline bg-primary-soft px-3 py-1.5 text-xs animate-in fade-in">
+                <HugeiconsIcon icon={Edit01Icon} size={14} class="text-primary shrink-0" />
+                <span class="flex-1 truncate text-xs text-primary font-medium">Edit pesan</span>
+                <button type="button" onclick={cancelEdit} class="text-mute hover:text-ink"><HugeiconsIcon icon={Cancel01Icon} size={14} /></button>
+              </div>
+            {:else if replyToMessage}
               <div class="flex items-center gap-2 border-t border-hairline bg-canvas-sunken/50 px-3 py-1.5">
                 <HugeiconsIcon icon={MailReply01Icon} size={14} strokeWidth={1.8} class="text-mute" />
                 <span class="flex-1 truncate text-xs text-mute">{tr('chat.replyTo', { name: replyToMessage.senderName })}</span>
@@ -1473,23 +1812,92 @@
                 <span>{typingStatusText()}</span>
               </div>
             {/if}
-            <div class="flex items-end gap-2 border-t border-hairline bg-card p-3">
+            <div class="flex items-center gap-1.5 sm:gap-2 border-t border-hairline bg-card p-2 sm:p-3">
               <input bind:this={fileInput} type="file" accept={ACCEPTED_FILE_TYPES} multiple onchange={handleFileSelect} class="hidden" />
-              <button type="button" onclick={() => fileInput?.click()} disabled={uploadingAttachment} class="flex size-10 shrink-0 items-center justify-center rounded-xl text-mute transition-colors hover:bg-canvas-sunken hover:text-ink disabled:opacity-40" aria-label={tr('chat.attachFile')}>
-                <HugeiconsIcon icon={Attachment01Icon} size={18} strokeWidth={1.8} />
-              </button>
+              <div bind:this={mobileActionsEl} class="relative flex items-center shrink-0">
+                <button
+                  type="button"
+                  onclick={() => (mobileActionsOpen = !mobileActionsOpen)}
+                  class="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-full bg-canvas-sunken text-mute hover:bg-hairline hover:text-ink active:scale-95 transition-all cursor-pointer {mobileActionsOpen ? 'bg-primary-soft text-primary ring-2 ring-primary/20' : ''}"
+                  title="Tindakan lainnya"
+                  aria-label="Tindakan lainnya"
+                  disabled={uploadingAttachment}
+                >
+                  <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2.2} class="transition-transform duration-150 {mobileActionsOpen ? 'rotate-45' : ''}" />
+                </button>
+
+                {#if mobileActionsOpen}
+                  <div class="absolute bottom-full mb-3 left-0 z-50 min-w-[190px] rounded-2xl border border-hairline bg-card/95 backdrop-blur-md p-1.5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <button
+                      type="button"
+                      onclick={() => {
+                        mobileActionsOpen = false;
+                        fileInput?.click();
+                      }}
+                      class="group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas-sunken active:bg-canvas-sunken/80 transition-colors cursor-pointer text-left"
+                    >
+                      <div class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
+                        <HugeiconsIcon icon={Attachment01Icon} size={16} strokeWidth={1.8} />
+                      </div>
+                      <span>Lampirkan file</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        mobileActionsOpen = false;
+                        stickerPickerOpenMobile = true;
+                      }}
+                      class="group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas-sunken active:bg-canvas-sunken/80 transition-colors cursor-pointer text-left"
+                    >
+                      <div class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
+                        <HugeiconsIcon icon={SmileIcon} size={16} strokeWidth={1.8} />
+                      </div>
+                      <span>Stiker & Emoji</span>
+                    </button>
+                  </div>
+                {/if}
+
+                <ChatStickerPicker
+                  bind:open={stickerPickerOpenMobile}
+                  align="left"
+                  onselectsticker={(sticker) => {
+                    composerText = (composerText ? composerText + ' ' : '') + sticker.url;
+                  }}
+                  onclose={() => (stickerPickerOpenMobile = false)}
+                />
+              </div>
               <textarea
                 bind:value={composerText}
                 oninput={handleComposerInput}
                 onkeydown={handleKeydown}
                 onpaste={handlePaste}
                 rows="1"
-                placeholder={tr('chat.messagePlaceholder')}
-                class="max-h-24 min-h-[40px] flex-1 resize-none rounded-xl border border-hairline bg-canvas px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+                placeholder="Tulis pesan…"
+                class="max-h-24 min-h-[36px] sm:min-h-[40px] flex-1 resize-none rounded-2xl border border-hairline bg-canvas-sunken/60 px-3 py-2 text-xs sm:text-sm text-ink placeholder:text-mute focus:outline-none focus:bg-card focus:ring-2 focus:ring-primary/15 transition-all"
               ></textarea>
-              <button type="button" onclick={handleSend} disabled={(!composerText.trim() && pendingAttachments.length === 0) || sendingMessage} class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-colors hover:bg-primary-hover disabled:opacity-40">
-                <HugeiconsIcon icon={SentIcon} size={18} strokeWidth={1.8} />
-              </button>
+              {#if editingMessageId}
+                <button
+                  type="button"
+                  onclick={saveEdit}
+                  disabled={!composerText.trim()}
+                  class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                  aria-label="Simpan editan"
+                  title="Simpan editan"
+                >
+                  <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={2.4} />
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  onclick={handleSend}
+                  disabled={(!composerText.trim() && pendingAttachments.length === 0) || sendingMessage}
+                  class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                >
+                  <HugeiconsIcon icon={SentIcon} size={16} class="translate-x-0.5 sm:size-[18px]" strokeWidth={2} />
+                </button>
+              {/if}
             </div>
           {/if}
         {/snippet}
@@ -1771,6 +2179,13 @@
         </div>
       {:else}
         <div bind:this={threadContainer} class="min-h-0 flex-1 overflow-y-auto bg-canvas-sunken/30 px-3 py-3">
+        {#if editingMessageId}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px] transition-opacity duration-200 animate-in fade-in"
+            onclick={cancelEdit}
+          ></div>
+        {/if}
           {#if hasOlderMessages}
             <button type="button" onclick={() => loadMessages(true)} disabled={loadingOlder} class="mx-auto mb-3 block rounded-full bg-card px-4 py-1.5 text-xs font-semibold text-primary shadow-control hover:bg-primary-soft disabled:opacity-50">
               {loadingOlder ? '…' : tr('chat.loadOlder')}
@@ -1821,16 +2236,31 @@
             </div>
           {:else}
             {#each messages as msg (msg.id)}
-              <div class="mb-2 flex {isOwnMessage(msg) ? 'justify-end' : 'justify-start'}">
+              <div
+                id={`dock-msg-${msg.id}`}
+                class="mb-2 flex {isOwnMessage(msg) ? 'justify-end' : 'justify-start'} {editingMessageId === msg.id ? 'relative z-40' : ''}"
+                role="group"
+                aria-label={`Pesan dari ${msg.senderName}`}
+              >
                 <div class="group relative max-w-[80%]">
                   {#if msg.replyToMessageId}
-                    <div class="mb-1 rounded-lg border-l-2 border-primary/40 bg-canvas-sunken/50 px-2.5 py-1 text-xs text-mute">
+                    <button
+                      type="button"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        scrollToRepliedMessage(msg.replyToMessageId);
+                      }}
+                      class="mb-1 w-full text-left rounded-lg border-l-[3.5px] border-primary bg-canvas-sunken/80 hover:bg-canvas-sunken p-2 text-xs transition-colors cursor-pointer select-none outline-none focus:outline-none"
+                      title="Lihat pesan asal"
+                      aria-label={`Lihat pesan asal dari ${msg.replyToSenderName ?? 'pengirim'}`}
+                    >
                       {#if msg.replyToDeleted}
-                        {tr('chat.replyDeleted')}
+                        <span class="text-mute italic">{tr('chat.replyDeleted')}</span>
                       {:else}
-                        <span class="font-medium">{msg.replyToSenderName}: </span>{msg.replyToBody}
+                        <span class="font-bold text-primary block truncate">{msg.replyToSenderName}:</span>
+                        <span class="text-mute truncate block">{msg.replyToBody}</span>
                       {/if}
-                    </div>
+                    </button>
                   {/if}
                   {#if !isOwnMessage(msg) && threadIsGroup}
                     <div class="mb-0.5 flex items-center gap-1.5">
@@ -1853,6 +2283,14 @@
                           <div class="max-h-48 max-w-[240px] overflow-hidden rounded-lg">
                             <ChatVideoPlayer src={att.filePath} fileName={att.fileName} />
                           </div>
+                        {:else if att.fileType.startsWith('audio/')}
+                          <audio
+                            src={att.filePath}
+                            controls
+                            preload="metadata"
+                            aria-label="Putar rekaman suara"
+                            class="block h-9 w-full min-w-[200px] max-w-[260px]"
+                          ></audio>
                         {:else}
                           <div class="flex items-center gap-1.5 rounded-lg border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
                             <HugeiconsIcon icon={File02Icon} size={14} strokeWidth={1.8} />
@@ -1866,22 +2304,68 @@
                       {/each}
                     </div>
                   {/if}
-                  <div class="group relative rounded-2xl px-3.5 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'}">
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                  {#if isStickerMessage(msg.body) && !msg.deletedAt}
+                    {@const sticker = parseSticker(msg.body)}
+                    <div class="my-1 flex flex-col {isOwnMessage(msg) ? 'items-end' : 'items-start'}">
+                      {#if sticker}
+                        {#if sticker.url.startsWith('http')}
+                          <button type="button" onclick={() => (lightboxSrc = sticker.url)} class="group/btn relative block focus:outline-none cursor-pointer" title={sticker.name}>
+                            <img src={sticker.url} alt={sticker.name} class="size-24 sm:size-28 object-contain select-none drop-shadow-md transition-transform duration-150 group-hover/btn:scale-108" loading="lazy" />
+                          </button>
+                        {:else}
+                          <span class="text-5xl sm:text-6xl select-none leading-none py-1 block drop-shadow-sm transition-transform duration-150 hover:scale-110 cursor-pointer" title={sticker.name}>
+                            {sticker.url}
+                          </span>
+                        {/if}
+                      {/if}
+                    </div>
+                  {:else}
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                  <div
+                    class="group relative min-w-[96px] rounded-2xl pl-3.5 pr-3.5 sm:pr-9 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'} {editingMessageId === msg.id ? 'ring-2 ring-primary ring-offset-2' : ''}"
+                    onclick={handleBubbleClick}
+                    oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
+                    onpointerdown={(event) => handleBubblePointerDown(event, msg)}
+                    onpointermove={handleBubblePointerMove}
+                    onpointerup={handleBubblePointerUp}
+                    onpointercancel={handleBubblePointerUp}
+                    onmousedown={(event) => handleBubbleMouseDown(event, msg)}
+                    onmouseup={handleBubblePointerUp}
+                    onmouseleave={handleBubblePointerUp}
+                  >
+                    {#if !msg.deletedAt}
+                      <button
+                        type="button"
+                        onclick={(event) => {
+                          event.stopPropagation();
+                          const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                          openMessageContextMenu(msg, rect.right - 192, rect.bottom + 4);
+                        }}
+                        class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-5.5 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs {isOwnMessage(msg) ? 'bg-black/20 text-white/90 hover:bg-black/35 hover:text-white' : 'bg-card/90 text-mute hover:bg-canvas-sunken hover:text-ink border border-hairline/70'}"
+                        aria-label={tr('chat.moreOptions')}
+                        title={tr('chat.moreOptions')}
+                      >
+                        <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={2.4} />
+                      </button>
+                    {/if}
                     {#if msg.deletedAt}
                       <span class="italic text-faint">{tr('chat.deleted')}</span>
-                    {:else if editingMessageId === msg.id}
-                      <div class="flex flex-col gap-2">
-                        <textarea bind:value={editText} rows="2" class="w-full resize-none rounded-lg border border-hairline bg-canvas px-2 py-1 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"></textarea>
-                        <div class="flex gap-1.5">
-                          <button type="button" onclick={saveEdit} class="flex size-7 items-center justify-center rounded-lg bg-primary-soft text-primary hover:bg-primary-soft-hover"><HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} /></button>
-                          <button type="button" onclick={cancelEdit} class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute hover:text-ink"><HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} /></button>
-                        </div>
-                      </div>
                     {:else}
-                      {#if msg.body}<span class="whitespace-pre-wrap break-words">{msg.body}</span>{/if}
+                      {#if msg.body}
+                        {#if msg.body.startsWith('💥 BUZZ!')}
+                          <div class="my-0.5 flex items-center gap-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 text-xs font-bold {isOwnMessage(msg) ? 'text-white' : 'text-amber-900 dark:text-amber-200'}">
+                            <span>💥</span>
+                            <span class="whitespace-pre-wrap break-words">{msg.body}</span>
+                          </div>
+                        {:else}
+                          <span class="whitespace-pre-wrap break-words">{msg.body}</span>
+                        {/if}
+                      {/if}
                       {#if msg.editedAt}<span class="ml-1 text-[10px] {isOwnMessage(msg) ? 'text-white/60' : 'text-faint'}">({tr('chat.edited')})</span>{/if}
                     {/if}
                   </div>
+                {/if}
                   {#if !msg.deletedAt && reactionCounts(msg).length > 0}
                     <div class="mt-1 flex flex-wrap gap-1">
                       {#each reactionCounts(msg) as rc (rc.reaction)}
@@ -1892,34 +2376,18 @@
                     </div>
                   {/if}
                   <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}</div>
-                  {#if !msg.deletedAt}
-                    <button type="button" onclick={() => (openMenuMessageId = openMenuMessageId === msg.id ? null : msg.id)} class="absolute -top-1 {isOwnMessage(msg) ? '-left-7' : '-right-7'} flex size-6 items-center justify-center rounded-full bg-card text-faint opacity-0 shadow-control transition-opacity hover:text-ink group-hover:opacity-100" aria-label={tr('chat.moreOptions')}>
-                      <HugeiconsIcon icon={MoreVerticalIcon} size={14} strokeWidth={2} />
-                    </button>
-                    {#if openMenuMessageId === msg.id}
-                      <div class="absolute z-10 mt-1 {isOwnMessage(msg) ? 'left-0' : 'right-0'} top-full rounded-lg border border-hairline bg-card py-1 shadow-popover">
-                        <button type="button" onclick={() => startReply(msg)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-body hover:bg-canvas-sunken"><HugeiconsIcon icon={MailReply01Icon} size={14} strokeWidth={1.8} />{tr('chat.reply')}</button>
-                        <button type="button" onclick={() => (reactionPickerMessageId = reactionPickerMessageId === msg.id ? null : msg.id)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-body hover:bg-canvas-sunken"><span class="text-sm">😊</span>{tr('chat.reactionsLabel')}</button>
-                        {#if isOwnMessage(msg)}
-                          <button type="button" onclick={() => startEdit(msg)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-body hover:bg-canvas-sunken"><HugeiconsIcon icon={Edit01Icon} size={14} strokeWidth={1.8} />{tr('chat.edit')}</button>
-                          <button type="button" onclick={() => (deleteTargetId = msg.id)} class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-status-urgent-ink hover:bg-status-urgent-soft"><HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />{tr('chat.delete')}</button>
-                        {/if}
-                      </div>
-                      {#if reactionPickerMessageId === msg.id}
-                        <div class="absolute z-20 {isOwnMessage(msg) ? 'left-0' : 'right-0'} top-full mt-8 flex gap-1 rounded-lg border border-hairline bg-card p-1.5 shadow-popover">
-                          {#each ALLOWED_REACTIONS as r}
-                            <button type="button" onclick={() => handleReaction(msg, r)} class="flex size-7 items-center justify-center rounded-md text-base hover:bg-canvas-sunken">{r}</button>
-                          {/each}
-                        </div>
-                      {/if}
-                    {/if}
-                  {/if}
                 </div>
               </div>
             {/each}
           {/if}
         </div>
-        {#if replyToMessage}
+        {#if editingMessageId}
+          <div class="flex items-center gap-2 border-t border-hairline bg-primary-soft px-3 py-1.5 text-xs animate-in fade-in">
+            <HugeiconsIcon icon={Edit01Icon} size={14} class="text-primary shrink-0" />
+            <span class="flex-1 truncate text-xs text-primary font-medium">Edit pesan</span>
+            <button type="button" onclick={cancelEdit} class="text-mute hover:text-ink"><HugeiconsIcon icon={Cancel01Icon} size={14} /></button>
+          </div>
+        {:else if replyToMessage}
           <div class="flex items-center gap-2 border-t border-hairline bg-canvas-sunken/50 px-3 py-1.5">
             <HugeiconsIcon icon={MailReply01Icon} size={14} strokeWidth={1.8} class="text-mute" />
             <span class="flex-1 truncate text-xs text-mute">{tr('chat.replyTo', { name: replyToMessage.senderName })}</span>
@@ -1963,23 +2431,71 @@
             <span>{typingStatusText()}</span>
           </div>
         {/if}
-        <div class="flex items-end gap-2 border-t border-hairline bg-card p-3">
+        <div class="relative flex items-center gap-2 border-t border-hairline bg-card p-3">
           <input bind:this={fileInput} type="file" accept={ACCEPTED_FILE_TYPES} multiple onchange={handleFileSelect} class="hidden" />
-          <button type="button" onclick={() => fileInput?.click()} disabled={uploadingAttachment} class="flex size-10 shrink-0 items-center justify-center rounded-xl text-mute transition-colors hover:bg-canvas-sunken hover:text-ink disabled:opacity-40" aria-label={tr('chat.attachFile')}>
-            <HugeiconsIcon icon={Attachment01Icon} size={18} strokeWidth={1.8} />
-          </button>
+          <div class="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onclick={() => fileInput?.click()}
+              disabled={uploadingAttachment}
+              class="flex size-10 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-canvas-sunken hover:text-ink disabled:opacity-40"
+              aria-label={tr('chat.attachFile')}
+            >
+              <HugeiconsIcon icon={Attachment01Icon} size={21} strokeWidth={1.8} />
+            </button>
+            <div class="relative flex items-center">
+              <button
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  stickerPickerOpenDesktop = !stickerPickerOpenDesktop;
+                }}
+                class="flex size-10 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-canvas-sunken hover:text-ink cursor-pointer {stickerPickerOpenDesktop ? 'text-primary bg-primary-soft/60' : ''}"
+                title="Pilih stiker & emoji"
+                aria-label="Pilih stiker & emoji"
+              >
+                <HugeiconsIcon icon={SmileIcon} size={21} strokeWidth={1.8} />
+              </button>
+              <ChatStickerPicker
+                bind:open={stickerPickerOpenDesktop}
+                align="left"
+                onselectsticker={(sticker) => {
+                  composerText = (composerText ? composerText + ' ' : '') + sticker.url;
+                }}
+                onclose={() => (stickerPickerOpenDesktop = false)}
+              />
+            </div>
+          </div>
           <textarea
             bind:value={composerText}
             oninput={handleComposerInput}
             onkeydown={handleKeydown}
             onpaste={handlePaste}
             rows="1"
-            placeholder={tr('chat.messagePlaceholder')}
-            class="max-h-24 min-h-[40px] flex-1 resize-none rounded-xl border border-hairline bg-canvas px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+            placeholder="Tulis pesan…"
+            class="max-h-24 min-h-[40px] flex-1 resize-none rounded-2xl border border-hairline bg-canvas-sunken/60 px-3.5 py-2.5 text-sm text-ink placeholder:text-mute focus:outline-none focus:bg-card focus:ring-2 focus:ring-primary/15 transition-all"
           ></textarea>
-          <button type="button" onclick={handleSend} disabled={(!composerText.trim() && pendingAttachments.length === 0) || sendingMessage} class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-colors hover:bg-primary-hover disabled:opacity-40">
-            <HugeiconsIcon icon={SentIcon} size={18} strokeWidth={1.8} />
-          </button>
+          {#if editingMessageId}
+            <button
+              type="button"
+              onclick={saveEdit}
+              disabled={!composerText.trim()}
+              class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              aria-label="Simpan editan"
+              title="Simpan editan"
+            >
+              <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={2.4} />
+            </button>
+          {:else}
+            <button
+              type="button"
+              onclick={handleSend}
+              disabled={(!composerText.trim() && pendingAttachments.length === 0) || sendingMessage}
+              class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+            >
+              <HugeiconsIcon icon={SentIcon} size={18} class="translate-x-0.5" strokeWidth={2} />
+            </button>
+          {/if}
         </div>
       {/if}
     {:else if dockMode === 'newDirect'}
@@ -2077,6 +2593,27 @@
   </aside>
 {/if}
 
+<ChatMessageContextMenu
+  bind:open={contextMenuOpen}
+  x={contextMenuX}
+  y={contextMenuY}
+  message={contextMenuMessage}
+  currentUserId={userId}
+  onreact={(msg) => (reactionPickerMessageId = msg.id)}
+  ontogglereaction={(msg, r) => handleReaction(msg, r)}
+  onreply={startReply}
+  onforward={openForwardDialog}
+  onpin={togglePinMessage}
+  onedit={startEdit}
+  ondelete={(msg) => (deleteTargetId = msg.id)}
+/>
+<ChatForwardDialog
+  bind:open={forwardDialogOpen}
+  message={forwardSourceMessage}
+  conversations={conversations}
+  currentConversationId={activeConversationId}
+  onforward={forwardMessageTo}
+/>
 <!-- Delete confirmation dialog -->
 <ConfirmDialog
   open={deleteTargetId !== null}

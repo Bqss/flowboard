@@ -150,6 +150,13 @@ export const RenameRoomSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 })
 });
 
+export const SendBuzzSchema = t.Object({
+  conversationId: t.Optional(t.String()),
+  targetUserId: t.Optional(t.String()),
+  taskId: t.Optional(t.String()),
+  note: t.Optional(t.String({ maxLength: 500 }))
+});
+
 export const UpdateWorkspaceSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 })
 });
@@ -206,7 +213,11 @@ export const WorkflowCardItemParam = t.Object({
 export const CreateWorkflowSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  label: t.Optional(t.Union([t.String({ maxLength: 50 }), t.Null()])),
+  labels: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 50 }))),
   workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  workspaceMemberGroupIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  allowedUserIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
@@ -222,7 +233,11 @@ export const CreateWorkflowSchema = t.Object({
 export const UpdateWorkflowSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+  label: t.Optional(t.Union([t.String({ maxLength: 50 }), t.Null()])),
+  labels: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 50 }))),
   workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  workspaceMemberGroupIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  allowedUserIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
   ownerId: t.Optional(t.String({ format: 'uuid' })),
   defaultAssigneeId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
   defaultAssigneeIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
@@ -280,6 +295,10 @@ const ChecklistActionDraftSchema = t.Object({
 export const WorkflowDraftSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
   workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  workspaceMemberGroupIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  allowedUserIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  label: t.Optional(t.Union([t.String({ maxLength: 50 }), t.Null()])),
+  labels: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 50 }))),
   stages: t.Array(
     t.Object({
       name: t.String({ minLength: 1, maxLength: 120 }),
@@ -703,13 +722,21 @@ export const TaskBoardCommentParam = t.Object({
 export const CreateTaskBoardSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
-  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()]))
+  label: t.Optional(t.Union([t.String({ maxLength: 50 }), t.Null()])),
+  labels: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 50 }))),
+  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  workspaceMemberGroupIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  allowedUserIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
 });
 
 export const UpdateTaskBoardSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
   description: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
-  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()]))
+  label: t.Optional(t.Union([t.String({ maxLength: 50 }), t.Null()])),
+  labels: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 50 }))),
+  workspaceMemberGroupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  workspaceMemberGroupIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
+  allowedUserIds: t.Optional(t.Array(t.String({ format: 'uuid' }))),
 });
 
 export const CreateTaskColumnSchema = t.Object({

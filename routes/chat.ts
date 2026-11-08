@@ -1,4 +1,4 @@
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 import * as chat from '@handlers/chat';
 import { createRequireAuth } from '@middlewares';
 import { resolveWorkspaceMember } from '@middlewares/workspace';
@@ -13,6 +13,7 @@ import {
   CreateGroupSchema,
   EditChatMessageSchema,
   RenameRoomSchema,
+  SendBuzzSchema,
   SendChatMessageSchema,
   WorkspaceIdParam
 } from '@validators';
@@ -58,6 +59,13 @@ export const createChatRoutes = () => {
       params: WorkspaceIdParam,
       body: CreateGroupSchema
     })
+    .get('/context/:contextType/:contextId', chat.getContextConversationHandler, {
+      params: t.Object({
+        workspaceId: t.String(),
+        contextType: t.Union([t.Literal('taskboard'), t.Literal('workflow')]),
+        contextId: t.String()
+      })
+    })
 
     // Conversation detail + management
     .get('/conversations/:conversationId', chat.getConversationHandler, {
@@ -92,7 +100,15 @@ export const createChatRoutes = () => {
     .delete('/conversations/:conversationId/messages/:messageId', chat.deleteMessageHandler, {
       params: ChatMessageParam
     })
-
+    .post('/conversations/:conversationId/messages/:messageId/pin', chat.togglePinMessageHandler, {
+      params: ChatMessageParam
+    })
+    .post('/conversations/:conversationId/messages/:messageId/forward', chat.forwardMessageHandler, {
+      params: ChatMessageParam,
+      body: t.Object({
+        targetConversationIds: t.Array(t.String({ format: 'uuid' }), { minItems: 1 })
+      })
+    })
     // Attachments
     .post('/conversations/:conversationId/attachments', chat.uploadAttachmentHandler, {
       params: ChatConversationParam,
@@ -109,5 +125,14 @@ export const createChatRoutes = () => {
     // Read state
     .post('/conversations/:conversationId/read', chat.markReadHandler, {
       params: ChatConversationParam
+    })
+    // Bomb / Buzz (big sound & vibrate alert)
+    .post('/buzz', chat.sendBuzzHandler, {
+      params: WorkspaceIdParam,
+      body: SendBuzzSchema
+    })
+    .post('/conversations/:conversationId/buzz', chat.sendBuzzHandler, {
+      params: ChatConversationParam,
+      body: SendBuzzSchema
     }));
 };

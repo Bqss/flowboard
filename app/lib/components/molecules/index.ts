@@ -37,7 +37,12 @@ import Toast from './Toast.svelte';
 import { toast, type ToastItem, type ToastTone } from './toast-state.svelte.js';
 import EmptyStateBlock from './EmptyStateBlock.svelte';
 import ChatVideoPlayer from './ChatVideoPlayer.svelte';
+import ChatAudioPlayer from './ChatAudioPlayer.svelte';
 import CopyToClipboard from './CopyToClipboard.svelte';
+import ChatMessageContextMenu from './ChatMessageContextMenu.svelte';
+import ChatForwardDialog from './ChatForwardDialog.svelte';
+import ChatStickerPicker from './ChatStickerPicker.svelte';
+import ChatReactionPicker from './ChatReactionPicker.svelte';
 import Rating from './Rating.svelte';
 import FilterPill from './FilterPill.svelte';
 import PortalUserPicker, { type PortalUser } from './PortalUserPicker.svelte';
@@ -103,5 +108,10 @@ export {
 	TaskPicPicker,
 	RichTextEditor,
 	RichTextContent,
-	ChatVideoPlayer
+	ChatVideoPlayer,
+	ChatAudioPlayer,
+	ChatMessageContextMenu,
+	ChatForwardDialog,
+	ChatStickerPicker,
+	ChatReactionPicker,
 };

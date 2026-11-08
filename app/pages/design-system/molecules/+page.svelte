@@ -39,7 +39,8 @@
     LanguageSwitcher,
     InternalPicPicker,
     PortalUserPicker,
-    MultiSelectCombobox
+    MultiSelectCombobox,
+    ChatAudioPlayer
   } from '$lib/components/molecules/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import { KanbanIcon, Home09Icon } from '@hugeicons/core-free-icons';
@@ -50,6 +51,7 @@
     { href: '#navigation', label: 'Navigation' },
     { href: '#data', label: 'Data' },
     { href: '#feedback', label: 'Feedback' },
+    { href: '#media', label: 'Media & Chat' },
     { href: '#inventory', label: 'Inventory' }
   ];
 
@@ -119,7 +121,8 @@
     'Breadcrumb', 'Pagination', 'NavItem', 'DropdownMenu', 'ContextMenu', 'Stepper',
     'FilterPill', 'StatCard', 'StatCardHighlight', 'MetricDelta', 'Sparkline', 'IconChip',
     'UserChip', 'ListRow', 'KeyValuePair', 'AlertInline', 'Toast', 'EmptyStateBlock', 'Rating',
-    'CopyToClipboard', 'ThemeToggle', 'LanguageSwitcher', 'PortalUserPicker', 'InternalPicPicker'
+    'CopyToClipboard', 'ThemeToggle', 'LanguageSwitcher', 'PortalUserPicker', 'InternalPicPicker',
+    'ChatAudioPlayer', 'ChatVideoPlayer'
   ];
 </script>
 
@@ -317,6 +320,26 @@
         onaction={() => {}}
         icon={emptyIcon}
       />
+    </div>
+  </ShowcaseSection>
+
+  <ShowcaseSection id="media" title="Media & Chat" description="Custom voice audio player and media components.">
+    <div class="grid gap-6 md:grid-cols-2">
+      <div class="rounded-xl border border-hairline bg-card p-4 space-y-3">
+        <span class="text-xs font-semibold text-mute uppercase tracking-wider block">Incoming Voice Note</span>
+        <div class="rounded-2xl rounded-bl-sm border border-hairline bg-card p-3 shadow-xs max-w-[300px]">
+          <ChatAudioPlayer src="" fileName="pesan-suara-masuk.ogg" isOwn={false} />
+          <span class="mt-1 block text-right text-[11px] font-medium text-mute tabular-nums">10:42 AM</span>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-hairline bg-card p-4 space-y-3">
+        <span class="text-xs font-semibold text-mute uppercase tracking-wider block">Outgoing Voice Note</span>
+        <div class="rounded-2xl rounded-br-sm bg-[#2563eb] text-white p-3 shadow-xs max-w-[300px]">
+          <ChatAudioPlayer src="" fileName="pesan-suara-keluar.ogg" isOwn={true} />
+          <span class="mt-1 block text-right text-[11px] font-medium text-white/90 tabular-nums">10:45 AM</span>
+        </div>
+      </div>
     </div>
   </ShowcaseSection>
 

@@ -29,7 +29,11 @@ export type ApiWorkflow = {
   id: string;
   name: string;
   description?: string | null;
+  label?: string | null;
+  labels?: string[];
   workspaceMemberGroupId?: string | null;
+  workspaceMemberGroupIds?: string[];
+  allowedUserIds?: string[];
   ownerId: string;
   ownerName?: string;
   defaultAssigneeId: string | null;
@@ -202,7 +206,11 @@ export type ApiTaskBoard = {
   workspaceId?: string;
   name: string;
   description: string | null;
+  label?: string | null;
+  labels?: string[];
   workspaceMemberGroupId?: string | null;
+  workspaceMemberGroupIds?: string[];
+  allowedUserIds?: string[];
   ownerId: string;
   ownerName?: string;
   taskCount?: number;
@@ -309,6 +317,8 @@ export type ApiTaskActivity = {
 };
 
 export type ApiWorkflowDraft = {
+  label?: string | null;
+  labels?: string[];
   name: string;
   stages: Array<{
     name: string;
@@ -366,9 +376,12 @@ export type ApiNotification = {
     | 'handover'
     | 'workflow_action'
     | 'chat_message'
+    | 'chat_reaction'
     | 'task_assigned'
     | 'task_comment'
-    | 'task_mention';
+    | 'task_mention'
+    | 'task_due_soon'
+    | 'task_overdue';
   title: string;
   body: string;
   cardId: string | null;
@@ -572,6 +585,8 @@ export type ApiChatMessage = {
   replyToDeleted: boolean | null;
   editedAt: string | null;
   deletedAt: string | null;
+  pinnedAt?: string | null;
+  pinnedById?: string | null;
   createdAt: string;
   reactions: ApiChatReaction[];
   attachments: ApiChatAttachment[];
@@ -617,6 +632,12 @@ export type ApiChatConversationDetail = {
   contextId?: string | null;
   groupId?: string | null;
   name: string | null;
+  description?: string | null;
+  ownerId?: string | null;
+  isOwner?: boolean;
+  canManageMembers?: boolean;
+  mediaCount?: number;
+  starredCount?: number;
   partner: {
     id: string;
     name: string;
@@ -630,6 +651,7 @@ export type ApiChatConversationDetail = {
     email: string;
     avatarUrl: string | null;
     role: string;
+    isOwner?: boolean;
   }>;
   userRole: 'admin' | 'member';
 };
@@ -940,6 +962,17 @@ export const api = {
       { fetch: fetchFn }
     ),
 
+  getContextConversation: (
+    workspaceId: string,
+    contextType: 'taskboard' | 'workflow',
+    contextId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ conversation: ApiChatConversationDetail }>(
+      `/workspaces/${workspaceId}/chat/context/${contextType}/${contextId}`,
+      { fetch: fetchFn }
+    ),
+
   renameChatRoom: (workspaceId: string, conversationId: string, name: string, fetchFn?: FetchLike) =>
     request<{ ok: boolean }>(
       `/workspaces/${workspaceId}/chat/conversations/${conversationId}`,
@@ -982,6 +1015,27 @@ export const api = {
       }
     ),
 
+  sendBuzz: (
+    workspaceId: string,
+    payload: {
+      conversationId?: string;
+      targetUserId?: string;
+      taskId?: string;
+      note?: string;
+    },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ success: boolean; message?: ApiChatMessage; cooldownUntil?: string; error?: string }>(
+      payload.conversationId
+        ? `/workspaces/${workspaceId}/chat/conversations/${payload.conversationId}/buzz`
+        : `/workspaces/${workspaceId}/chat/buzz`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        fetch: fetchFn
+      }
+    ),
+
   uploadChatAttachment: (
     workspaceId: string,
     conversationId: string,
@@ -1008,6 +1062,32 @@ export const api = {
       { method: 'DELETE', fetch: fetchFn }
     ),
 
+  togglePinChatMessage: (
+    workspaceId: string,
+    conversationId: string,
+    messageId: string,
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: boolean; pinnedAt: string | null; pinnedById: string | null }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages/${messageId}/pin`,
+      { method: 'POST', fetch: fetchFn }
+    ),
+
+  forwardChatMessage: (
+    workspaceId: string,
+    conversationId: string,
+    messageId: string,
+    targetConversationIds: string[],
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: boolean; count: number }>(
+      `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages/${messageId}/forward`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ targetConversationIds }),
+        fetch: fetchFn
+      }
+    ),
   toggleChatReaction: (workspaceId: string, conversationId: string, messageId: string, reaction: string, fetchFn?: FetchLike) =>
     request<{ action: 'added' | 'removed' }>(
       `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(reaction)}`,
@@ -1118,7 +1198,11 @@ export const api = {
     body: {
       name: string;
       description?: string | null;
+      label?: string | null;
+      labels?: string[];
       workspaceMemberGroupId?: string | null;
+      workspaceMemberGroupIds?: string[];
+      allowedUserIds?: string[];
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
@@ -1346,6 +1430,10 @@ export const api = {
       name?: string;
       description?: string | null;
       workspaceMemberGroupId?: string | null;
+      workspaceMemberGroupIds?: string[];
+      allowedUserIds?: string[];
+      label?: string | null;
+      labels?: string[];
       ownerId?: string;
       defaultAssigneeId?: string | null;
       defaultAssigneeIds?: string[];
@@ -1912,7 +2000,7 @@ export const api = {
 
   createTaskBoard: (
     workspaceId: string,
-    body: { name: string; description?: string | null; workspaceMemberGroupId?: string | null },
+    body: { name: string; description?: string | null; label?: string | null; labels?: string[]; workspaceMemberGroupId?: string | null; workspaceMemberGroupIds?: string[]; allowedUserIds?: string[] },
     fetchFn?: FetchLike
   ) =>
     request<{ board: ApiTaskBoard; columns: ApiTaskBoardColumn[] }>(
@@ -1928,7 +2016,7 @@ export const api = {
   updateTaskBoard: (
     workspaceId: string,
     boardId: string,
-    body: { name?: string; description?: string | null; workspaceMemberGroupId?: string | null },
+    body: { name?: string; description?: string | null; label?: string | null; labels?: string[]; workspaceMemberGroupId?: string | null; workspaceMemberGroupIds?: string[]; allowedUserIds?: string[] },
     fetchFn?: FetchLike
   ) =>
     request<{ board: ApiTaskBoard }>(`/workspaces/${workspaceId}/boards/${boardId}`, {

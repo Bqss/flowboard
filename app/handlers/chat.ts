@@ -9,7 +9,9 @@ import {
   deleteMessage,
   editMessage,
   findOrCreateDirect,
+  forwardMessage,
   getConversationDetail,
+  getOrCreateContextConversation,
   getMessages,
   listAllChatConversations,
   listConversations,
@@ -17,7 +19,9 @@ import {
   markRead,
   removeParticipant,
   renameRoom,
+  sendBuzz,
   sendMessage,
+  togglePinMessage,
   toggleReaction
 } from '@services/chat';
 import { getOnlineUserIds } from '@services/chatSocket';
@@ -34,6 +38,7 @@ type UploadAttachmentBody = { file: File };
 type SendMessageBody = { body: string; clientMessageId: string; replyToMessageId?: string; attachmentIds?: string[] };
 type EditMessageBody = { body: string };
 type CreateDirectBody = { memberId: string };
+type SendBuzzBody = { conversationId?: string; targetUserId?: string; taskId?: string; note?: string };
 type CreateGroupBody = { name: string; memberIds: string[] };
 type AddParticipantBody = { userId: string };
 type RenameBody = { name: string };
@@ -259,10 +264,10 @@ export async function editMessageHandler(ctx: Ctx<EditMessageBody, MessageParams
     ctx.set.status = 400;
     return { error: 'Message cannot be empty' };
   }
-  const ok = await editMessage(ctx.workspace.id, ctx.params.conversationId, ctx.params.messageId, ctx.user.id, body);
-  if (!ok) {
-    ctx.set.status = 403;
-    return { error: 'You can only edit your own non-deleted messages' };
+  const result = await editMessage(ctx.workspace.id, ctx.params.conversationId, ctx.params.messageId, ctx.user.id, body);
+  if (!result.ok) {
+    ctx.set.status = 400;
+    return { error: result.error ?? 'Gagal mengedit pesan' };
   }
   return { ok: true };
 }
@@ -278,6 +283,50 @@ export async function deleteMessageHandler(ctx: Ctx<unknown, MessageParams>) {
     return { error: 'You can only delete your own messages' };
   }
   return { ok: true };
+}
+
+export async function togglePinMessageHandler(ctx: Ctx<unknown, MessageParams>) {
+  if (!hasWorkspaceAccess(ctx)) {
+    ctx.set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  const result = await togglePinMessage(
+    ctx.workspace.id,
+    ctx.params.conversationId,
+    ctx.params.messageId,
+    ctx.user.id
+  );
+  if (!result.ok) {
+    ctx.set.status = 400;
+    return { error: result.error ?? 'Gagal menyematkan pesan' };
+  }
+  return result;
+}
+
+export async function forwardMessageHandler(
+  ctx: Ctx<{ targetConversationIds: string[] }, MessageParams>
+) {
+  if (!hasWorkspaceAccess(ctx)) {
+    ctx.set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  const { targetConversationIds } = ctx.body;
+  if (!targetConversationIds || !Array.isArray(targetConversationIds) || targetConversationIds.length === 0) {
+    ctx.set.status = 400;
+    return { error: 'Pilih sekurang-kurangnya satu perbualan tujuan' };
+  }
+  const result = await forwardMessage(
+    ctx.workspace.id,
+    ctx.params.conversationId,
+    ctx.params.messageId,
+    targetConversationIds,
+    ctx.user.id
+  );
+  if (!result.ok) {
+    ctx.set.status = 400;
+    return { error: result.error ?? 'Gagal meneruskan pesan' };
+  }
+  return result;
 }
 
 /* ------------------------------------------------------- reactions */
@@ -382,4 +431,42 @@ export async function uploadAttachmentHandler(ctx: Ctx<UploadAttachmentBody, Con
     return { error: 'Conversation not found or you are not a participant' };
   }
   return { attachment };
+}
+
+export async function sendBuzzHandler(ctx: Ctx<SendBuzzBody, WorkspaceParams>) {
+  if (!hasWorkspaceAccess(ctx)) {
+    ctx.set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  const result = await sendBuzz(ctx.workspace.id, ctx.user.id, {
+    conversationId: ctx.body.conversationId,
+    targetUserId: ctx.body.targetUserId,
+    taskId: ctx.body.taskId,
+    note: ctx.body.note
+  });
+  if (!result.success) {
+    ctx.set.status = result.error?.includes('tunggu') ? 429 : 400;
+    return { error: result.error };
+  }
+  return result;
+}
+
+export async function getContextConversationHandler(
+  ctx: Ctx<unknown, { workspaceId: string; contextType: 'taskboard' | 'workflow'; contextId: string }>
+) {
+  if (!hasWorkspaceAccess(ctx)) {
+    ctx.set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  const conversation = await getOrCreateContextConversation(
+    ctx.workspace.id,
+    ctx.user.id,
+    ctx.params.contextType,
+    ctx.params.contextId
+  );
+  if (!conversation) {
+    ctx.set.status = 404;
+    return { error: 'Not found or access denied' };
+  }
+  return { conversation };
 }

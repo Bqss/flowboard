@@ -6,6 +6,7 @@
     api,
     ApiError,
     type ApiChatAttachment,
+    type ApiChatConversationDetail,
     type ApiChatInboxConversation,
     type ApiChatInboxWorkspace,
     type ApiChatMessage,
@@ -14,13 +15,16 @@
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Avatar, Badge, Button, IconButton, Input, Skeleton, Switch, Tooltip } from '$lib/components/atoms/index.js';
-  import { ChatVideoPlayer, FormField, SearchInput, toast } from '$lib/components/molecules/index.js';
+  import { ChatAudioPlayer, ChatForwardDialog, ChatMessageContextMenu, ChatReactionPicker, ChatStickerPicker, ChatVideoPlayer, FormField, SearchInput, toast } from '$lib/components/molecules/index.js';
+  import { formatStickerMessage, isStickerMessage, parseSticker, type ChatSticker } from '$lib/chat/stickers.js';
   import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Add01Icon,
     AlertCircleIcon,
     ArrowLeft01Icon,
+    ArrowRight01Icon,
+    ArrowDown01Icon,
     Attachment01Icon,
     BubbleChatIcon,
     Building06Icon,
@@ -33,14 +37,20 @@
     MailReply01Icon,
     MoreVerticalIcon,
     Mic01Icon,
+    PinIcon,
+    PinOffIcon,
     PauseIcon,
     PlayIcon,
     StopIcon,
+    Settings01Icon,
+    Search01Icon,
     SentIcon,
     Tick02Icon,
     UserGroupIcon,
     Video01Icon,
     WorkflowSquare01Icon,
+    SmileIcon,
+    StickerIcon,
     ZoomIcon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from '../$types';
@@ -114,13 +124,110 @@
   let selectedGroupMemberIds = $state<string[]>([]);
   let groupCreating = $state(false);
 
+  let activeConversationDetail = $state<ApiChatConversationDetail | null>(null);
   let roomInfoOpen = $state(false);
-  let roomParticipants = $state<Array<{ userId: string; name: string; email: string; avatarUrl: string | null; role: string }>>([]);
+  let roomInfoTab = $state<'info' | 'media' | 'pinned'>('info');
+  let roomParticipants = $state<Array<{ userId: string; name: string; email: string; avatarUrl: string | null; role: string; isOwner?: boolean }>>([]);
+  let roomParticipantSearch = $state('');
+  let isSearchingParticipants = $state(false);
 
+  // Remove participant
+  let removeConfirmOpen = $state(false);
+  let memberToRemove = $state<{ userId: string; name: string } | null>(null);
+  let removingMember = $state(false);
+
+  // Add participant
+  let addMemberOpen = $state(false);
+  let addingMember = $state(false);
+  let addMemberSearch = $state('');
+  let availableWorkspaceMembers = $state<ApiChatMember[]>([]);
+  let loadingAvailableMembers = $state(false);
   let reactionPickerMessageId = $state<string | null>(null);
   const ALLOWED_REACTIONS = ['👍', '❤️', '😂', '🎉', '🙏', '👀'];
-
+  let contextMenuOpen = $state(false);
+  let contextMenuMessage = $state<ApiChatMessage | null>(null);
+  let contextMenuX = $state(0);
+  let contextMenuY = $state(0);
+  let forwardSourceMessage = $state<ApiChatMessage | null>(null);
+  let forwardDialogOpen = $state(false);
+  let editingMessageId = $state<string | null>(null);
+  let editMessageText = $state('');
   let deleteMessageTarget = $state<ApiChatMessage | null>(null);
+  let mobileFabOpen = $state(false);
+  const totalUnreadCount = $derived(
+    conversations.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0)
+  );
+  let stickerPickerOpen = $state(false);
+  let mobileActionsOpen = $state(false);
+  let mobileActionsEl = $state<HTMLDivElement | null>(null);
+
+
+  function reactionCounts(msg: ApiChatMessage): Array<{ reaction: string; count: number; reactedByMe: boolean; userNames: string[] }> {
+    const grouped = new Map<string, { count: number; reactedByMe: boolean; userNames: string[] }>();
+    for (const r of msg.reactions ?? []) {
+      const existing = grouped.get(r.reaction);
+      if (existing) {
+        existing.count++;
+        if (r.userId === userId) existing.reactedByMe = true;
+        if (r.userName && !existing.userNames.includes(r.userName)) existing.userNames.push(r.userName);
+      } else {
+        grouped.set(r.reaction, {
+          count: 1,
+          reactedByMe: r.userId === userId,
+          userNames: r.userName ? [r.userName] : []
+        });
+      }
+    }
+    return Array.from(grouped.entries()).map(([reaction, info]) => ({ reaction, ...info }));
+  }
+
+  function myReactionsForMsg(msg: ApiChatMessage): string[] {
+    return (msg.reactions ?? [])
+      .filter((r) => r.userId === userId)
+      .map((r) => r.reaction);
+  }
+
+  async function handleSendSticker(sticker: { url: string; name: string }) {
+    const conversation = activeConversation;
+    if (!conversation || conversation.id !== activeConversationId) return;
+
+    const clientMessageId = crypto.randomUUID();
+    const body = formatStickerMessage(sticker);
+    const replyTarget = replyToMessage;
+    replyToMessage = null;
+
+    const optimisticMessage: ApiChatMessage = {
+      id: clientMessageId,
+      senderId: userId,
+      senderName: userName,
+      senderAvatarUrl: data.user?.avatarUrl ?? null,
+      body,
+      replyToMessageId: replyTarget?.id ?? null,
+      replyToSenderName: replyTarget?.senderName ?? null,
+      replyToBody: replyTarget?.body ?? null,
+      replyToDeleted: Boolean(replyTarget?.deletedAt),
+      editedAt: null,
+      deletedAt: null,
+      createdAt: new Date().toISOString(),
+      reactions: [],
+      attachments: []
+    };
+    messages = [...messages, optimisticMessage];
+    scrollToBottom();
+
+    try {
+      const res = await api.sendChatMessage(
+        conversation.workspaceId,
+        conversation.id,
+        body,
+        clientMessageId,
+        replyTarget?.id
+      );
+      messages = messages.map((m) => (m.id === clientMessageId ? res.message : m));
+    } catch {
+      // ignore
+    }
+  }
 
   /* ------------------------------------------------------- derived */
   let filteredConversations = $derived.by(() => {
@@ -390,14 +497,13 @@
           messages = messages.map((message) => {
             if (message.id !== data.messageId) return message;
             if (data.action === 'added') {
-              const existing = message.reactions.find(
-                (reaction) => reaction.userId === data.userId && reaction.reaction === data.reaction
+              const reactionsWithoutUser = message.reactions.filter(
+                (reaction) => reaction.userId !== data.userId
               );
-              if (existing) return message;
               return {
                 ...message,
                 reactions: [
-                  ...message.reactions,
+                  ...reactionsWithoutUser,
                   { reaction: data.reaction, userId: data.userId, userName: data.userName }
                 ]
               };
@@ -429,6 +535,28 @@
         onlineUserIds = new Set([...onlineUsersByWorkspace.values()].flatMap((ids) => [...ids]));
         break;
       }
+      case 'conversation:update': {
+        const convId = data.conversationId as string;
+        if (activeConversation && activeConversation.id === convId && activeConversation.workspaceId === workspaceId) {
+          api.getChatConversation(workspaceId, convId)
+            .then((detail) => {
+              if (activeConversationId === convId) {
+                activeConversationDetail = detail;
+                roomParticipants = detail.participants ?? [];
+              }
+            })
+            .catch(() => {
+              activeConversationId = null;
+              activeConversation = null;
+              activeConversationDetail = null;
+              messages = [];
+              roomInfoOpen = false;
+              toast.info('Akses Anda ke obrolan ini telah diperbarui');
+            });
+        }
+        loadConversations();
+        break;
+      }
     }
   }
 
@@ -447,6 +575,11 @@
     }
     if (conv.lastMessage.deletedAt) return tr('chat.deleted');
     const prefix = conv.lastMessage.senderId === userId ? 'Anda: ' : '';
+    if (isStickerMessage(conv.lastMessage.body)) {
+      const sticker = parseSticker(conv.lastMessage.body);
+      const display = sticker && !sticker.url.startsWith('http') ? ` ${sticker.url}` : '';
+      return prefix + '🎨 Stiker' + display;
+    }
     return prefix + conv.lastMessage.body;
   }
 
@@ -547,6 +680,7 @@
         api.getChatMessages(conv.workspaceId, conv.id)
       ]);
       if (!isCurrentConversation()) return;
+      activeConversationDetail = detailRes;
       roomParticipants = detailRes.participants ?? [];
       messages = msgRes.messages ?? [];
       hasOlderMessages = (msgRes.messages ?? []).length >= 50;
@@ -914,11 +1048,24 @@
   async function toggleReaction(msg: ApiChatMessage, reaction: string) {
     const conversation = activeConversation;
     if (!conversation || conversation.id !== activeConversationId) return;
+    reactionPickerMessageId = null;
+    const previousReactions = msg.reactions ?? [];
+    const alreadyReacted = previousReactions.some((r) => r.reaction === reaction && r.userId === userId);
+    messages = messages.map((m) => {
+      if (m.id !== msg.id) return m;
+      const reactionsWithoutUser = (m.reactions ?? []).filter((r) => r.userId !== userId);
+      return {
+        ...m,
+        reactions: alreadyReacted
+          ? reactionsWithoutUser
+          : [...reactionsWithoutUser, { reaction, userId, userName }]
+      };
+    });
+
     try {
       await api.toggleChatReaction(conversation.workspaceId, conversation.id, msg.id, reaction);
-      reactionPickerMessageId = null;
     } catch {
-      // ignore
+      messages = messages.map((m) => (m.id === msg.id ? { ...m, reactions: previousReactions } : m));
     }
   }
 
@@ -927,9 +1074,161 @@
     if (!conversation || conversation.id !== activeConversationId || !deleteMessageTarget) return;
     try {
       await api.deleteChatMessage(conversation.workspaceId, conversation.id, deleteMessageTarget.id);
+      messages = messages.map((message) =>
+        message.id === deleteMessageTarget?.id
+          ? { ...message, body: '', deletedAt: new Date().toISOString(), editedAt: null, reactions: [] }
+          : message
+      );
       deleteMessageTarget = null;
     } catch {
       toast.error('Gagal menghapus pesan');
+    }
+  }
+  function openMessageContextMenu(msg: ApiChatMessage, x: number, y: number) {
+    contextMenuMessage = msg;
+    contextMenuX = x;
+    contextMenuY = y;
+    contextMenuOpen = true;
+  }
+
+  function handleMessageContextMenu(event: MouseEvent, msg: ApiChatMessage) {
+    event.preventDefault();
+    openMessageContextMenu(msg, event.clientX, event.clientY);
+  }
+
+
+  let composerInputElement = $state<HTMLInputElement | null>(null);
+
+  function startEditMessage(msg: ApiChatMessage) {
+    editingMessageId = msg.id;
+    composerText = msg.body;
+    replyToMessage = null;
+    requestAnimationFrame(() => {
+      composerInputElement?.focus();
+    });
+  }
+
+  function cancelEditMessage() {
+    editingMessageId = null;
+    composerText = '';
+  }
+
+  async function saveEditMessage() {
+    const conversation = activeConversation;
+    const messageId = editingMessageId;
+    const body = composerText.trim();
+    if (!conversation || conversation.id !== activeConversationId || !messageId || !body) return;
+
+    try {
+      await api.editChatMessage(conversation.workspaceId, conversation.id, messageId, body);
+      messages = messages.map((message) =>
+        message.id === messageId ? { ...message, body, editedAt: new Date().toISOString() } : message
+      );
+      cancelEditMessage();
+    } catch {
+      toast.error('Gagal mengedit pesan');
+    }
+  }
+
+  async function togglePinMessage(msg: ApiChatMessage) {
+    const conversation = activeConversation;
+    if (!conversation || conversation.id !== activeConversationId) return;
+    try {
+      const result = await api.togglePinChatMessage(conversation.workspaceId, conversation.id, msg.id);
+      messages = messages.map((message) =>
+        message.id === msg.id
+          ? { ...message, pinnedAt: result.pinnedAt, pinnedById: result.pinnedById }
+          : message
+      );
+    } catch {
+      toast.error('Gagal mengubah sematan pesan');
+    }
+  }
+
+  function openForwardDialog(msg: ApiChatMessage) {
+    forwardSourceMessage = msg;
+    forwardDialogOpen = true;
+  }
+
+  async function forwardMessageTo(targetConversationIds: string[]) {
+    const conversation = activeConversation;
+    const message = forwardSourceMessage;
+    if (!conversation || conversation.id !== activeConversationId || !message) return;
+    await api.forwardChatMessage(conversation.workspaceId, conversation.id, message.id, targetConversationIds);
+    toast.success('Pesan berhasil diteruskan');
+    void loadConversations();
+  }
+  function scrollToRepliedMessage(replyId?: string | null) {
+    if (!replyId) return;
+    const el = document.getElementById(`chat-msg-${replyId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      toast.info('Pesan yang dibalas berada lebih jauh di riwayat obrolan.');
+    }
+  }
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  let holdStartX = 0;
+  let holdStartY = 0;
+
+  let holdJustTriggered = false;
+
+  function handleBubblePointerDown(event: PointerEvent, msg: ApiChatMessage) {
+    if (msg.deletedAt) return;
+    holdStartX = event.clientX;
+    holdStartY = event.clientY;
+    holdJustTriggered = false;
+    const targetEl = event.currentTarget as HTMLElement;
+    if (holdTimer) clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => {
+      holdJustTriggered = true;
+      reactionPickerMessageId = msg.id;
+      const rect = targetEl.getBoundingClientRect();
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+      const isOwn = msg.senderId === userId;
+      const menuX = isMobile
+        ? (isOwn ? Math.max(12, rect.right - 192) : Math.max(12, rect.left))
+        : (isOwn ? rect.right - 192 : rect.left);
+      const menuY = rect.bottom + 6;
+      openMessageContextMenu(msg, menuX, menuY);
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate(40); } catch {}
+      }
+      setTimeout(() => {
+        holdJustTriggered = false;
+      }, 400);
+    }, 450);
+  }
+
+  function handleBubblePointerMove(event: PointerEvent) {
+    if (!holdTimer) return;
+    const dist = Math.hypot(event.clientX - holdStartX, event.clientY - holdStartY);
+    if (dist > 10) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+  }
+
+  function handleBubbleMouseDown(event: MouseEvent, msg: ApiChatMessage) {
+    if (event.button !== 0) return;
+    handleBubblePointerDown(event as unknown as PointerEvent, msg);
+  }
+
+  function handleBubblePointerUp(event?: Event) {
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+    if (holdJustTriggered && event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  function handleBubbleClick(event: MouseEvent) {
+    if (holdJustTriggered) {
+      event.preventDefault();
+      event.stopPropagation();
     }
   }
   /* ------------------------------------------------------- new chat modal */
@@ -995,6 +1294,163 @@
     }
   }
 
+  /* ------------------------------------------------------- room / group info helpers */
+  const filteredParticipants = $derived.by(() => {
+    if (!roomParticipantSearch.trim()) return roomParticipants;
+    const q = roomParticipantSearch.toLowerCase();
+    return roomParticipants.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.email && p.email.toLowerCase().includes(q))
+    );
+  });
+
+  const activeConversationAttachments = $derived.by(() => {
+    const list: ApiChatAttachment[] = [];
+    for (const msg of messages) {
+      if (msg.attachments && msg.attachments.length > 0) {
+        list.push(...msg.attachments);
+      }
+    }
+    return list;
+  });
+
+  const pinnedMessages = $derived.by(() => {
+    return messages.filter((m) => Boolean(m.pinnedAt) && !m.deletedAt);
+  });
+  let activePinnedIndex = $state(0);
+
+  $effect(() => {
+    if (activePinnedIndex >= pinnedMessages.length) {
+      activePinnedIndex = 0;
+    }
+  });
+
+  const currentPinnedMessage = $derived.by(() => {
+    if (pinnedMessages.length === 0) return null;
+    return pinnedMessages[activePinnedIndex] ?? pinnedMessages[0];
+  });
+
+  function handlePinnedBannerClick() {
+    if (!currentPinnedMessage) return;
+    const targetId = currentPinnedMessage.id;
+    const el = document.getElementById(`chat-msg-${targetId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (pinnedMessages.length > 1) {
+      activePinnedIndex = (activePinnedIndex + 1) % pinnedMessages.length;
+    }
+  }
+
+  function handleMessageContainerScroll() {
+    if (pinnedMessages.length <= 1 || !messageContainerEl) return;
+    const containerTop = messageContainerEl.getBoundingClientRect().top;
+    for (let i = 0; i < pinnedMessages.length; i++) {
+      const el = document.getElementById(`chat-msg-${pinnedMessages[i].id}`);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        if (elRect.top < containerTop + 50) {
+          continue;
+        } else {
+          activePinnedIndex = i;
+          return;
+        }
+      }
+    }
+  }
+
+  function formatFileSize(bytes?: number): string {
+    if (!bytes || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+  }
+
+  async function openRoomInfo() {
+    if (!activeConversation || activeConversation.kind === 'direct') return;
+    roomInfoTab = 'info';
+    roomParticipantSearch = '';
+    isSearchingParticipants = false;
+    roomInfoOpen = true;
+
+    try {
+      const detail = await api.getChatConversation(activeConversation.workspaceId, activeConversation.id);
+      if (activeConversationId === activeConversation?.id) {
+        activeConversationDetail = detail;
+        roomParticipants = detail.participants ?? [];
+      }
+    } catch {
+      // Keep existing
+    }
+  }
+
+  async function openAddMemberModal() {
+    if (!activeConversation) return;
+    addMemberSearch = '';
+    loadingAvailableMembers = true;
+    addMemberOpen = true;
+    try {
+      const res = await api.listChatMembers(activeConversation.workspaceId);
+      const currentParticipantUserIds = new Set(roomParticipants.map((p) => p.userId));
+      availableWorkspaceMembers = (res.members ?? []).filter(
+        (m) => !currentParticipantUserIds.has(m.id)
+      );
+    } catch {
+      availableWorkspaceMembers = [];
+      toast.error('Gagal memuat anggota workspace');
+    } finally {
+      loadingAvailableMembers = false;
+    }
+  }
+
+  async function handleAddMember(targetMember: ApiChatMember) {
+    if (!activeConversation) return;
+    addingMember = true;
+    try {
+      await api.addChatParticipant(activeConversation.workspaceId, activeConversation.id, targetMember.id);
+      toast.success(`${targetMember.name} berhasil ditambahkan ke grup chat`);
+      const detail = await api.getChatConversation(activeConversation.workspaceId, activeConversation.id);
+      if (activeConversationId === activeConversation.id) {
+        activeConversationDetail = detail;
+        roomParticipants = detail.participants ?? [];
+      }
+      addMemberOpen = false;
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal menambahkan anggota');
+    } finally {
+      addingMember = false;
+    }
+  }
+
+  function promptRemoveMember(member: { userId: string; name: string }) {
+    memberToRemove = member;
+    removeConfirmOpen = true;
+  }
+
+  async function handleRemoveMember() {
+    if (!memberToRemove || !activeConversation) return;
+    removingMember = true;
+    try {
+      await api.removeChatParticipant(
+        activeConversation.workspaceId,
+        activeConversation.id,
+        memberToRemove.userId
+      );
+      toast.success(`${memberToRemove.name} telah dikeluarkan dari grup chat`);
+      roomParticipants = roomParticipants.filter((p) => p.userId !== memberToRemove!.userId);
+      if (activeConversationDetail) {
+        activeConversationDetail.participants = (activeConversationDetail.participants ?? []).filter(
+          (p) => p.userId !== memberToRemove!.userId
+        );
+      }
+      removeConfirmOpen = false;
+      memberToRemove = null;
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal mengeluarkan anggota');
+    } finally {
+      removingMember = false;
+    }
+  }
+
   /* ------------------------------------------------------- lifecycle */
   $effect(() => {
     if (userId) {
@@ -1041,6 +1497,19 @@
 <svelte:head>
   <title>Mesej — actjom</title>
 </svelte:head>
+<svelte:window
+  onclick={(e) => {
+    if (mobileActionsOpen && mobileActionsEl && !mobileActionsEl.contains(e.target as Node)) {
+      mobileActionsOpen = false;
+    }
+  }}
+  onkeydown={(e) => {
+    if (e.key === 'Escape' && mobileActionsOpen) {
+      mobileActionsOpen = false;
+    }
+  }}
+/>
+
 
 <div class="flex h-full w-full flex-1 min-h-0 overflow-hidden border-t border-hairline bg-card">
   <!-- SISI KIRI: Daftar Percakapan -->
@@ -1154,7 +1623,7 @@
     {:else}
       <!-- ROOT LIST: Image #1 -->
       <div class="space-y-3 border-b border-hairline p-4">
-      <div class="flex items-center justify-between">
+      <div class="hidden md:flex items-center justify-between">
         <h1 class="text-xl font-bold tracking-tight text-ink">Mesej</h1>
         <div class="flex items-center gap-1.5">
           <Tooltip text="Tulis pesan" side="bottom">
@@ -1170,7 +1639,7 @@
         </div>
       </div>
 
-      <SearchInput bind:value={searchQuery} placeholder="Cari obrolan…" />
+      <SearchInput bind:value={searchQuery} placeholder="Cari ahli…" />
 
       <!-- Toggler Semua Workspace -->
       <div class="flex items-center justify-between px-1">
@@ -1209,48 +1678,53 @@
         </div>
       {/if}
       <!-- Filter Kategori -->
-      <div class="flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+      <div class="flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
           type="button"
           onclick={() => (categoryFilter = 'all')}
-          class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {categoryFilter === 'all' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}"
+          class="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors {categoryFilter === 'all' ? 'bg-primary text-white shadow-xs' : 'bg-canvas-sunken text-mute hover:text-ink'}"
         >
           Semua
         </button>
         <button
           type="button"
+          onclick={() => (categoryFilter = 'unread')}
+          class="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors {categoryFilter === 'unread' ? 'bg-primary text-white shadow-xs' : 'bg-canvas-sunken text-mute hover:text-ink'}"
+        >
+          <span>Belum dibaca</span>
+          {#if totalUnreadCount > 0}
+            <span class="flex size-4.5 min-w-4.5 items-center justify-center rounded-full {categoryFilter === 'unread' ? 'bg-white text-primary' : 'bg-primary text-white'} text-[10px] font-bold">
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+            </span>
+          {/if}
+        </button>
+        <button
+          type="button"
           onclick={() => (categoryFilter = 'board')}
-          class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {categoryFilter === 'board' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}"
+          class="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors {categoryFilter === 'board' ? 'bg-primary text-white shadow-xs' : 'bg-canvas-sunken text-mute hover:text-ink'}"
         >
           Board
         </button>
         <button
           type="button"
           onclick={() => (categoryFilter = 'workflow')}
-          class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {categoryFilter === 'workflow' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}"
+          class="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors {categoryFilter === 'workflow' ? 'bg-primary text-white shadow-xs' : 'bg-canvas-sunken text-mute hover:text-ink'}"
         >
           Workflow
         </button>
         <button
           type="button"
           onclick={() => (categoryFilter = 'group')}
-          class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {categoryFilter === 'group' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}"
+          class="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors {categoryFilter === 'group' ? 'bg-primary text-white shadow-xs' : 'bg-canvas-sunken text-mute hover:text-ink'}"
         >
           Grup
         </button>
         <button
           type="button"
           onclick={() => (categoryFilter = 'direct')}
-          class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {categoryFilter === 'direct' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}"
+          class="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors {categoryFilter === 'direct' ? 'bg-primary text-white shadow-xs' : 'bg-canvas-sunken text-mute hover:text-ink'}"
         >
           Direct
-        </button>
-        <button
-          type="button"
-          onclick={() => (categoryFilter = 'unread')}
-          class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors {categoryFilter === 'unread' ? 'bg-primary text-white' : 'bg-canvas-sunken text-mute hover:text-ink'}"
-        >
-          Belum Dibaca
         </button>
       </div>
     </div>
@@ -1392,18 +1866,41 @@
             <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={2} />
           </button>
 
-          {#if activeConversation?.kind === 'taskboard'}
-            <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-              <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
-            </div>
-          {:else if activeConversation?.kind === 'workflow'}
-            <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
-              <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
-            </div>
-          {:else if activeConversation?.kind === 'group'}
-            <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
-              <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
-            </div>
+          {#if activeConversation?.kind !== 'direct'}
+            <button
+              type="button"
+              onclick={openRoomInfo}
+              class="flex items-center gap-3 min-w-0 text-left rounded-xl p-1 -m-1 transition-colors hover:bg-canvas-sunken/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 cursor-pointer group"
+              aria-label="Informasi obrolan grup"
+            >
+              {#if activeConversation?.kind === 'taskboard'}
+                <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                  <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
+                </div>
+              {:else if activeConversation?.kind === 'workflow'}
+                <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                  <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+                </div>
+              {:else if activeConversation?.kind === 'group'}
+                <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+                  <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
+                </div>
+              {/if}
+
+              <div class="min-w-0 flex-1">
+                <h2 class="truncate text-base font-bold text-ink leading-tight group-hover:text-primary transition-colors">
+                  {conversationDisplayName(activeConversation!)}
+                </h2>
+                <div class="mt-1 flex min-w-0 items-center gap-2">
+                  {#if allWorkspacesEnabled && activeConversation?.workspaceName}
+                    <Badge tone="neutral" class="max-w-36 truncate">{activeConversation.workspaceName}</Badge>
+                  {/if}
+                  <p class="truncate text-xs text-mute group-hover:text-ink/80 transition-colors">
+                    {roomParticipants.length} anggota
+                  </p>
+                </div>
+              </div>
+            </button>
           {:else}
             <Avatar
               name={conversationDisplayName(activeConversation!)}
@@ -1411,39 +1908,97 @@
               size={36}
               online={Boolean(activeConversation?.partner?.id && onlineUserIds.has(activeConversation.partner.id))}
             />
-          {/if}
-
-          <div class="min-w-0 flex-1">
-            <h2 class="truncate text-base font-bold text-ink leading-tight">
-              {conversationDisplayName(activeConversation!)}
-            </h2>
-            <div class="mt-1 flex min-w-0 items-center gap-2">
-              {#if allWorkspacesEnabled && activeConversation?.workspaceName}
-                <Badge tone="neutral" class="max-w-36 truncate">{activeConversation.workspaceName}</Badge>
-              {/if}
-              <p class="truncate text-xs text-mute">
-                {#if activeConversation?.kind === 'direct'}
-                  {activeConversation.partner?.id && onlineUserIds.has(activeConversation.partner.id) ? 'Online' : 'Offline'}
-                {:else}
-                  {roomParticipants.length} anggota
+            <div class="min-w-0 flex-1">
+              <h2 class="truncate text-base font-bold text-ink leading-tight">
+                {conversationDisplayName(activeConversation!)}
+              </h2>
+              <div class="mt-1 flex min-w-0 items-center gap-2">
+                {#if allWorkspacesEnabled && activeConversation?.workspaceName}
+                  <Badge tone="neutral" class="max-w-36 truncate">{activeConversation.workspaceName}</Badge>
                 {/if}
-              </p>
+                <p class="truncate text-xs text-mute">
+                  {activeConversation.partner?.id && onlineUserIds.has(activeConversation.partner.id) ? 'Online' : 'Offline'}
+                </p>
+              </div>
             </div>
-          </div>
+          {/if}
         </div>
 
-        {#if activeConversation?.kind !== 'direct'}
-          <IconButton variant="ghost" size="sm" label="Anggota obrolan" onclick={() => (roomInfoOpen = !roomInfoOpen)}>
-            <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
-          </IconButton>
-        {/if}
       </header>
 
+      {#if currentPinnedMessage}
+        <!-- Pinned Message Top Banner -->
+        <div class="relative z-20 flex items-center justify-between gap-3 border-b border-hairline bg-card/95 px-3 sm:px-4 py-2 shadow-2xs backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
+          <button
+            type="button"
+            onclick={handlePinnedBannerClick}
+            class="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group/pin"
+            title="Klik untuk melihat pesan yang disematkan"
+          >
+            <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary transition-colors group-hover/pin:bg-primary group-hover/pin:text-white">
+              <HugeiconsIcon icon={PinIcon} size={14} strokeWidth={2.2} />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-bold text-ink leading-tight truncate group-hover/pin:text-primary transition-colors">
+                  {currentPinnedMessage.senderName}
+                </span>
+                {#if pinnedMessages.length > 1}
+                  <span class="text-[10px] font-semibold text-mute bg-canvas-sunken px-1.5 py-0.2 rounded-full tabular-nums">
+                    {activePinnedIndex + 1}/{pinnedMessages.length}
+                  </span>
+                {/if}
+              </div>
+              <p class="truncate text-xs text-mute mt-0.5 leading-tight">
+                {currentPinnedMessage.body || (currentPinnedMessage.attachments?.length ? '📎 Lampiran berkas' : 'Pesan')}
+              </p>
+            </div>
+          </button>
+          <div class="flex items-center gap-1 shrink-0">
+            {#if pinnedMessages.length > 1}
+              <button
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  activePinnedIndex = (activePinnedIndex + 1) % pinnedMessages.length;
+                  handlePinnedBannerClick();
+                }}
+                class="flex size-7 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink transition-colors cursor-pointer"
+                title="Pesan sematan berikutnya"
+                aria-label="Pesan sematan berikutnya"
+              >
+                <HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={2} />
+              </button>
+            {/if}
+            <button
+              type="button"
+              onclick={(e) => {
+                e.stopPropagation();
+                togglePinMessage(currentPinnedMessage);
+              }}
+              class="flex size-7 items-center justify-center rounded-lg text-mute hover:bg-status-urgent-soft hover:text-status-urgent transition-colors cursor-pointer"
+              title="Lepas sematan"
+              aria-label="Lepas sematan pesan"
+            >
+              <HugeiconsIcon icon={PinOffIcon} size={14} strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      {/if}
       <!-- Message History Container -->
       <div
         bind:this={messageContainerEl}
+        onscroll={handleMessageContainerScroll}
         class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5"
       >
+        {#if editingMessageId}
+          <!-- Backdrop: dims everything except the message being edited -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px] transition-opacity duration-200 animate-in fade-in"
+            onclick={cancelEditMessage}
+          ></div>
+        {/if}
         {#if hasOlderMessages}
           <div class="flex justify-center pt-2">
             <Button variant="ghost" size="sm" loading={loadingOlder} onclick={loadOlderMessages} class="text-xs">
@@ -1475,25 +2030,64 @@
             {@const nonVisualAttachments = !msg.deletedAt && msg.attachments ? msg.attachments.filter((att) => !att.fileType.startsWith('image/') && !att.fileType.startsWith('video/')) : []}
             {@const hasVisualMedia = visualAttachments.length > 0}
             {@const hasCaption = Boolean(!msg.deletedAt && msg.body && msg.body.trim().length > 0)}
-            <div class="group flex flex-col {isOwn ? 'items-end' : 'items-start'}">
+            <div
+              id={`chat-msg-${msg.id}`}
+              class="group flex flex-col {isOwn ? 'items-end' : 'items-start'} {editingMessageId === msg.id ? 'relative z-40' : ''}"
+              role="group"
+              aria-label={`Pesan dari ${msg.senderName}`}
+            >
               {#if !isOwn && activeConversation?.kind !== 'direct'}
                 <span class="mb-1 text-[11px] font-semibold text-mute px-1">
                   {msg.senderName}
                 </span>
               {/if}
 
-              <div class="relative flex max-w-[85%] sm:max-w-[70%] items-end gap-1.5">
+              <div class="relative flex max-w-[85%] sm:max-w-[70%] items-end gap-1.5 {editingMessageId === msg.id ? 'z-40 ring-2 ring-primary ring-offset-2 rounded-2xl shadow-2xl scale-[1.01]' : ''} {reactionPickerMessageId === msg.id || (contextMenuOpen && contextMenuMessage?.id === msg.id) ? 'z-50' : ''}">
                 <!-- Message Bubble -->
                 {#if hasVisualMedia}
                   <!-- Visual Media Bubble: Flush on top/sides, padding only on caption below (Image #1, #2, #3) -->
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                   <div
-                    class="overflow-hidden rounded-2xl shadow-xs {isOwn ? 'bg-[#2563eb] text-white rounded-br-sm' : 'bg-card border border-hairline text-ink rounded-bl-sm'}"
+                    class="relative group/bubble overflow-hidden rounded-2xl shadow-xs {isOwn ? 'bg-[#2563eb] text-white rounded-br-sm' : 'bg-card border border-hairline text-ink rounded-bl-sm'}"
+                    onclick={handleBubbleClick}
+                    oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
+                    onpointerdown={(event) => handleBubblePointerDown(event, msg)}
+                    onpointermove={handleBubblePointerMove}
+                    onpointerup={handleBubblePointerUp}
+                    onpointercancel={handleBubblePointerUp}
+                    onmousedown={(event) => handleBubbleMouseDown(event, msg)}
+                    onmouseup={handleBubblePointerUp}
+                    onmouseleave={handleBubblePointerUp}
                   >
+                    {#if !msg.deletedAt}
+                      <button
+                        type="button"
+                        onclick={(event) => {
+                          event.stopPropagation();
+                          const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                          openMessageContextMenu(msg, rect.right - 192, rect.bottom + 4);
+                        }}
+                        class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-5.5 items-center justify-center rounded-full transition-all cursor-pointer shadow-xs bg-black/45 text-white/90 hover:bg-black/65 hover:text-white"
+                        aria-label="Opsi pesan"
+                        title="Opsi pesan"
+                      >
+                        <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={2.4} />
+                      </button>
+                    {/if}
                     {#if msg.replyToMessageId}
-                      <div class="m-2 mb-1.5 rounded-lg border-l-2 border-primary-border/60 bg-black/5 dark:bg-white/5 p-2 text-xs opacity-80">
-                        <span class="font-bold block">{msg.replyToSenderName ?? 'Balasan'}</span>
-                        <span class="truncate block">{msg.replyToBody ?? 'Pesan'}</span>
-                      </div>
+                      <button
+                        type="button"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          scrollToRepliedMessage(msg.replyToMessageId);
+                        }}
+                        class="m-2 mb-1.5 w-[calc(100%-16px)] text-left rounded-lg border-l-[3.5px] border-white/80 bg-black/25 hover:bg-black/40 p-2 text-xs text-white transition-colors cursor-pointer select-none outline-none focus:outline-none"
+                        title="Lihat pesan asal"
+                        aria-label={`Lihat pesan asal dari ${msg.replyToSenderName ?? 'pengirim'}`}
+                      >
+                        <span class="font-bold block truncate">{msg.replyToSenderName ?? 'Balasan'}</span>
+                        <span class="truncate block opacity-85">{msg.replyToBody ?? 'Pesan'}</span>
+                      </button>
                     {/if}
 
                     <!-- Media at top (no outer padding on top/left/right) -->
@@ -1535,7 +2129,7 @@
 
                     <!-- Non-visual attachments (audio / documents) if mixed -->
                     {#if nonVisualAttachments.length > 0}
-                      <div class="px-3 pt-2 space-y-1.5">
+                      <div class="px-3 pt-2 pr-9 space-y-1.5">
                         {#each nonVisualAttachments as att (att.id)}
                           {#if att.fileType.startsWith('audio/')}
                             <audio
@@ -1572,19 +2166,105 @@
                       </div>
                     {/if}
                   </div>
+                {:else if isStickerMessage(msg.body) && !msg.deletedAt}
+                  <!-- Sticker rendering: transparent backdrop, expressive scaling -->
+                  {@const sticker = parseSticker(msg.body)}
+                  <div
+                    class="relative group/sticker flex flex-col {isOwn ? 'items-end' : 'items-start'}"
+                    onclick={handleBubbleClick}
+                    onpointerdown={(event) => handleBubblePointerDown(event, msg)}
+                    onpointermove={handleBubblePointerMove}
+                    onpointerup={handleBubblePointerUp}
+                    onpointercancel={handleBubblePointerUp}
+                    onmousedown={(event) => handleBubbleMouseDown(event, msg)}
+                    onmouseup={handleBubblePointerUp}
+                    onmouseleave={handleBubblePointerUp}
+                  >
+                    {#if msg.replyToMessageId}
+                      <button
+                        type="button"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          scrollToRepliedMessage(msg.replyToMessageId);
+                        }}
+                        class="mb-1 w-full text-left rounded-xl border border-hairline border-l-[3.5px] border-l-primary bg-card/95 hover:bg-card p-2 text-xs shadow-2xs transition-colors cursor-pointer select-none outline-none focus:outline-none"
+                        title="Lihat pesan asal"
+                        aria-label={`Lihat pesan asal dari ${msg.replyToSenderName ?? 'pengirim'}`}
+                      >
+                        <span class="font-bold block truncate text-primary">{msg.replyToSenderName ?? 'Balasan'}</span>
+                        <span class="truncate block text-mute">{msg.replyToBody ?? 'Pesan'}</span>
+                      </button>
+                    {/if}
+                    <button
+                      type="button"
+                      oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
+                      class="group/btn relative block focus:outline-none cursor-pointer"
+                      title={sticker?.name ?? 'Stiker'}
+                    >
+                      {#if sticker?.url && sticker.url.startsWith('http')}
+                        <img
+                          src={sticker.url}
+                          alt={sticker.name ?? 'Stiker'}
+                          class="size-28 sm:size-32 object-contain select-none drop-shadow-md transition-transform duration-150 group-hover/btn:scale-108"
+                          loading="lazy"
+                        />
+                      {:else}
+                        <span class="text-6xl sm:text-7xl select-none leading-none py-1 block drop-shadow-sm transition-transform duration-150 group-hover/btn:scale-110">
+                          {sticker?.url}
+                        </span>
+                      {/if}
+                    </button>
+                    <span class="mt-0.5 text-[10px] text-mute font-medium tabular-nums px-1">
+                      {formatDate(msg.createdAt)}
+                    </span>
+                  </div>
                 {:else}
                   <!-- Standard Text / File Bubble: Normal padding -->
+                  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                   <div
-                    class="rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-xs {isOwn ? 'bg-[#2563eb] text-white rounded-br-sm' : 'bg-card border border-hairline text-ink rounded-bl-sm'}"
+                    class="relative group/bubble min-w-[96px] rounded-2xl pl-3.5 pr-3.5 sm:pr-9 py-2 text-sm leading-relaxed shadow-xs {isOwn ? 'bg-[#2563eb] text-white rounded-br-sm' : 'bg-card border border-hairline text-ink rounded-bl-sm'}"
+                    onclick={handleBubbleClick}
+                    oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
+                    onpointerdown={(event) => handleBubblePointerDown(event, msg)}
+                    onpointermove={handleBubblePointerMove}
+                    onpointerup={handleBubblePointerUp}
+                    onpointercancel={handleBubblePointerUp}
+                    onmousedown={(event) => handleBubbleMouseDown(event, msg)}
+                    onmouseup={handleBubblePointerUp}
+                    onmouseleave={handleBubblePointerUp}
                   >
+                    {#if !msg.deletedAt}
+                      <button
+                        type="button"
+                        onclick={(event) => {
+                          event.stopPropagation();
+                          const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+                          openMessageContextMenu(msg, rect.right - 192, rect.bottom + 4);
+                        }}
+                        class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-5.5 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs {isOwn ? 'bg-black/20 text-white/90 hover:bg-black/35 hover:text-white' : 'bg-card/90 text-mute hover:bg-canvas-sunken hover:text-ink border border-hairline/70'}"
+                        aria-label="Opsi pesan"
+                        title="Opsi pesan"
+                      >
+                        <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={2.4} />
+                      </button>
+                    {/if}
                     {#if msg.deletedAt}
                       <span class="italic opacity-60 text-xs">Pesan ini telah dihapus</span>
                     {:else}
                       {#if msg.replyToMessageId}
-                        <div class="mb-1.5 rounded-lg border-l-2 border-primary-border/60 bg-black/5 dark:bg-white/5 p-2 text-xs opacity-80">
-                          <span class="font-bold block">{msg.replyToSenderName ?? 'Balasan'}</span>
-                          <span class="truncate block">{msg.replyToBody ?? 'Pesan'}</span>
-                        </div>
+                        <button
+                          type="button"
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            scrollToRepliedMessage(msg.replyToMessageId);
+                          }}
+                          class="mb-1.5 w-full text-left rounded-lg border-l-[3.5px] p-2 text-xs transition-colors cursor-pointer select-none outline-none focus:outline-none {isOwn ? 'border-white/80 bg-black/25 hover:bg-black/35 text-white' : 'border-primary bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-ink'}"
+                          title="Lihat pesan asal"
+                          aria-label={`Lihat pesan asal dari ${msg.replyToSenderName ?? 'pengirim'}`}
+                        >
+                          <span class="font-bold block truncate {isOwn ? 'text-white' : 'text-primary'}">{msg.replyToSenderName ?? 'Balasan'}</span>
+                          <span class="truncate block opacity-85">{msg.replyToBody ?? 'Pesan'}</span>
+                        </button>
                       {/if}
 
                       {#if msg.attachments && msg.attachments.length > 0}
@@ -1616,7 +2296,14 @@
                       {/if}
 
                       {#if msg.body && msg.body.trim().length > 0}
-                        <p class="{msg.attachments && msg.attachments.length > 0 ? 'mt-2' : ''} whitespace-pre-wrap break-words">{msg.body}</p>
+                        {#if msg.body.startsWith('💥 BUZZ!')}
+                          <div class="my-1 flex items-center gap-2 rounded-xl bg-amber-500/20 border border-amber-500/40 px-3 py-2 text-sm font-bold {isOwn ? 'text-white' : 'text-amber-900 dark:text-amber-200'}">
+                            <span class="text-xl">💥</span>
+                            <p class="whitespace-pre-wrap break-words">{msg.body}</p>
+                          </div>
+                        {:else}
+                          <p class="{msg.attachments && msg.attachments.length > 0 ? 'mt-2' : ''} whitespace-pre-wrap break-words">{msg.body}</p>
+                        {/if}
                       {/if}
                     {/if}
 
@@ -1626,38 +2313,46 @@
                   </div>
                 {/if}
 
-                <!-- Action Button Hover Menu -->
-                <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    label="Balas"
-                    onclick={() => (replyToMessage = msg)}
-                  >
-                    <HugeiconsIcon icon={MailReply01Icon} size={14} strokeWidth={1.8} />
-                  </IconButton>
+                <!-- WhatsApp Floating Reaction Bar -->
+                {#if reactionPickerMessageId === msg.id}
+                  <ChatReactionPicker
+                    open={true}
+                    activeReactions={myReactionsForMsg(msg)}
+                    align={isOwn ? 'right' : 'left'}
+                    onselect={(r) => toggleReaction(msg, r)}
+                    onclose={() => (reactionPickerMessageId = null)}
+                  />
+                {/if}
 
-                  {#if isOwn}
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      label="Hapus pesan"
-                      onclick={() => (deleteMessageTarget = msg)}
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
-                    </IconButton>
-                  {/if}
-                </div>
               </div>
 
-              <!-- Reactions List -->
-              {#if msg.reactions && msg.reactions.length > 0}
-                <div class="mt-1 flex flex-wrap gap-1 px-1">
-                  {#each msg.reactions as r}
-                    <span class="rounded-full border border-hairline bg-card px-2 py-0.5 text-xs text-ink shadow-xs">
-                      {r.reaction}
-                    </span>
+              <!-- Reactions List (WhatsApp style) -->
+              {#if reactionCounts(msg).length > 0}
+                {@const groupedReactions = reactionCounts(msg)}
+                <div class="mt-1 flex flex-wrap items-center gap-1 px-1">
+                  {#each groupedReactions as gr (gr.reaction)}
+                    <button
+                      type="button"
+                      onclick={() => toggleReaction(msg, gr.reaction)}
+                      class="flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-all cursor-pointer active:scale-95 {gr.reactedByMe ? 'border-primary/40 bg-primary-soft text-primary font-semibold ring-1 ring-primary/20 shadow-xs' : 'border-hairline bg-card/90 text-ink hover:bg-canvas-sunken shadow-2xs'}"
+                      title={gr.userNames.length > 0 ? `Bereaksi: ${gr.userNames.join(', ')}` : gr.reaction}
+                    >
+                      <span class="text-sm">{gr.reaction}</span>
+                      {#if gr.count > 1}
+                        <span class="text-[11px] font-bold">{gr.count}</span>
+                      {/if}
+                    </button>
                   {/each}
+
+                  <button
+                    type="button"
+                    onclick={() => (reactionPickerMessageId = reactionPickerMessageId === msg.id ? null : msg.id)}
+                    class="flex size-5.5 items-center justify-center rounded-full border border-hairline bg-card/70 text-mute hover:bg-canvas-sunken hover:text-ink transition-colors text-xs cursor-pointer shadow-2xs"
+                    title="Tambah reaksi"
+                    aria-label="Tambah reaksi"
+                  >
+                    +
+                  </button>
                 </div>
               {/if}
             </div>
@@ -1672,8 +2367,21 @@
       </div>
 
       <!-- Composer Bar -->
-      <footer class="border-t border-hairline bg-card p-3 sm:p-4">
-        {#if replyToMessage}
+      <footer class="border-t border-hairline bg-card p-2 sm:p-3 {editingMessageId ? 'relative z-40' : ''}">
+        {#if editingMessageId}
+          <div class="mb-2 flex items-center justify-between rounded-xl bg-primary-soft border border-primary-border p-2.5 text-xs animate-in fade-in">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <HugeiconsIcon icon={Edit01Icon} size={16} strokeWidth={2} class="text-primary shrink-0" />
+              <div class="min-w-0 flex-1">
+                <span class="font-bold block text-ink">Edit Pesan</span>
+                <p class="truncate text-mute text-[11px]">{messages.find((m) => m.id === editingMessageId)?.body ?? ''}</p>
+              </div>
+            </div>
+            <IconButton variant="ghost" size="sm" label="Batal edit" onclick={cancelEditMessage}>
+              <HugeiconsIcon icon={Cancel01Icon} size={14} />
+            </IconButton>
+          </div>
+        {:else if replyToMessage}
           <div class="mb-2 flex items-center justify-between rounded-xl bg-canvas-sunken p-2.5 text-xs">
             <div class="min-w-0 flex-1">
               <span class="font-bold text-ink">Membalas {replyToMessage.senderName}</span>
@@ -1778,9 +2486,13 @@
         <form
           onsubmit={(e) => {
             e.preventDefault();
-            sendMessage();
+            if (editingMessageId) {
+              saveEditMessage();
+            } else {
+              sendMessage();
+            }
           }}
-          class="flex items-center gap-2"
+          class="relative flex items-center gap-1.5 sm:gap-2"
         >
           <input
             type="file"
@@ -1789,84 +2501,249 @@
             class="hidden"
           />
 
-          <IconButton
-            variant="ghost"
-            size="md"
-            label="Lampirkan file"
-            onclick={() => fileInputEl?.click()}
-            disabled={uploadingAttachment || sendingMessage}
-          >
-            <HugeiconsIcon icon={Attachment01Icon} size={18} strokeWidth={1.8} />
-          </IconButton>
-          {#if isRecordingVoice}
-            <span
-              class="flex items-center gap-1.5 text-xs font-semibold text-status-urgent-ink"
-              role="timer"
-              aria-label={`Durasi rekaman ${formatVoiceDuration(voiceRecordingSeconds)}`}
-            >
-              <span class="size-2 rounded-full bg-status-urgent animate-pulse"></span>
-              {formatVoiceDuration(voiceRecordingSeconds)}
-            </span>
-            <IconButton
-              variant="ghost"
-              size="md"
-              label="Batalkan rekaman suara"
-              onclick={() => stopVoiceRecording(true)}
-            >
-              <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
-            </IconButton>
-            <IconButton
-              variant="primary"
-              size="md"
-              label="Selesai merekam suara"
-              onclick={() => stopVoiceRecording()}
-            >
-              <HugeiconsIcon icon={StopIcon} size={18} strokeWidth={1.8} />
-            </IconButton>
-          {:else}
-            <IconButton
-              variant="ghost"
-              size="md"
-              label={isStartingVoiceRecording ? 'Meminta izin mikrofon' : 'Rekam pesan suara'}
-              onclick={startVoiceRecording}
-              disabled={isStartingVoiceRecording || uploadingAttachment || sendingMessage || voiceDraftFile !== null}
-            >
-              {#if isStartingVoiceRecording}
-                <span class="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true"></span>
-              {:else}
-                <HugeiconsIcon icon={Mic01Icon} size={18} strokeWidth={1.8} />
-              {/if}
-            </IconButton>
-          {/if}
-
-          <Input
-            bind:value={composerText}
-            oninput={handleComposerInput}
-            placeholder="Tulis pesan… (Tekan Enter untuk kirim)"
-            onpaste={handleComposerPaste}
-            class="h-10 flex-1 rounded-xl"
+          <!-- Floating Sticker & Emoji Picker (shared) -->
+          <ChatStickerPicker
+            bind:open={stickerPickerOpen}
+            onselectsticker={(sticker) => {
+              composerText = (composerText ? composerText + ' ' : '') + sticker.url;
+            }}
+            onclose={() => (stickerPickerOpen = false)}
           />
 
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={
-              (!composerText.trim() && pendingAttachments.length === 0 && !voiceDraftFile) ||
-              sendingMessage ||
-              uploadingAttachment ||
-              isStartingVoiceRecording ||
-              isRecordingVoice
-            }
-            class="rounded-xl px-4"
-          >
-            <HugeiconsIcon icon={SentIcon} size={18} strokeWidth={1.8} />
-          </Button>
+          {#if isRecordingVoice}
+            <!-- Active Voice Recording Bar (mobile & desktop) -->
+            <div class="flex items-center gap-1 shrink-0">
+              <span
+                class="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-status-urgent-ink px-1"
+                role="timer"
+                aria-label={`Durasi rekaman ${formatVoiceDuration(voiceRecordingSeconds)}`}
+              >
+                <span class="size-2 rounded-full bg-status-urgent animate-pulse"></span>
+                {formatVoiceDuration(voiceRecordingSeconds)}
+              </span>
+              <IconButton
+                variant="ghost"
+                size="sm"
+                class="size-8 sm:size-9 rounded-full"
+                label="Batalkan rekaman suara"
+                onclick={() => stopVoiceRecording(true)}
+              >
+                <HugeiconsIcon icon={Cancel01Icon} size={16} strokeWidth={1.8} />
+              </IconButton>
+              <IconButton
+                variant="primary"
+                size="sm"
+                class="size-8 sm:size-9 rounded-full"
+                label="Selesai merekam suara"
+                onclick={() => stopVoiceRecording()}
+              >
+                <HugeiconsIcon icon={StopIcon} size={16} strokeWidth={1.8} />
+              </IconButton>
+            </div>
+          {:else}
+            <!-- Mobile '+' Trigger & Dropdown Menu -->
+            <div bind:this={mobileActionsEl} class="relative flex md:hidden items-center shrink-0">
+              <button
+                type="button"
+                onclick={() => (mobileActionsOpen = !mobileActionsOpen)}
+                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-canvas-sunken text-mute hover:bg-hairline hover:text-ink active:scale-95 transition-all cursor-pointer {mobileActionsOpen ? 'bg-primary-soft text-primary ring-2 ring-primary/20' : ''}"
+                title="Tindakan lainnya"
+                aria-label="Tindakan lainnya"
+                disabled={uploadingAttachment || sendingMessage}
+              >
+                <HugeiconsIcon
+                  icon={Add01Icon}
+                  size={19}
+                  strokeWidth={2.2}
+                  class="transition-transform duration-150 {mobileActionsOpen ? 'rotate-45' : ''}"
+                />
+              </button>
+
+              {#if mobileActionsOpen}
+                <div
+                  class="absolute bottom-full mb-3 left-0 z-50 min-w-[200px] rounded-2xl border border-hairline bg-card/95 backdrop-blur-md p-1.5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-150"
+                >
+                  <!-- Lampirkan file -->
+                  <button
+                    type="button"
+                    onclick={() => {
+                      mobileActionsOpen = false;
+                      fileInputEl?.click();
+                    }}
+                    class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-ink hover:bg-canvas-sunken active:bg-canvas-sunken/80 transition-colors cursor-pointer text-left"
+                  >
+                    <div class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
+                      <HugeiconsIcon icon={Attachment01Icon} size={18} strokeWidth={1.8} />
+                    </div>
+                    <span>Lampirkan file</span>
+                  </button>
+
+                  <!-- Stiker & Emoji -->
+                  <button
+                    type="button"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      mobileActionsOpen = false;
+                      stickerPickerOpen = true;
+                    }}
+                    class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-ink hover:bg-canvas-sunken active:bg-canvas-sunken/80 transition-colors cursor-pointer text-left"
+                  >
+                    <div class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
+                      <HugeiconsIcon icon={SmileIcon} size={18} strokeWidth={1.8} />
+                    </div>
+                    <span>Stiker & Emoji</span>
+                  </button>
+
+                  <!-- Pesan Suara -->
+                  <button
+                    type="button"
+                    onclick={() => {
+                      mobileActionsOpen = false;
+                      startVoiceRecording();
+                    }}
+                    disabled={isStartingVoiceRecording || voiceDraftFile !== null}
+                    class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-ink hover:bg-canvas-sunken active:bg-canvas-sunken/80 transition-colors cursor-pointer text-left disabled:opacity-50"
+                  >
+                    <div class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
+                      <HugeiconsIcon icon={Mic01Icon} size={18} strokeWidth={1.8} />
+                    </div>
+                    <span>Pesan Suara</span>
+                  </button>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Desktop Action Icons Cluster (Preserved & Properly Sized) -->
+            <div class="hidden md:flex items-center gap-1 shrink-0">
+              <IconButton
+                variant="ghost"
+                size="md"
+                class="size-10 rounded-full"
+                label="Lampirkan file"
+                onclick={() => fileInputEl?.click()}
+                disabled={uploadingAttachment || sendingMessage}
+              >
+                <HugeiconsIcon icon={Attachment01Icon} size={21} strokeWidth={1.8} />
+              </IconButton>
+
+              <IconButton
+                variant="ghost"
+                size="md"
+                class="size-10 rounded-full {stickerPickerOpen ? 'text-primary bg-primary-soft/60' : ''}"
+                label="Pilih stiker & emoji"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  stickerPickerOpen = !stickerPickerOpen;
+                }}
+                disabled={uploadingAttachment || sendingMessage}
+              >
+                <HugeiconsIcon icon={SmileIcon} size={21} strokeWidth={1.8} />
+              </IconButton>
+
+              <IconButton
+                variant="ghost"
+                size="md"
+                class="size-10 rounded-full"
+                label={isStartingVoiceRecording ? 'Meminta izin mikrofon' : 'Rekam pesan suara'}
+                onclick={startVoiceRecording}
+                disabled={isStartingVoiceRecording || uploadingAttachment || sendingMessage || voiceDraftFile !== null}
+              >
+                {#if isStartingVoiceRecording}
+                  <span class="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true"></span>
+                {:else}
+                  <HugeiconsIcon icon={Mic01Icon} size={21} strokeWidth={1.8} />
+                {/if}
+              </IconButton>
+            </div>
+
+          {/if}
+
+          <!-- Text Input -->
+          <div class="relative min-w-0 flex-1">
+            <input
+              bind:this={composerInputElement}
+              type="text"
+              bind:value={composerText}
+              oninput={handleComposerInput}
+              onpaste={handleComposerPaste}
+              placeholder={editingMessageId ? 'Edit pesan…' : 'Tulis pesan…'}
+              class="h-9 sm:h-10 w-full rounded-full border border-hairline bg-canvas-sunken/60 px-3.5 sm:px-4 text-xs sm:text-sm text-ink placeholder:text-mute focus:border-primary focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all {editingMessageId ? 'ring-2 ring-primary/30 border-primary bg-card' : ''}"
+            />
+          </div>
+
+          <!-- Send / Save Edit Button -->
+          {#if editingMessageId}
+            <button
+              type="submit"
+              disabled={!composerText.trim() || sendingMessage}
+              class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              aria-label="Simpan pesan yang diedit"
+              title="Simpan editan"
+            >
+              <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={2.4} />
+            </button>
+          {:else}
+            <button
+              type="submit"
+              disabled={
+                (!composerText.trim() && pendingAttachments.length === 0 && !voiceDraftFile) ||
+                sendingMessage ||
+                uploadingAttachment ||
+                isStartingVoiceRecording ||
+                isRecordingVoice
+              }
+              class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              aria-label="Kirim pesan"
+            >
+              <HugeiconsIcon icon={SentIcon} size={17} class="translate-x-0.5" strokeWidth={2} />
+            </button>
+          {/if}
         </form>
       </footer>
     {/if}
   </main>
 </div>
+
+<!-- Mobile Floating Action Button (FAB) matching Image #1 -->
+{#if !activeConversationId}
+  <div class="fixed bottom-20 right-4 z-30 md:hidden flex flex-col items-end gap-2">
+    {#if mobileFabOpen}
+      <div class="flex flex-col items-end gap-2 mb-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <button
+          type="button"
+          onclick={() => {
+            mobileFabOpen = false;
+            openCreateGroupModal();
+          }}
+          class="flex items-center gap-2 rounded-full border border-hairline bg-card py-2 px-3.5 text-xs font-bold text-ink shadow-lg active:scale-95 transition-all cursor-pointer"
+        >
+          <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} class="text-primary" />
+          <span>Cipta Kumpulan</span>
+        </button>
+        <button
+          type="button"
+          onclick={() => {
+            mobileFabOpen = false;
+            openNewDirectModal();
+          }}
+          class="flex items-center gap-2 rounded-full border border-hairline bg-card py-2 px-3.5 text-xs font-bold text-ink shadow-lg active:scale-95 transition-all cursor-pointer"
+        >
+          <HugeiconsIcon icon={Edit01Icon} size={16} strokeWidth={1.8} class="text-primary" />
+          <span>Tulis Mesej</span>
+        </button>
+      </div>
+    {/if}
+
+    <button
+      type="button"
+      onclick={() => (mobileFabOpen = !mobileFabOpen)}
+      class="flex size-12 items-center justify-center rounded-full bg-card/95 backdrop-blur-md border border-hairline text-mute shadow-lg shadow-black/10 transition-transform active:scale-95 cursor-pointer hover:bg-canvas-sunken hover:text-ink"
+      aria-label="Tindakan baru"
+    >
+      <HugeiconsIcon icon={mobileFabOpen ? Cancel01Icon : Settings01Icon} size={22} strokeWidth={1.8} />
+    </button>
+  </div>
+{/if}
 
 <!-- Modal: Tulis Pesan Baru (Direct) -->
 <Dialog bind:open={newDirectOpen} title="Tulis Pesan Baru" description="Pilih rekan kerja untuk memulai obrolan langsung." size="md">
@@ -1947,6 +2824,28 @@
   {/snippet}
 </Dialog>
 
+<!-- Message context actions -->
+<ChatMessageContextMenu
+  bind:open={contextMenuOpen}
+  x={contextMenuX}
+  y={contextMenuY}
+  message={contextMenuMessage}
+  currentUserId={userId}
+  onreact={(msg) => (reactionPickerMessageId = msg.id)}
+  ontogglereaction={(msg, r) => toggleReaction(msg, r)}
+  onreply={(msg) => (replyToMessage = msg)}
+  onforward={openForwardDialog}
+  onpin={togglePinMessage}
+  onedit={startEditMessage}
+  ondelete={(msg) => (deleteMessageTarget = msg)}
+/>
+<ChatForwardDialog
+  bind:open={forwardDialogOpen}
+  message={forwardSourceMessage}
+  conversations={conversations.filter((conversation) => conversation.workspaceId === activeConversation?.workspaceId)}
+  currentConversationId={activeConversationId}
+  onforward={forwardMessageTo}
+/>
 <!-- Confirm Delete Message Modal -->
 <ConfirmDialog
   open={deleteMessageTarget !== null}
@@ -1970,3 +2869,333 @@
     <img src={lightboxSrc} alt="Preview" class="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl" />
   </div>
 {/if}
+
+<!-- Modal: Informasi Grup Chat (Image 3, 4, 2) -->
+<Dialog
+  bind:open={roomInfoOpen}
+  size="md"
+  title={roomInfoTab === 'info' ? 'Info Grup' : roomInfoTab === 'media' ? 'Media & Lampiran' : 'Pesan Disematkan'}
+>
+  {#if roomInfoTab === 'media'}
+    <div class="space-y-3">
+      <div class="flex items-center gap-2 mb-2">
+        <Button variant="ghost" size="sm" onclick={() => (roomInfoTab = 'info')} class="gap-1 text-xs">
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={14} />
+          Kembali ke Info
+        </Button>
+      </div>
+
+      {#if activeConversationAttachments.length === 0}
+        <div class="py-8 text-center text-xs text-mute">
+          Belum ada media, tautan, atau lampiran dokumen.
+        </div>
+      {:else}
+        <div class="max-h-80 overflow-y-auto space-y-2 pr-1">
+          {#each activeConversationAttachments as att (att.id)}
+            <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-hairline bg-surface hover:bg-canvas-sunken transition-colors">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                  {#if att.fileType.startsWith('image/')}
+                    <HugeiconsIcon icon={Attachment01Icon} size={18} />
+                  {:else if att.fileType.startsWith('video/')}
+                    <HugeiconsIcon icon={Video01Icon} size={18} />
+                  {:else}
+                    <HugeiconsIcon icon={File02Icon} size={18} />
+                  {/if}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs font-semibold text-ink">{att.fileName}</p>
+                  <p class="text-[10px] text-mute">{formatFileSize(att.fileSize)}</p>
+                </div>
+              </div>
+              <a
+                href={att.filePath}
+                target="_blank"
+                rel="noreferrer"
+                download={att.fileName}
+                class="flex size-8 shrink-0 items-center justify-center rounded-lg text-mute hover:bg-lane hover:text-ink transition-colors"
+                title="Unduh berkas"
+              >
+                <HugeiconsIcon icon={Download04Icon} size={16} />
+              </a>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {:else if roomInfoTab === 'pinned'}
+    <div class="space-y-3">
+      <div class="flex items-center gap-2 mb-2">
+        <Button variant="ghost" size="sm" onclick={() => (roomInfoTab = 'info')} class="gap-1 text-xs">
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={14} />
+          Kembali ke Info
+        </Button>
+      </div>
+
+      {#if pinnedMessages.length === 0}
+        <div class="py-8 text-center text-xs text-mute">
+          Tidak ada pesan yang disematkan.
+        </div>
+      {:else}
+        <div class="max-h-80 overflow-y-auto space-y-2 pr-1">
+          {#each pinnedMessages as pinMsg (pinMsg.id)}
+            <div class="p-3 rounded-xl border border-hairline bg-surface space-y-1">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-ink">{pinMsg.senderName}</span>
+                <span class="text-[10px] text-mute">{formatDate(pinMsg.createdAt)}</span>
+              </div>
+              <p class="text-xs text-ink whitespace-pre-wrap">{pinMsg.body || '(Lampiran berkas)'}</p>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <!-- Tab Info (Default layout matching Image 3, 4, 2) -->
+    <div class="space-y-5">
+      <!-- Image 3: Group Avatar, Title & Subtitle -->
+      <div class="flex flex-col items-center text-center pt-1 pb-2">
+        {#if activeConversation?.kind === 'taskboard'}
+          <div class="flex size-20 items-center justify-center rounded-full bg-sky-100 text-sky-700 shadow-sm dark:bg-sky-950/60 dark:text-sky-300">
+            <HugeiconsIcon icon={KanbanIcon} size={36} strokeWidth={1.8} />
+          </div>
+        {:else if activeConversation?.kind === 'workflow'}
+          <div class="flex size-20 items-center justify-center rounded-full bg-amber-100 text-amber-700 shadow-sm dark:bg-amber-950/60 dark:text-amber-300">
+            <HugeiconsIcon icon={WorkflowSquare01Icon} size={36} strokeWidth={1.8} />
+          </div>
+        {:else}
+          <div class="flex size-20 items-center justify-center rounded-full bg-primary-soft text-primary shadow-sm">
+            <HugeiconsIcon icon={UserGroupIcon} size={36} strokeWidth={1.8} />
+          </div>
+        {/if}
+
+        <h3 class="mt-3.5 text-lg font-bold text-ink sm:text-xl leading-snug max-w-sm">
+          {activeConversation ? conversationDisplayName(activeConversation) : 'Obrolan Grup'}
+        </h3>
+
+        <div class="mt-1 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <span>
+            {activeConversation?.kind === 'taskboard'
+              ? 'Taskboard'
+              : activeConversation?.kind === 'workflow'
+                ? 'Workflow'
+                : 'Grup'}
+          </span>
+          <span>·</span>
+          <span>{roomParticipants.length} anggota</span>
+        </div>
+
+        {#if activeConversationDetail?.description}
+          <p class="mt-2 text-xs text-mute max-w-sm leading-relaxed">
+            {activeConversationDetail.description}
+          </p>
+        {/if}
+      </div>
+
+      <!-- Image 4: Media, links & docs + Starred / Pinned Section -->
+      <div class="overflow-hidden rounded-2xl border border-hairline bg-surface/40 divide-y divide-hairline">
+        <button
+          type="button"
+          onclick={() => (roomInfoTab = 'media')}
+          class="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-canvas-sunken/60 cursor-pointer"
+        >
+          <div class="flex items-center gap-3">
+            <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-canvas-sunken text-mute">
+              <HugeiconsIcon icon={File02Icon} size={16} strokeWidth={1.8} />
+            </div>
+            <span class="text-sm font-medium text-ink">Media, tautan dan dokumen</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-mute">
+            <span>{activeConversationDetail?.mediaCount ?? activeConversationAttachments.length}</span>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={15} class="text-faint" />
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onclick={() => (roomInfoTab = 'pinned')}
+          class="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-canvas-sunken/60 cursor-pointer"
+        >
+          <div class="flex items-center gap-3">
+            <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-canvas-sunken text-mute">
+              <HugeiconsIcon icon={PinIcon} size={16} strokeWidth={1.8} />
+            </div>
+            <span class="text-sm font-medium text-ink">Pesan disematkan</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-mute">
+            <span>{activeConversationDetail?.starredCount ?? pinnedMessages.length}</span>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={15} class="text-faint" />
+          </div>
+        </button>
+      </div>
+
+      <!-- Image 2: Members List Section -->
+      <div class="space-y-3">
+        <!-- Members header + search toggle -->
+        <div class="flex items-center justify-between px-1">
+          <h4 class="text-sm font-bold text-ink">
+            {roomParticipants.length} anggota
+          </h4>
+          <IconButton
+            variant="card"
+            size="sm"
+            label="Cari anggota"
+            onclick={() => (isSearchingParticipants = !isSearchingParticipants)}
+          >
+            <HugeiconsIcon icon={Search01Icon} size={18} strokeWidth={1.8} />
+          </IconButton>
+        </div>
+
+        {#if isSearchingParticipants}
+          <div class="px-1">
+            <SearchInput
+              bind:value={roomParticipantSearch}
+              placeholder="Cari anggota obrolan…"
+              size="sm"
+            />
+          </div>
+        {/if}
+
+        <div class="rounded-2xl border border-hairline bg-surface/30 divide-y divide-hairline overflow-hidden">
+          <!-- Add member option (if Owner) -->
+          {#if activeConversationDetail?.isOwner}
+            <button
+              type="button"
+              onclick={openAddMemberModal}
+              class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-canvas-sunken/60 text-primary font-medium text-xs sm:text-sm cursor-pointer"
+            >
+              <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2} />
+              </div>
+              <span class="font-semibold text-ink">Tambah anggota</span>
+            </button>
+          {/if}
+
+          <!-- Participant Rows -->
+          <div class="max-h-60 overflow-y-auto divide-y divide-hairline">
+            {#each filteredParticipants as member (member.userId)}
+              {@const isSelf = member.userId === userId}
+              {@const isMemberOwner = Boolean(member.isOwner)}
+              <div class="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-canvas-sunken/40">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  <Avatar
+                    name={member.name}
+                    src={member.avatarUrl ?? undefined}
+                    size={36}
+                    online={onlineUserIds.has(member.userId)}
+                  />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5">
+                      <span class="truncate text-xs sm:text-sm font-semibold text-ink">
+                        {isSelf ? 'Anda' : member.name}
+                      </span>
+                      {#if isSelf && !member.isOwner}
+                        <span class="text-[11px] text-mute">(Anda)</span>
+                      {/if}
+                    </div>
+                    <p class="truncate text-[11px] text-mute">{member.email}</p>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  {#if isMemberOwner}
+                    <Badge tone="progress" variant="soft" class="text-[10px] font-bold">Owner</Badge>
+                  {:else if member.role === 'admin'}
+                    <Badge tone="neutral" variant="soft" class="text-[10px] font-semibold">Admin</Badge>
+                  {/if}
+
+                  <!-- Remove action button: only shown if current user is owner, and target is NOT the owner and NOT self -->
+                  {#if activeConversationDetail?.isOwner && !isSelf && !isMemberOwner}
+                    <button
+                      type="button"
+                      onclick={() => promptRemoveMember(member)}
+                      title="Keluarkan dari grup chat"
+                      aria-label="Keluarkan anggota dari grup chat"
+                      class="flex size-7 items-center justify-center rounded-lg text-mute hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#snippet footer()}
+    <div class="flex justify-end">
+      <Button variant="secondary" onclick={() => (roomInfoOpen = false)}>Tutup</Button>
+    </div>
+  {/snippet}
+</Dialog>
+
+<!-- Modal: Tambah Anggota ke Grup -->
+<Dialog
+  bind:open={addMemberOpen}
+  title="Tambah Anggota"
+  description="Pilih anggota workspace untuk dimasukkan ke dalam grup chat ini."
+  size="sm"
+>
+  <div class="space-y-3">
+    <SearchInput bind:value={addMemberSearch} placeholder="Cari anggota workspace…" size="sm" />
+    <div class="max-h-60 overflow-y-auto divide-y divide-hairline rounded-xl border border-hairline">
+      {#if loadingAvailableMembers}
+        <div class="p-4 text-center text-xs text-mute">Memuat anggota workspace…</div>
+      {:else}
+        {@const filtered = availableWorkspaceMembers.filter(
+          (m) =>
+            !addMemberSearch ||
+            m.name.toLowerCase().includes(addMemberSearch.toLowerCase()) ||
+            m.email.toLowerCase().includes(addMemberSearch.toLowerCase())
+        )}
+        {#if filtered.length === 0}
+          <div class="p-4 text-center text-xs text-mute">
+            {addMemberSearch ? 'Tidak ada anggota yang cocok' : 'Semua anggota workspace sudah ada di obrolan ini.'}
+          </div>
+        {:else}
+          {#each filtered as member (member.id)}
+            <button
+              type="button"
+              disabled={addingMember}
+              onclick={() => handleAddMember(member)}
+              class="flex w-full items-center justify-between gap-3 p-2.5 text-left transition-colors hover:bg-canvas-sunken disabled:opacity-50 cursor-pointer"
+            >
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={32} />
+                <div class="min-w-0 flex-1">
+                  <span class="block truncate text-xs font-semibold text-ink">{member.name}</span>
+                  <span class="block truncate text-[11px] text-mute">{member.email}</span>
+                </div>
+              </div>
+              <span class="text-xs font-medium text-primary hover:underline shrink-0">
+                + Tambah
+              </span>
+            </button>
+          {/each}
+        {/if}
+      {/if}
+    </div>
+  </div>
+  {#snippet footer()}
+    <Button variant="secondary" onclick={() => (addMemberOpen = false)}>Batal</Button>
+  {/snippet}
+</Dialog>
+
+<!-- Confirm Dialog: Keluarkan Anggota dari Grup Chat -->
+<ConfirmDialog
+  open={removeConfirmOpen}
+  title="Keluarkan dari Obrolan Grup?"
+  description={`Apakah Anda yakin ingin mengeluarkan ${memberToRemove?.name ?? 'anggota ini'} dari grup obrolan ini? Akses hanya akan dihapus dari obrolan ini dan tidak akan menghapus pengguna dari workspace atau group member.`}
+  confirmLabel="Keluarkan"
+  cancelLabel="Batal"
+  destructive={true}
+  loading={removingMember}
+  onconfirm={handleRemoveMember}
+  oncancel={() => {
+    removeConfirmOpen = false;
+    memberToRemove = null;
+  }}
+/>

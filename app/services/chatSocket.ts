@@ -33,7 +33,8 @@ export type ChatSocketEvent =
   | { type: 'message:new'; conversationId: string; message: unknown }
   | { type: 'message:edit'; conversationId: string; messageId: string; body: string; editedAt: string }
   | { type: 'message:delete'; conversationId: string; messageId: string; deletedAt: string }
-  | { type: 'reaction:toggle'; conversationId: string; messageId: string; userId: string; reaction: string; action: 'added' | 'removed' }
+  | { type: 'message:pin'; conversationId: string; messageId: string; pinnedAt: string | null; pinnedById: string | null }
+  | { type: 'reaction:toggle'; conversationId: string; messageId: string; userId: string; userName?: string; reaction: string; action: 'added' | 'removed' }
   | { type: 'read'; conversationId: string; userId: string }
   | { type: 'conversation:update'; conversationId: string }
   | { type: 'presence:state'; userIds: string[] }
@@ -41,6 +42,18 @@ export type ChatSocketEvent =
   | { type: 'presence:user_offline'; userId: string }
   | { type: 'typing'; conversationId: string; userId: string; isTyping: boolean }
   | { type: 'connected'; userId: string; onlineUsers: string[] }
+  | {
+      type: 'buzz:send';
+      workspaceId: string;
+      senderId: string;
+      senderName: string;
+      targetUserId?: string;
+      conversationId?: string;
+      taskId?: string;
+      taskTitle?: string;
+      note?: string;
+      createdAt: string;
+    }
   | { type: 'pong' };
 
 export type ClientChatSocketMessage =

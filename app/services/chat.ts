@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import {
   db,
   chatAttachments,
@@ -9,10 +9,13 @@ import {
   users,
   workspaceMemberGroupMembers,
   workspaceMemberGroups,
-  workspaceMembers
+  workspaceMembers,
+  tasks,
+  taskBoards,
+  workflows
 } from '@db';
 import { createWorkspaceMemberGroup, listWorkspacesForUser } from '@services/workspace';
-import { broadcastToUsers } from '@services/chatSocket';
+import { broadcastToUsers, type ChatSocketEvent } from './chatSocket';
 import { createNotification } from '@services/notification';
 import { mergeWorkspaceConversations, type ChatInboxWorkspace } from './chatInbox';
 export { mergeWorkspaceConversations, type ChatInboxWorkspace } from './chatInbox';
@@ -52,6 +55,227 @@ const findWorkspaceMember = async (workspaceId: string, memberId: string) => {
   return member ?? null;
 };
 
+/** Check if a user has access to a taskboard or workflow */
+export const checkContextAccess = async (
+  workspaceId: string,
+  contextType: 'taskboard' | 'workflow' | string | null | undefined,
+  contextId: string | null | undefined,
+  groupId: string | null | undefined,
+  userId: string
+): Promise<boolean> => {
+  if (!contextId || (contextType !== 'taskboard' && contextType !== 'workflow')) return false;
+
+  const [workspaceMember] = await db
+    .select({ role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+    .limit(1);
+
+  if (!workspaceMember) return false;
+  if (workspaceMember.role === 'owner') return true;
+
+  if (contextType === 'taskboard') {
+    const [board] = await db
+      .select({
+        ownerId: taskBoards.ownerId,
+        workspaceMemberGroupId: taskBoards.workspaceMemberGroupId,
+        workspaceMemberGroupIds: taskBoards.workspaceMemberGroupIds,
+        allowedUserIds: taskBoards.allowedUserIds
+      })
+      .from(taskBoards)
+      .where(and(eq(taskBoards.id, contextId), eq(taskBoards.workspaceId, workspaceId)))
+      .limit(1);
+
+    if (!board) return false;
+    if (board.ownerId === userId) return true;
+
+    const groupIds = (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0)
+      ? board.workspaceMemberGroupIds
+      : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []);
+    const allowedUsers = board.allowedUserIds ?? [];
+
+    if (groupIds.length === 0 && allowedUsers.length === 0) return true;
+    if (allowedUsers.includes(userId)) return true;
+
+    if (groupIds.length > 0) {
+      const [groupMember] = await db
+        .select({ id: workspaceMemberGroupMembers.id })
+        .from(workspaceMemberGroupMembers)
+        .where(
+          and(
+            inArray(workspaceMemberGroupMembers.groupId, groupIds),
+            eq(workspaceMemberGroupMembers.userId, userId)
+          )
+        )
+        .limit(1);
+
+      return Boolean(groupMember);
+    }
+    return false;
+  }
+
+  if (contextType === 'workflow') {
+    const [wf] = await db
+      .select({
+        ownerId: workflows.ownerId,
+        workspaceMemberGroupId: workflows.workspaceMemberGroupId,
+        workspaceMemberGroupIds: workflows.workspaceMemberGroupIds,
+        allowedUserIds: workflows.allowedUserIds
+      })
+      .from(workflows)
+      .where(and(eq(workflows.id, contextId), eq(workflows.workspaceId, workspaceId)))
+      .limit(1);
+
+    if (!wf) return false;
+    if (wf.ownerId === userId) return true;
+
+    const groupIds = (wf.workspaceMemberGroupIds && wf.workspaceMemberGroupIds.length > 0)
+      ? wf.workspaceMemberGroupIds
+      : (wf.workspaceMemberGroupId ? [wf.workspaceMemberGroupId] : []);
+    const allowedUsers = wf.allowedUserIds ?? [];
+
+    if (groupIds.length === 0 && allowedUsers.length === 0) return true;
+    if (allowedUsers.includes(userId)) return true;
+
+    if (groupIds.length > 0) {
+      const [groupMember] = await db
+        .select({ id: workspaceMemberGroupMembers.id })
+        .from(workspaceMemberGroupMembers)
+        .where(
+          and(
+            inArray(workspaceMemberGroupMembers.groupId, groupIds),
+            eq(workspaceMemberGroupMembers.userId, userId)
+          )
+        )
+        .limit(1);
+
+      return Boolean(groupMember);
+    }
+    return false;
+  }
+
+  return false;
+};
+
+/** Ensure all workspace/group members who have access to a context conversation are enrolled as participants */
+export const syncContextParticipants = async (conversationId: string) => {
+  const [conversation] = await db
+    .select({
+      id: chatConversations.id,
+      workspaceId: chatConversations.workspaceId,
+      contextType: chatConversations.contextType,
+      contextId: chatConversations.contextId,
+      groupId: chatConversations.groupId,
+      createdById: chatConversations.createdById
+    })
+    .from(chatConversations)
+    .where(eq(chatConversations.id, conversationId))
+    .limit(1);
+
+  if (!conversation || !conversation.contextId || (conversation.contextType !== 'taskboard' && conversation.contextType !== 'workflow')) {
+    return;
+  }
+
+  let eligibleUserIds: string[] = [];
+
+  const wsMembers = await db
+    .select({ userId: workspaceMembers.userId, role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, conversation.workspaceId));
+
+  const workspaceOwnerIds = wsMembers.filter((m) => m.role === 'owner').map((m) => m.userId);
+
+  if (conversation.contextType === 'taskboard') {
+    const [board] = await db
+      .select({
+        ownerId: taskBoards.ownerId,
+        workspaceMemberGroupId: taskBoards.workspaceMemberGroupId,
+        workspaceMemberGroupIds: taskBoards.workspaceMemberGroupIds,
+        allowedUserIds: taskBoards.allowedUserIds
+      })
+      .from(taskBoards)
+      .where(eq(taskBoards.id, conversation.contextId))
+      .limit(1);
+
+    if (board) {
+      const groupIds = (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0)
+        ? board.workspaceMemberGroupIds
+        : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []);
+      const allowedUsers = board.allowedUserIds ?? [];
+
+      if (groupIds.length === 0 && allowedUsers.length === 0) {
+        eligibleUserIds = wsMembers.map((m) => m.userId);
+      } else {
+        const groupMembers = groupIds.length > 0
+          ? await db
+              .select({ userId: workspaceMemberGroupMembers.userId })
+              .from(workspaceMemberGroupMembers)
+              .where(inArray(workspaceMemberGroupMembers.groupId, groupIds))
+          : [];
+        eligibleUserIds = [
+          ...new Set([
+            ...groupMembers.map((m) => m.userId),
+            ...allowedUsers,
+            board.ownerId,
+            ...workspaceOwnerIds
+          ])
+        ];
+      }
+    }
+  } else if (conversation.contextType === 'workflow') {
+    const [wf] = await db
+      .select({
+        ownerId: workflows.ownerId,
+        workspaceMemberGroupId: workflows.workspaceMemberGroupId,
+        workspaceMemberGroupIds: workflows.workspaceMemberGroupIds,
+        allowedUserIds: workflows.allowedUserIds
+      })
+      .from(workflows)
+      .where(eq(workflows.id, conversation.contextId))
+      .limit(1);
+
+    if (wf) {
+      const groupIds = (wf.workspaceMemberGroupIds && wf.workspaceMemberGroupIds.length > 0)
+        ? wf.workspaceMemberGroupIds
+        : (wf.workspaceMemberGroupId ? [wf.workspaceMemberGroupId] : []);
+      const allowedUsers = wf.allowedUserIds ?? [];
+
+      if (groupIds.length === 0 && allowedUsers.length === 0) {
+        eligibleUserIds = wsMembers.map((m) => m.userId);
+      } else {
+        const groupMembers = groupIds.length > 0
+          ? await db
+              .select({ userId: workspaceMemberGroupMembers.userId })
+              .from(workspaceMemberGroupMembers)
+              .where(inArray(workspaceMemberGroupMembers.groupId, groupIds))
+          : [];
+        eligibleUserIds = [
+          ...new Set([
+            ...groupMembers.map((m) => m.userId),
+            ...allowedUsers,
+            wf.ownerId,
+            ...workspaceOwnerIds
+          ])
+        ];
+      }
+    }
+  }
+
+  if (eligibleUserIds.length > 0) {
+    await db
+      .insert(chatParticipants)
+      .values(
+        eligibleUserIds.map((userId) => ({
+          conversationId,
+          workspaceId: conversation.workspaceId,
+          userId,
+          role: userId === conversation.createdById ? ('admin' as const) : ('member' as const)
+        }))
+      )
+      .onConflictDoNothing();
+  }
+};
+
 /** Verify that `userId` is an active participant of `conversationId`. */
 const assertParticipant = async (conversationId: string, userId: string) => {
   const [participant] = await db
@@ -65,7 +289,43 @@ const assertParticipant = async (conversationId: string, userId: string) => {
       )
     )
     .limit(1);
-  return participant ?? null;
+
+  if (participant) return participant;
+
+  // Auto-sync for context conversations (taskboard / workflow)
+  const [conversation] = await db
+    .select({
+      id: chatConversations.id,
+      workspaceId: chatConversations.workspaceId,
+      contextType: chatConversations.contextType,
+      contextId: chatConversations.contextId,
+      groupId: chatConversations.groupId
+    })
+    .from(chatConversations)
+    .where(eq(chatConversations.id, conversationId))
+    .limit(1);
+
+  if (conversation && (conversation.contextType === 'taskboard' || conversation.contextType === 'workflow') && conversation.contextId) {
+    const hasAccess = await checkContextAccess(conversation.workspaceId, conversation.contextType, conversation.contextId, conversation.groupId, userId);
+    if (hasAccess) {
+      const [newParticipant] = await db
+        .insert(chatParticipants)
+        .values({
+          conversationId,
+          workspaceId: conversation.workspaceId,
+          userId,
+          role: 'member'
+        })
+        .onConflictDoUpdate({
+          target: [chatParticipants.conversationId, chatParticipants.userId],
+          set: { leftAt: null }
+        })
+        .returning();
+      return newParticipant ?? null;
+    }
+  }
+
+  return null;
 };
 
 /** Get conversation, verifying it belongs to `workspaceId`. */
@@ -184,6 +444,40 @@ export const listConversations = async (
   userId: string,
   search?: string
 ): Promise<ConversationListItem[]> => {
+  // Auto-sync active context conversations in this workspace that the user has access to
+  const contextConvs = await db
+    .select({
+      id: chatConversations.id,
+      contextType: chatConversations.contextType,
+      contextId: chatConversations.contextId,
+      groupId: chatConversations.groupId
+    })
+    .from(chatConversations)
+    .where(
+      and(
+        eq(chatConversations.workspaceId, workspaceId),
+        inArray(chatConversations.contextType, ['taskboard', 'workflow']),
+        isNull(chatConversations.archivedAt)
+      )
+    );
+
+  for (const conv of contextConvs) {
+    if (conv.contextId && (conv.contextType === 'taskboard' || conv.contextType === 'workflow')) {
+      const hasAccess = await checkContextAccess(workspaceId, conv.contextType, conv.contextId, conv.groupId, userId);
+      if (hasAccess) {
+        await db
+          .insert(chatParticipants)
+          .values({
+            conversationId: conv.id,
+            workspaceId,
+            userId,
+            role: 'member'
+          })
+          .onConflictDoNothing();
+      }
+    }
+  }
+
   // Get all active conversations for the user in this workspace
   const participantRows = await db
     .select({
@@ -577,9 +871,100 @@ type ConversationDetail = {
   contextId: string | null;
   groupId: string | null;
   name: string | null;
+  description?: string | null;
+  ownerId?: string | null;
+  isOwner?: boolean;
+  canManageMembers?: boolean;
+  mediaCount?: number;
+  starredCount?: number;
   partner: { id: string; name: string; email: string; avatarUrl: string | null; role: string } | null;
-  participants: Array<{ userId: string; name: string; email: string; avatarUrl: string | null; role: string }>;
+  participants: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+    role: string;
+    isOwner?: boolean;
+  }>;
   userRole: 'admin' | 'member';
+};
+
+export const getConversationOwnerInfo = async (
+  workspaceId: string,
+  conversation: {
+    id: string;
+    kind: string;
+    contextType: 'group' | 'taskboard' | 'workflow' | null;
+    contextId: string | null;
+    groupId: string | null;
+    createdById: string;
+  }
+): Promise<{ ownerId: string | null; description: string | null }> => {
+  let ownerId: string | null = conversation.createdById;
+  let description: string | null = null;
+
+  if (conversation.contextType === 'taskboard' && conversation.contextId) {
+    const [board] = await db
+      .select({ ownerId: taskBoards.ownerId, description: taskBoards.description })
+      .from(taskBoards)
+      .where(and(eq(taskBoards.id, conversation.contextId), eq(taskBoards.workspaceId, workspaceId)))
+      .limit(1);
+    if (board) {
+      ownerId = board.ownerId;
+      description = board.description;
+    }
+  } else if (conversation.contextType === 'workflow' && conversation.contextId) {
+    const [wf] = await db
+      .select({ ownerId: workflows.ownerId, description: workflows.description })
+      .from(workflows)
+      .where(and(eq(workflows.id, conversation.contextId), eq(workflows.workspaceId, workspaceId)))
+      .limit(1);
+    if (wf) {
+      ownerId = wf.ownerId;
+      description = wf.description;
+    }
+  } else if (conversation.groupId) {
+    const [grp] = await db
+      .select({ createdById: workspaceMemberGroups.createdById })
+      .from(workspaceMemberGroups)
+      .where(and(eq(workspaceMemberGroups.id, conversation.groupId), eq(workspaceMemberGroups.workspaceId, workspaceId)))
+      .limit(1);
+    if (grp) {
+      ownerId = grp.createdById;
+    }
+  }
+
+  return { ownerId, description };
+};
+
+export const canUserManageConversation = async (
+  workspaceId: string,
+  conversation: {
+    id: string;
+    kind: string;
+    contextType: 'group' | 'taskboard' | 'workflow' | null;
+    contextId: string | null;
+    groupId: string | null;
+    createdById: string;
+  },
+  userId: string,
+  userParticipantRole?: string
+): Promise<boolean> => {
+  if (conversation.createdById === userId) return true;
+
+  const { ownerId } = await getConversationOwnerInfo(workspaceId, conversation);
+  if (ownerId && ownerId === userId) return true;
+
+  if (userParticipantRole === 'admin') return true;
+
+  const [wm] = await db
+    .select({ role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+    .limit(1);
+  if (wm?.role === 'owner') return true;
+
+  return false;
 };
 
 export const getConversationDetail = async (
@@ -594,6 +979,24 @@ export const getConversationDetail = async (
   if (!participation) return null;
 
   const participants = await getParticipants(conversationId);
+  const { ownerId, description } = await getConversationOwnerInfo(workspaceId, conversation);
+  const isOwner = await canUserManageConversation(workspaceId, conversation, userId, participation.role);
+
+  const [attachmentRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(chatAttachments)
+    .where(eq(chatAttachments.conversationId, conversationId));
+
+  const [pinnedRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.conversationId, conversationId),
+        isNotNull(chatMessages.pinnedAt),
+        isNull(chatMessages.deletedAt)
+      )
+    );
 
   let partner: ConversationDetail['partner'] = null;
   if (conversation.kind === 'direct') {
@@ -616,13 +1019,20 @@ export const getConversationDetail = async (
     contextId: conversation.contextId,
     groupId: conversation.groupId,
     name: conversation.name,
+    description,
+    ownerId,
+    isOwner,
+    canManageMembers: isOwner,
+    mediaCount: attachmentRow?.count ?? 0,
+    starredCount: pinnedRow?.count ?? 0,
     partner,
     participants: participants.map((p) => ({
       userId: p.userId,
       name: p.name,
       email: p.email,
       avatarUrl: p.avatarUrl,
-      role: p.role
+      role: p.role,
+      isOwner: p.userId === ownerId || p.userId === conversation.createdById
     })),
     userRole: participation.role as 'admin' | 'member'
   };
@@ -638,10 +1048,13 @@ export const renameRoom = async (
 ): Promise<boolean> => {
   const conversation = await getConversation(workspaceId, conversationId);
   const nextName = name.trim();
-  if (!conversation || conversation.kind !== 'group' || !nextName) return false;
+  if (!conversation || conversation.kind === 'direct' || !nextName) return false;
 
   const participation = await assertParticipant(conversationId, userId);
-  if (!participation || participation.role !== 'admin') return false;
+  if (!participation) return false;
+
+  const canManage = await canUserManageConversation(workspaceId, conversation, userId, participation.role);
+  if (!canManage) return false;
 
   await db.transaction(async (tx) => {
     const now = new Date();
@@ -663,6 +1076,12 @@ export const renameRoom = async (
     }
   });
 
+  const participantIds = await getParticipantUserIds(conversationId);
+  broadcastToUsers(workspaceId, participantIds, {
+    type: 'conversation:update',
+    conversationId
+  });
+
   return true;
 };
 
@@ -675,58 +1094,40 @@ export const addParticipant = async (
   newMemberId: string
 ): Promise<boolean> => {
   const conversation = await getConversation(workspaceId, conversationId);
-  if (!conversation || conversation.kind !== 'group') return false;
+  if (!conversation || conversation.kind === 'direct') return false;
 
   const participation = await assertParticipant(conversationId, userId);
-  if (!participation || participation.role !== 'admin') return false;
+  if (!participation) return false;
+
+  const canManage = await canUserManageConversation(workspaceId, conversation, userId, participation.role);
+  if (!canManage) return false;
+
   if (!(await findWorkspaceMember(workspaceId, newMemberId))) return false;
 
   await db.transaction(async (tx) => {
-    if (conversation.groupId) {
-      await tx
-        .insert(workspaceMemberGroupMembers)
-        .values({ groupId: conversation.groupId, userId: newMemberId })
-        .onConflictDoNothing();
-      const channels = await tx
-        .select({ id: chatConversations.id })
-        .from(chatConversations)
-        .where(and(eq(chatConversations.groupId, conversation.groupId), isNull(chatConversations.archivedAt)));
-      await tx
-        .insert(chatParticipants)
-        .values(
-          channels.map((channel) => ({
-            conversationId: channel.id,
-            workspaceId,
-            userId: newMemberId,
-            role: 'member' as const
-          }))
-        )
-        .onConflictDoUpdate({
-          target: [chatParticipants.conversationId, chatParticipants.userId],
-          set: { leftAt: null }
-        });
-      await tx
-        .update(chatConversations)
-        .set({ updatedAt: new Date() })
-        .where(eq(chatConversations.groupId, conversation.groupId));
-    } else {
-      await tx
-        .insert(chatParticipants)
-        .values({
-          conversationId,
-          workspaceId,
-          userId: newMemberId,
-          role: 'member' as const
-        })
-        .onConflictDoUpdate({
-          target: [chatParticipants.conversationId, chatParticipants.userId],
-          set: { leftAt: null }
-        });
-      await tx
-        .update(chatConversations)
-        .set({ updatedAt: new Date() })
-        .where(eq(chatConversations.id, conversationId));
-    }
+    await tx
+      .insert(chatParticipants)
+      .values({
+        conversationId,
+        workspaceId,
+        userId: newMemberId,
+        role: 'member' as const
+      })
+      .onConflictDoUpdate({
+        target: [chatParticipants.conversationId, chatParticipants.userId],
+        set: { leftAt: null }
+      });
+
+    await tx
+      .update(chatConversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatConversations.id, conversationId));
+  });
+
+  const participantIds = await getParticipantUserIds(conversationId);
+  broadcastToUsers(workspaceId, participantIds, {
+    type: 'conversation:update',
+    conversationId
   });
 
   return true;
@@ -741,77 +1142,50 @@ export const removeParticipant = async (
   targetUserId: string
 ): Promise<boolean> => {
   const conversation = await getConversation(workspaceId, conversationId);
-  if (!conversation || conversation.kind !== 'group') return false;
+  if (!conversation || conversation.kind === 'direct') return false;
 
   const participation = await assertParticipant(conversationId, userId);
   if (!participation) return false;
 
+  const { ownerId } = await getConversationOwnerInfo(workspaceId, conversation);
+
   if (userId === targetUserId) {
-    if (participation.role === 'admin') {
-      const otherAdmins = await db
-        .select({ id: chatParticipants.id })
-        .from(chatParticipants)
-        .where(
-          and(
-            eq(chatParticipants.conversationId, conversationId),
-            eq(chatParticipants.role, 'admin'),
-            ne(chatParticipants.userId, userId),
-            isNull(chatParticipants.leftAt)
-          )
-        );
-      if (otherAdmins.length === 0) return false;
+    if (userId === ownerId || userId === conversation.createdById) {
+      return false;
     }
-  } else if (participation.role !== 'admin') {
-    return false;
+  } else {
+    const canManage = await canUserManageConversation(workspaceId, conversation, userId, participation.role);
+    if (!canManage) return false;
+
+    if (targetUserId === ownerId || targetUserId === conversation.createdById) {
+      return false;
+    }
   }
 
+  const now = new Date();
   await db.transaction(async (tx) => {
-    const now = new Date();
-    if (conversation.groupId) {
-      const channels = await tx
-        .select({ id: chatConversations.id })
-        .from(chatConversations)
-        .where(and(eq(chatConversations.groupId, conversation.groupId), isNull(chatConversations.archivedAt)));
-      for (const channel of channels) {
-        await tx
-          .update(chatParticipants)
-          .set({ leftAt: now })
-          .where(
-            and(
-              eq(chatParticipants.conversationId, channel.id),
-              eq(chatParticipants.userId, targetUserId),
-              isNull(chatParticipants.leftAt)
-            )
-          );
-      }
-      await tx
-        .delete(workspaceMemberGroupMembers)
-        .where(
-          and(
-            eq(workspaceMemberGroupMembers.groupId, conversation.groupId),
-            eq(workspaceMemberGroupMembers.userId, targetUserId)
-          )
-        );
-      await tx
-        .update(chatConversations)
-        .set({ updatedAt: now })
-        .where(eq(chatConversations.groupId, conversation.groupId));
-    } else {
-      await tx
-        .update(chatParticipants)
-        .set({ leftAt: now })
-        .where(
-          and(
-            eq(chatParticipants.conversationId, conversationId),
-            eq(chatParticipants.userId, targetUserId),
-            isNull(chatParticipants.leftAt)
-          )
-        );
-      await tx
-        .update(chatConversations)
-        .set({ updatedAt: now })
-        .where(eq(chatConversations.id, conversationId));
-    }
+    await tx
+      .update(chatParticipants)
+      .set({ leftAt: now })
+      .where(
+        and(
+          eq(chatParticipants.conversationId, conversationId),
+          eq(chatParticipants.userId, targetUserId),
+          isNull(chatParticipants.leftAt)
+        )
+      );
+
+    await tx
+      .update(chatConversations)
+      .set({ updatedAt: now })
+      .where(eq(chatConversations.id, conversationId));
+  });
+
+  const remainingParticipantIds = await getParticipantUserIds(conversationId);
+  const affectedUserIds = [...new Set([...remainingParticipantIds, targetUserId])];
+  broadcastToUsers(workspaceId, affectedUserIds, {
+    type: 'conversation:update',
+    conversationId
   });
 
   return true;
@@ -831,6 +1205,8 @@ type MessageRow = {
   replyToDeleted: boolean | null;
   editedAt: Date | null;
   deletedAt: Date | null;
+  pinnedAt: Date | null;
+  pinnedById: string | null;
   createdAt: Date;
   reactions: Array<{ reaction: string; userId: string; userName: string }>;
   attachments: Array<{ id: string; fileName: string; filePath: string; fileType: string; fileSize: number; width: number | null; height: number | null }>;
@@ -872,6 +1248,8 @@ export const getMessages = async (
       replyToMessageId: chatMessages.replyToMessageId,
       editedAt: chatMessages.editedAt,
       deletedAt: chatMessages.deletedAt,
+      pinnedAt: chatMessages.pinnedAt,
+      pinnedById: chatMessages.pinnedById,
       createdAt: chatMessages.createdAt
     })
     .from(chatMessages)
@@ -958,6 +1336,8 @@ export const getMessages = async (
       replyToDeleted: reply?.deletedAt ? true : null,
       editedAt: m.editedAt,
       deletedAt: m.deletedAt,
+      pinnedAt: m.pinnedAt,
+      pinnedById: m.pinnedById,
       createdAt: m.createdAt,
       reactions: reactionMap.get(m.id) ?? [],
       attachments: attachmentMap.get(m.id) ?? []
@@ -980,6 +1360,8 @@ type SendMessageResult = {
   replyToMessageId: string | null;
   editedAt: Date | null;
   deletedAt: Date | null;
+  pinnedAt: Date | null;
+  pinnedById: string | null;
   createdAt: Date;
   reactions: Array<{ reaction: string; userId: string; userName: string }>;
   attachments: Array<{ id: string; fileName: string; filePath: string; fileType: string; fileSize: number; width: number | null; height: number | null }>;
@@ -1044,6 +1426,8 @@ export const sendMessage = async (
       replyToMessageId: chatMessages.replyToMessageId,
       editedAt: chatMessages.editedAt,
       deletedAt: chatMessages.deletedAt,
+      pinnedAt: chatMessages.pinnedAt,
+      pinnedById: chatMessages.pinnedById,
       createdAt: chatMessages.createdAt
     });
 
@@ -1060,6 +1444,8 @@ export const sendMessage = async (
         replyToMessageId: chatMessages.replyToMessageId,
         editedAt: chatMessages.editedAt,
         deletedAt: chatMessages.deletedAt,
+        pinnedAt: chatMessages.pinnedAt,
+        pinnedById: chatMessages.pinnedById,
         createdAt: chatMessages.createdAt
       })
       .from(chatMessages)
@@ -1123,6 +1509,11 @@ export const sendMessage = async (
     attachments: linkedAttachments
   };
 
+  // If this conversation is scoped to a taskboard or workflow, sync participants before broadcasting
+  if (conversation.contextType === 'taskboard' || conversation.contextType === 'workflow') {
+    await syncContextParticipants(conversationId);
+  }
+
   // Broadcast to all conversation participants via WebSocket
   const participantIds = await getParticipantUserIds(conversationId);
   broadcastToUsers(workspaceId, participantIds, {
@@ -1131,13 +1522,27 @@ export const sendMessage = async (
     message: result
   });
   if (inserted) {
-    const preview = trimmed
-      ? trimmed.length > 140
-        ? `${trimmed.slice(0, 137)}…`
-        : trimmed
-      : linkedAttachments.length > 0
-        ? 'Sent an attachment.'
-        : 'New message.';
+    let preview = 'New message.';
+    if (trimmed) {
+      if (trimmed.startsWith('sticker:')) {
+        try {
+          const raw = trimmed.slice('sticker:'.length).trim();
+          if (raw.startsWith('{')) {
+            const parsed = JSON.parse(raw);
+            preview = `🎨 Stiker: ${parsed.url || parsed.name || 'Stiker'}`;
+          } else {
+            const [url] = raw.split('|');
+            preview = `🎨 Stiker: ${url}`;
+          }
+        } catch {
+          preview = '🎨 Stiker';
+        }
+      } else {
+        preview = trimmed.length > 140 ? `${trimmed.slice(0, 137)}…` : trimmed;
+      }
+    } else if (linkedAttachments.length > 0) {
+      preview = 'Sent an attachment.';
+    }
     const senderName = sender?.name ?? 'Someone';
     const conversationTitle =
       conversation.name && conversation.kind !== 'direct'
@@ -1174,15 +1579,40 @@ export const editMessage = async (
   messageId: string,
   userId: string,
   body: string
-): Promise<boolean> => {
+): Promise<{ ok: boolean; error?: string }> => {
   const conversation = await getConversation(workspaceId, conversationId);
-  if (!conversation) return false;
+  if (!conversation) return { ok: false, error: 'Percakapan tidak ditemukan' };
 
   const participation = await assertParticipant(conversationId, userId);
-  if (!participation) return false;
+  if (!participation) return { ok: false, error: 'Bukan peserta percakapan' };
 
   const trimmed = body.trim();
-  if (!trimmed) return false;
+  if (!trimmed) return { ok: false, error: 'Pesan tidak boleh kosong' };
+
+  const [targetMessage] = await db
+    .select({
+      id: chatMessages.id,
+      senderId: chatMessages.senderId,
+      createdAt: chatMessages.createdAt,
+      deletedAt: chatMessages.deletedAt
+    })
+    .from(chatMessages)
+    .where(and(eq(chatMessages.id, messageId), eq(chatMessages.conversationId, conversationId)))
+    .limit(1);
+
+  if (!targetMessage || targetMessage.deletedAt) {
+    return { ok: false, error: 'Pesan tidak ditemukan atau sudah dihapus' };
+  }
+
+  if (targetMessage.senderId !== userId) {
+    return { ok: false, error: 'Hanya pengirim yang boleh mengedit pesan ini' };
+  }
+
+  const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+  const elapsed = Date.now() - new Date(targetMessage.createdAt).getTime();
+  if (elapsed > THREE_HOURS_MS) {
+    return { ok: false, error: 'Pesan hanya boleh diedit dalam tempoh 3 jam selepas dihantar' };
+  }
 
   const [result] = await db
     .update(chatMessages)
@@ -1208,7 +1638,180 @@ export const editMessage = async (
       editedAt
     });
   }
-  return Boolean(result);
+  return { ok: true };
+};
+
+export const togglePinMessage = async (
+  workspaceId: string,
+  conversationId: string,
+  messageId: string,
+  userId: string
+): Promise<{ ok: boolean; pinnedAt: string | null; pinnedById: string | null; error?: string }> => {
+  const conversation = await getConversation(workspaceId, conversationId);
+  if (!conversation) return { ok: false, pinnedAt: null, pinnedById: null, error: 'Percakapan tidak ditemukan' };
+
+  const participation = await assertParticipant(conversationId, userId);
+  if (!participation) return { ok: false, pinnedAt: null, pinnedById: null, error: 'Bukan peserta percakapan' };
+
+  const [targetMessage] = await db
+    .select({
+      id: chatMessages.id,
+      pinnedAt: chatMessages.pinnedAt,
+      pinnedById: chatMessages.pinnedById,
+      deletedAt: chatMessages.deletedAt
+    })
+    .from(chatMessages)
+    .where(and(eq(chatMessages.id, messageId), eq(chatMessages.conversationId, conversationId)))
+    .limit(1);
+
+  if (!targetMessage || targetMessage.deletedAt) {
+    return { ok: false, pinnedAt: null, pinnedById: null, error: 'Pesan tidak ditemukan atau sudah dihapus' };
+  }
+
+  const isCurrentlyPinned = Boolean(targetMessage.pinnedAt);
+  const newPinnedAt = isCurrentlyPinned ? null : new Date();
+  const newPinnedById = isCurrentlyPinned ? null : userId;
+
+  await db
+    .update(chatMessages)
+    .set({ pinnedAt: newPinnedAt, pinnedById: newPinnedById })
+    .where(eq(chatMessages.id, messageId));
+
+  const participantIds = await getParticipantUserIds(conversationId);
+  const pinnedAtStr = newPinnedAt ? newPinnedAt.toISOString() : null;
+  broadcastToUsers(workspaceId, participantIds, {
+    type: 'message:pin',
+    conversationId,
+    messageId,
+    pinnedAt: pinnedAtStr,
+    pinnedById: newPinnedById
+  } as ChatSocketEvent);
+
+  return {
+    ok: true,
+    pinnedAt: pinnedAtStr,
+    pinnedById: newPinnedById
+  };
+};
+
+export const forwardMessage = async (
+  workspaceId: string,
+  sourceConversationId: string,
+  messageId: string,
+  targetConversationIds: string[],
+  userId: string
+): Promise<{ ok: boolean; count: number; error?: string }> => {
+  const sourcePart = await assertParticipant(sourceConversationId, userId);
+  if (!sourcePart) return { ok: false, count: 0, error: 'Akses ke percakapan asal ditolak' };
+
+  const [sourceMessage] = await db
+    .select({
+      id: chatMessages.id,
+      body: chatMessages.body,
+      deletedAt: chatMessages.deletedAt
+    })
+    .from(chatMessages)
+    .where(and(eq(chatMessages.id, messageId), eq(chatMessages.conversationId, sourceConversationId)))
+    .limit(1);
+
+  if (!sourceMessage || sourceMessage.deletedAt) {
+    return { ok: false, count: 0, error: 'Pesan tidak ditemukan atau sudah dihapus' };
+  }
+
+  const sourceAttachments = await db
+    .select({
+      fileName: chatAttachments.fileName,
+      filePath: chatAttachments.filePath,
+      fileType: chatAttachments.fileType,
+      fileSize: chatAttachments.fileSize,
+      width: chatAttachments.width,
+      height: chatAttachments.height
+    })
+    .from(chatAttachments)
+    .where(eq(chatAttachments.messageId, messageId));
+
+  const [sender] = await db
+    .select({ name: users.name, avatarUrl: users.avatarUrl })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  let forwardedCount = 0;
+
+  for (const targetConvId of targetConversationIds) {
+    const targetPart = await assertParticipant(targetConvId, userId);
+    if (!targetPart) continue;
+
+    const clientMsgId = `fwd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const [inserted] = await db
+      .insert(chatMessages)
+      .values({
+        conversationId: targetConvId,
+        senderId: userId,
+        clientMessageId: clientMsgId,
+        body: sourceMessage.body,
+        replyToMessageId: null
+      })
+      .returning({
+        id: chatMessages.id,
+        conversationId: chatMessages.conversationId,
+        senderId: chatMessages.senderId,
+        clientMessageId: chatMessages.clientMessageId,
+        body: chatMessages.body,
+        replyToMessageId: chatMessages.replyToMessageId,
+        editedAt: chatMessages.editedAt,
+        deletedAt: chatMessages.deletedAt,
+        pinnedAt: chatMessages.pinnedAt,
+        pinnedById: chatMessages.pinnedById,
+        createdAt: chatMessages.createdAt
+      });
+
+    if (!inserted) continue;
+
+    let linkedAttachments: SendMessageResult['attachments'] = [];
+    if (sourceAttachments.length > 0) {
+      const cloned = await db
+        .insert(chatAttachments)
+        .values(
+          sourceAttachments.map((att) => ({
+            conversationId: targetConvId,
+            workspaceId,
+            uploaderId: userId,
+            messageId: inserted.id,
+            fileName: att.fileName,
+            filePath: att.filePath,
+            fileType: att.fileType,
+            fileSize: att.fileSize,
+            width: att.width,
+            height: att.height
+          }))
+        )
+        .returning();
+      linkedAttachments = cloned.map((r) => ({ ...r, width: r.width, height: r.height }));
+    }
+
+    await db
+      .update(chatConversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatConversations.id, targetConvId));
+
+    const participantIds = await getParticipantUserIds(targetConvId);
+    broadcastToUsers(workspaceId, participantIds, {
+      type: 'message:new',
+      conversationId: targetConvId,
+      message: {
+        ...inserted,
+        senderName: sender?.name ?? 'Unknown',
+        senderAvatarUrl: sender?.avatarUrl ?? null,
+        reactions: [],
+        attachments: linkedAttachments
+      }
+    });
+
+    forwardedCount++;
+  }
+
+  return { ok: forwardedCount > 0, count: forwardedCount };
 };
 
 /* ------------------------------------------------------- messages: delete */
@@ -1266,9 +1869,12 @@ export const toggleReaction = async (
   const participation = await assertParticipant(conversationId, userId);
   if (!participation) return null;
 
-  // Verify message exists in this conversation and is not deleted
   const [message] = await db
-    .select({ id: chatMessages.id })
+    .select({
+      id: chatMessages.id,
+      senderId: chatMessages.senderId,
+      body: chatMessages.body
+    })
     .from(chatMessages)
     .where(
       and(
@@ -1280,26 +1886,77 @@ export const toggleReaction = async (
     .limit(1);
   if (!message) return null;
 
-  // Try to insert — if exists, remove instead
-  const [inserted] = await db
-    .insert(chatReactions)
-    .values({ messageId, userId, reaction })
-    .onConflictDoNothing({
-      target: [chatReactions.messageId, chatReactions.userId, chatReactions.reaction]
-    })
-    .returning({ id: chatReactions.id });
+  const existingReactions = await db
+    .select({ reaction: chatReactions.reaction })
+    .from(chatReactions)
+    .where(and(eq(chatReactions.messageId, messageId), eq(chatReactions.userId, userId)));
+  const alreadyReacted = existingReactions.some((item) => item.reaction === reaction);
+  const removedReactions = existingReactions.map((item) => item.reaction);
+  let action: 'added' | 'removed';
 
-  const action: 'added' | 'removed' = inserted ? 'added' : 'removed';
+  await db
+    .delete(chatReactions)
+    .where(and(eq(chatReactions.messageId, messageId), eq(chatReactions.userId, userId)));
 
+  if (alreadyReacted) {
+    action = 'removed';
+  } else {
+    await db.insert(chatReactions).values({ messageId, userId, reaction });
+    action = 'added';
+  }
+
+  const [user] = await db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const userName = user?.name ?? 'Someone';
   const participantIds = await getParticipantUserIds(conversationId);
-  broadcastToUsers(workspaceId, participantIds, {
-    type: 'reaction:toggle',
-    conversationId,
-    messageId,
-    userId,
-    reaction,
-    action
-  });
+
+  for (const removedReaction of removedReactions) {
+    broadcastToUsers(workspaceId, participantIds, {
+      type: 'reaction:toggle',
+      conversationId,
+      messageId,
+      userId,
+      userName,
+      reaction: removedReaction,
+      action: 'removed'
+    });
+  }
+  if (action === 'added') {
+    broadcastToUsers(workspaceId, participantIds, {
+      type: 'reaction:toggle',
+      conversationId,
+      messageId,
+      userId,
+      userName,
+      reaction,
+      action
+    });
+  }
+
+  if (action === 'added' && message.senderId !== userId) {
+    try {
+      let previewMsg = message.body || 'pesan Anda';
+      if (previewMsg.startsWith('sticker:')) {
+        previewMsg = 'stiker';
+      } else if (previewMsg.length > 30) {
+        previewMsg = `${previewMsg.slice(0, 27)}…`;
+      }
+
+      await createNotification({
+        workspaceId,
+        userId: message.senderId,
+        conversationId,
+        type: 'chat_reaction',
+        title: 'Reaksi baru',
+        body: `${userName} bereaksi ${reaction} pada "${previewMsg}"`
+      });
+    } catch (err) {
+      console.error('[notification] chat reaction notification failed:', err);
+    }
+  }
 
   return action;
 };
@@ -1414,4 +2071,258 @@ export const listWorkspaceMembersForChat = async (workspaceId: string, userId: s
     .orderBy(asc(users.name));
 
   return rows;
+};
+
+/* ------------------------------------------------------- Bomb / Buzz service */
+
+const buzzCooldowns = new Map<string, number>();
+const BUZZ_COOLDOWN_MS = 10_000; // 10 seconds cooldown
+
+export type SendBuzzInput = {
+  conversationId?: string;
+  targetUserId?: string;
+  taskId?: string;
+  note?: string;
+};
+
+export type SendBuzzResult = {
+  success: boolean;
+  message?: unknown;
+  cooldownUntil?: string;
+  error?: string;
+};
+
+export const sendBuzz = async (
+  workspaceId: string,
+  userId: string,
+  input: SendBuzzInput
+): Promise<SendBuzzResult> => {
+  const targetKey = `${userId}:${input.conversationId || input.taskId || input.targetUserId || 'general'}`;
+  const now = Date.now();
+  const lastSent = buzzCooldowns.get(targetKey);
+
+  if (lastSent && now - lastSent < BUZZ_COOLDOWN_MS) {
+    const remainingSec = Math.ceil((BUZZ_COOLDOWN_MS - (now - lastSent)) / 1000);
+    return {
+      success: false,
+      error: `Sila tunggu ${remainingSec} saat sebelum menghantar buzz seterusnya`,
+      cooldownUntil: new Date(lastSent + BUZZ_COOLDOWN_MS).toISOString()
+    };
+  }
+
+  // Fetch sender name
+  const [sender] = await db
+    .select({ name: users.name, avatarUrl: users.avatarUrl })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const senderName = sender?.name ?? 'Seseorang';
+  let createdMessage: unknown = null;
+
+  // Case 1: Buzz inside a chat conversation
+  if (input.conversationId) {
+    const conversation = await getConversation(workspaceId, input.conversationId);
+    if (!conversation) {
+      return { success: false, error: 'Perbualan tidak dijumpai' };
+    }
+
+    const participantIds = await getParticipantUserIds(input.conversationId);
+    if (!participantIds.includes(userId)) {
+      return { success: false, error: 'Anda bukan ahli perbualan ini' };
+    }
+
+    // Insert a special Buzz message in the chat
+    const clientMessageId = `buzz-${now}-${Math.random().toString(36).slice(2, 9)}`;
+    const buzzBody = `💥 BUZZ! ${input.note ? input.note : 'Perhatian! Mesej penting memerlukan tindakan anda segera!'}`;
+
+    createdMessage = await sendMessage(
+      workspaceId,
+      input.conversationId,
+      userId,
+      buzzBody,
+      clientMessageId
+    );
+
+    // Broadcast instant buzz:send event to all other participants
+    const recipients = participantIds.filter((id) => id !== userId);
+    broadcastToUsers(workspaceId, recipients, {
+      type: 'buzz:send',
+      workspaceId,
+      senderId: userId,
+      senderName,
+      conversationId: input.conversationId,
+      note: input.note || 'Perhatian! Sila semak perbualan ini sekarang!',
+      createdAt: new Date().toISOString()
+    });
+
+    buzzCooldowns.set(targetKey, now);
+    return {
+      success: true,
+      message: createdMessage,
+      cooldownUntil: new Date(now + BUZZ_COOLDOWN_MS).toISOString()
+    };
+  }
+
+  // Case 2: Buzz for a Task
+  if (input.taskId) {
+    const [task] = await db
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        boardId: tasks.boardId,
+        assigneeId: tasks.assigneeId,
+        createdById: tasks.createdById
+      })
+      .from(tasks)
+      .where(eq(tasks.id, input.taskId))
+      .limit(1);
+
+    if (!task) {
+      return { success: false, error: 'Tugasan tidak dijumpai' };
+    }
+
+    const targetUserId = input.targetUserId || task.assigneeId;
+    if (!targetUserId) {
+      return { success: false, error: 'Tugasan ini belum mempunyai PIC/assignee untuk di-buzz' };
+    }
+
+    if (targetUserId === userId) {
+      return { success: false, error: 'Anda tidak boleh menghantar buzz kepada diri sendiri' };
+    }
+
+    // Broadcast instant buzz event to assignee
+    broadcastToUsers(workspaceId, [targetUserId], {
+      type: 'buzz:send',
+      workspaceId,
+      senderId: userId,
+      senderName,
+      taskId: task.id,
+      taskTitle: task.title,
+      targetUserId,
+      note: input.note || `Tugasan: "${task.title}" memerlukan perhatian segera!`,
+      createdAt: new Date().toISOString()
+    });
+
+    // Create high-priority in-app notification
+    await createNotification({
+      workspaceId,
+      userId: targetUserId,
+      boardId: task.boardId,
+      taskId: task.id,
+      type: 'task_assigned',
+      title: `💥 BOMB! Tugasan: ${task.title}`,
+      body: input.note || `${senderName} menghantar Buzz untuk mengingatkan tugasan ini!`
+    }).catch((err) => {
+      console.warn('[buzz] Failed to create notification for task buzz:', err);
+    });
+
+    buzzCooldowns.set(targetKey, now);
+    return {
+      success: true,
+      cooldownUntil: new Date(now + BUZZ_COOLDOWN_MS).toISOString()
+    };
+  }
+
+  // Case 3: Direct user buzz
+  if (input.targetUserId) {
+    if (input.targetUserId === userId) {
+      return { success: false, error: 'Anda tidak boleh menghantar buzz kepada diri sendiri' };
+    }
+
+    broadcastToUsers(workspaceId, [input.targetUserId], {
+      type: 'buzz:send',
+      workspaceId,
+      senderId: userId,
+      senderName,
+      targetUserId: input.targetUserId,
+      note: input.note || 'Perhatian! Sila semak tugasan/mesej anda.',
+      createdAt: new Date().toISOString()
+    });
+
+    buzzCooldowns.set(targetKey, now);
+    return {
+      success: true,
+      cooldownUntil: new Date(now + BUZZ_COOLDOWN_MS).toISOString()
+    };
+  }
+
+  return { success: false, error: 'Sila nyatakan conversationId, taskId, atau targetUserId' };
+};
+
+export const getOrCreateContextConversation = async (
+  workspaceId: string,
+  userId: string,
+  contextType: 'taskboard' | 'workflow',
+  contextId: string
+): Promise<ConversationDetail | null> => {
+  const hasAccess = await checkContextAccess(workspaceId, contextType, contextId, null, userId);
+  if (!hasAccess) return null;
+
+  const [existing] = await db
+    .select({ id: chatConversations.id })
+    .from(chatConversations)
+    .where(
+      and(
+        eq(chatConversations.workspaceId, workspaceId),
+        eq(chatConversations.contextType, contextType),
+        eq(chatConversations.contextId, contextId),
+        isNull(chatConversations.archivedAt)
+      )
+    )
+    .limit(1);
+
+  let conversationId = existing?.id;
+
+  if (!conversationId) {
+    let name = contextType === 'workflow' ? 'Chat Workflow' : 'Chat Board';
+    let groupId: string | null = null;
+    let ownerId = userId;
+
+    if (contextType === 'taskboard') {
+      const [board] = await db
+        .select({ name: taskBoards.name, groupId: taskBoards.workspaceMemberGroupId, ownerId: taskBoards.ownerId })
+        .from(taskBoards)
+        .where(and(eq(taskBoards.id, contextId), eq(taskBoards.workspaceId, workspaceId)))
+        .limit(1);
+      if (board) {
+        name = board.name;
+        groupId = board.groupId;
+        ownerId = board.ownerId;
+      }
+    } else if (contextType === 'workflow') {
+      const [wf] = await db
+        .select({ name: workflows.name, groupId: workflows.workspaceMemberGroupId, ownerId: workflows.ownerId })
+        .from(workflows)
+        .where(and(eq(workflows.id, contextId), eq(workflows.workspaceId, workspaceId)))
+        .limit(1);
+      if (wf) {
+        name = wf.name;
+        groupId = wf.groupId;
+        ownerId = wf.ownerId;
+      }
+    }
+
+    const [inserted] = await db
+      .insert(chatConversations)
+      .values({
+        workspaceId,
+        kind: contextType,
+        contextType,
+        contextId,
+        groupId,
+        name,
+        createdById: ownerId
+      })
+      .onConflictDoUpdate({
+        target: [chatConversations.workspaceId, chatConversations.contextType, chatConversations.contextId],
+        set: { updatedAt: new Date(), archivedAt: null }
+      })
+      .returning({ id: chatConversations.id });
+
+    conversationId = inserted.id;
+  }
+
+  await syncContextParticipants(conversationId);
+  return getConversationDetail(workspaceId, conversationId, userId);
 };

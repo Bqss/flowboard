@@ -47,6 +47,7 @@ const getConversationDetailMock = mock(() => Promise.resolve(null));
 const renameRoomMock = mock(() => Promise.resolve(true));
 const addParticipantMock = mock(() => Promise.resolve(true));
 const removeParticipantMock = mock(() => Promise.resolve(true));
+const getOrCreateContextConversationMock = mock(() => Promise.resolve(null));
 
 mock.module('@services/chat', () => ({
   findOrCreateDirect: findOrCreateDirectMock,
@@ -66,7 +67,11 @@ mock.module('@services/chat', () => ({
   renameRoom: renameRoomMock,
   addParticipant: addParticipantMock,
   removeParticipant: removeParticipantMock,
-  createAttachment: mock(() => Promise.resolve(null))
+  createAttachment: mock(() => Promise.resolve(null)),
+  getOrCreateContextConversation: getOrCreateContextConversationMock,
+  forwardMessage: mock(() => Promise.resolve({ success: true })),
+  sendBuzz: mock(() => Promise.resolve({ success: true })),
+  togglePinMessage: mock(() => Promise.resolve({ pinnedAt: new Date().toISOString(), pinnedById: 'user-1' })),
 }));
 
 const {
