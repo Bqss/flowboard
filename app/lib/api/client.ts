@@ -592,6 +592,25 @@ export type ApiChatMessage = {
   attachments: ApiChatAttachment[];
 };
 
+export interface ApiChatReceiptCursor {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  joinedAt: string;
+  lastDeliveredAt: string | null;
+  lastReadAt: string | null;
+}
+
+export type ChatMessageStatus = 'sent' | 'delivered' | 'read';
+
+export type ChatReceiptWsEvent = {
+  type: 'receipt';
+  conversationId: string;
+  userId: string;
+  deliveredAt: string | null;
+  readAt: string | null;
+};
+
 export type ApiChatConversation = {
   id: string;
   kind: 'direct' | 'group' | 'taskboard' | 'workflow';
@@ -992,7 +1011,7 @@ export const api = {
     ),
 
   getChatMessages: (workspaceId: string, conversationId: string, before?: string, fetchFn?: FetchLike) =>
-    request<{ messages: ApiChatMessage[] }>(
+    request<{ messages: ApiChatMessage[]; receipts?: ApiChatReceiptCursor[] }>(
       `/workspaces/${workspaceId}/chat/conversations/${conversationId}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`,
       { fetch: fetchFn }
     ),
