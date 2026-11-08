@@ -275,6 +275,7 @@ export const chatParticipants = pgTable(
     role: chatParticipantRoleEnum('role').notNull().default('member'),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
     lastReadAt: timestamp('last_read_at', { withTimezone: true }),
+    lastDeliveredAt: timestamp('last_delivered_at', { withTimezone: true }),
     leftAt: timestamp('left_at', { withTimezone: true })
   },
   (table) => [

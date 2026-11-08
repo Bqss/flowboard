@@ -1,0 +1,1 @@
+ALTER TABLE "chat_participants" ADD COLUMN "last_delivered_at" timestamp with time zone;
