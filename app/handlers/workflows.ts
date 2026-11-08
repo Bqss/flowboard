@@ -48,7 +48,11 @@ type ReorderStagesBody = {
 type CreateWorkflowBody = {
   name: string;
   description?: string | null;
+  label?: string | null;
+  labels?: string[];
   workspaceMemberGroupId?: string | null;
+  workspaceMemberGroupIds?: string[];
+  allowedUserIds?: string[];
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
@@ -64,7 +68,11 @@ type CreateWorkflowBody = {
 type UpdateWorkflowBody = {
   name?: string;
   description?: string | null;
+  label?: string | null;
   workspaceMemberGroupId?: string | null;
+  labels?: string[];
+  workspaceMemberGroupIds?: string[];
+  allowedUserIds?: string[];
   ownerId?: string;
   defaultAssigneeId?: string | null;
   defaultAssigneeIds?: string[];
@@ -166,19 +174,26 @@ const requireManager = (
   return null;
 };
 
-export async function list({ workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
-  if (!workspace || !membership) {
+export async function list({ user, workspace, membership, set }: Ctx<unknown, WorkspaceParams>) {
+  if (!user || !workspace || !membership) {
     set.status = 403;
     return { error: 'Forbidden' };
   }
 
-  const rows = await listWorkflows(workspace.id);
+  const rows = await listWorkflows(workspace.id, {
+    userId: user.id,
+    role: membership.role
+  });
   return {
     workflows: rows.map((row) => ({
       id: row.id,
       name: row.name,
       description: row.description ?? null,
-      workspaceMemberGroupId: row.workspaceMemberGroupId,
+      label: row.labels?.[0] ?? null,
+      labels: row.labels ?? [],
+      workspaceMemberGroupId: row.workspaceMemberGroupId ?? (row.workspaceMemberGroupIds?.[0] ?? null),
+      workspaceMemberGroupIds: (row.workspaceMemberGroupIds && row.workspaceMemberGroupIds.length > 0) ? row.workspaceMemberGroupIds : (row.workspaceMemberGroupId ? [row.workspaceMemberGroupId] : []),
+      allowedUserIds: row.allowedUserIds ?? [],
       ownerId: row.ownerId,
       ownerName: row.ownerName,
       defaultAssigneeId: row.defaultAssigneeId,
@@ -211,7 +226,11 @@ export async function create({
   const { workflow, stages: createdStages } = await createWorkflow(workspace.id, {
     name: body.name,
     description: body.description,
+    label: body.label,
+    labels: body.labels,
     workspaceMemberGroupId: body.workspaceMemberGroupId,
+    workspaceMemberGroupIds: body.workspaceMemberGroupIds,
+    allowedUserIds: body.allowedUserIds,
     ownerId: body.ownerId ?? user.id,
     defaultAssigneeId: body.defaultAssigneeId,
     defaultAssigneeIds: body.defaultAssigneeIds,
@@ -229,7 +248,11 @@ export async function create({
       id: workflow.id,
       name: workflow.name,
       description: workflow.description ?? null,
-      workspaceMemberGroupId: workflow.workspaceMemberGroupId,
+      label: workflow.labels?.[0] ?? null,
+      labels: workflow.labels ?? [],
+      workspaceMemberGroupId: workflow.workspaceMemberGroupId ?? (workflow.workspaceMemberGroupIds?.[0] ?? null),
+      workspaceMemberGroupIds: (workflow.workspaceMemberGroupIds && workflow.workspaceMemberGroupIds.length > 0) ? workflow.workspaceMemberGroupIds : (workflow.workspaceMemberGroupId ? [workflow.workspaceMemberGroupId] : []),
+      allowedUserIds: workflow.allowedUserIds ?? [],
       ownerId: workflow.ownerId,
       defaultAssigneeId: workflow.defaultAssigneeId,
       defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : []),
@@ -246,17 +269,21 @@ export async function create({
 }
 
 export async function dashboardStats({
+  user,
   workspace,
   membership,
   query,
   set
 }: Ctx<unknown, WorkspaceParams>) {
-  if (!workspace || !membership) {
+  if (!user || !workspace || !membership) {
     set.status = 403;
     return { error: 'Forbidden' };
   }
 
-  const stats = await getDashboardStats(workspace.id, query.workflowId);
+  const stats = await getDashboardStats(workspace.id, query.workflowId, {
+    userId: user.id,
+    role: membership.role
+  });
   return { stats };
 }
 
@@ -282,6 +309,11 @@ export function show({ workflow, membership, set }: Ctx<unknown, WorkflowParams>
       id: workflow.id,
       name: workflow.name,
       description: workflow.description ?? null,
+      label: workflow.labels?.[0] ?? null,
+      labels: workflow.labels ?? [],
+      workspaceMemberGroupId: workflow.workspaceMemberGroupId ?? (workflow.workspaceMemberGroupIds?.[0] ?? null),
+      workspaceMemberGroupIds: (workflow.workspaceMemberGroupIds && workflow.workspaceMemberGroupIds.length > 0) ? workflow.workspaceMemberGroupIds : (workflow.workspaceMemberGroupId ? [workflow.workspaceMemberGroupId] : []),
+      allowedUserIds: workflow.allowedUserIds ?? [],
       ownerId: workflow.ownerId,
       defaultAssigneeId: workflow.defaultAssigneeId,
       defaultAssigneeIds: workflow.defaultAssigneeIds ?? (workflow.defaultAssigneeId ? [workflow.defaultAssigneeId] : []),
@@ -755,32 +787,40 @@ export async function relayCard({
 }
 
 export async function waitingAction({
+  user,
   workspace,
   membership,
   set
 }: Ctx<unknown, WorkspaceParams>) {
-  if (!workspace || !membership) {
+  if (!user || !workspace || !membership) {
     set.status = 403;
     return { error: 'Forbidden' };
   }
 
-  const cards = await listWaitingActionCards(workspace.id);
+  const cards = await listWaitingActionCards(workspace.id, {
+    userId: user.id,
+    role: membership.role
+  });
   return { cards };
 }
 
 export async function bulkReassign({
+  user,
   workspace,
   membership,
   body,
   set
 }: Ctx<{ cardIds: string[]; assigneeId: string | null }, WorkspaceParams>) {
-  if (!workspace || !membership) {
+  if (!user || !workspace || !membership) {
     set.status = 403;
     return { error: 'Forbidden' };
   }
 
   try {
-    const result = await bulkReassignCards(workspace.id, body.cardIds, body.assigneeId);
+    const result = await bulkReassignCards(workspace.id, body.cardIds, body.assigneeId, {
+      userId: user.id,
+      role: membership.role
+    });
     return result;
   } catch (error) {
     return handleWorkflowError(error, set);

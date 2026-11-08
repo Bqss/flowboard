@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { api, ApiError, type ApiTaskBoard, type ApiWorkspaceMemberGroup } from '$lib/api/client';
+  import { api, ApiError, type ApiTaskBoard, type ApiWorkspaceMember, type ApiWorkspaceMemberGroup } from '$lib/api/client';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, IconButton, Input, Skeleton, Textarea, Tooltip } from '$lib/components/atoms/index.js';
@@ -10,7 +10,10 @@
     Breadcrumb,
     SearchInput,
     SelectMenu,
-    toast
+    MultiSelectCombobox,
+    type MultiSelectOption,
+    toast,
+    TagInput,
   } from '$lib/components/molecules/index.js';
   import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -36,6 +39,7 @@
   let loadError = $state<string | null>(null);
   let boards = $state<ApiTaskBoard[]>([]);
   let boardSearch = $state('');
+  let boardLabelFilter = $state('');
   let viewMode = $state<'grid' | 'list'>('list');
 
   $effect(() => {
@@ -59,8 +63,14 @@
   let createError = $state<string | null>(null);
   let boardName = $state('');
   let boardDescription = $state('');
+  let boardLabels = $state<string[]>([]);
   let boardGroupId = $state<string>('');
   let groups = $state<ApiWorkspaceMemberGroup[]>([]);
+  let members = $state<ApiWorkspaceMember[]>([]);
+  let boardGroupIds = $state<string[]>([]);
+  let boardAllowedUserIds = $state<string[]>([]);
+  let editBoardGroupIds = $state<string[]>([]);
+  let editBoardAllowedUserIds = $state<string[]>([]);
 
   let boardToDelete = $state<ApiTaskBoard | null>(null);
   let deletingBoard = $state(false);
@@ -71,13 +81,22 @@
   let editingBoard = $state<ApiTaskBoard | null>(null);
   let editBoardName = $state('');
   let editBoardDescription = $state('');
+  let editBoardLabels = $state<string[]>([]);
   let editBoardGroupId = $state('');
 
   function openEditBoard(board: ApiTaskBoard) {
     editingBoard = board;
     editBoardName = board.name;
     editBoardDescription = board.description ?? '';
+    const initialGroupIds = (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0)
+      ? [...board.workspaceMemberGroupIds]
+      : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []);
+    editBoardGroupIds = initialGroupIds;
+    editBoardAllowedUserIds = board.allowedUserIds ? [...board.allowedUserIds] : [];
     editBoardGroupId = board.workspaceMemberGroupId ?? '';
+    editBoardLabels = (board.labels && board.labels.length > 0)
+      ? [...board.labels]
+      : (board.label ? [board.label] : []);
     editError = null;
     editOpen = true;
   }
@@ -90,7 +109,9 @@
       const res = await api.updateTaskBoard(data.workspace.id, editingBoard.id, {
         name: editBoardName.trim(),
         description: editBoardDescription.trim() ? editBoardDescription.trim() : null,
-        workspaceMemberGroupId: editBoardGroupId ? editBoardGroupId : null
+        workspaceMemberGroupIds: editBoardGroupIds,
+        allowedUserIds: editBoardAllowedUserIds,
+        labels: editBoardLabels,
       });
       boards = boards.map((b) => (b.id === editingBoard?.id ? { ...b, ...res.board } : b));
       editOpen = false;
@@ -106,16 +127,57 @@
     { value: '', label: tr('taskboard.viewerAll') },
     ...groups.map((g) => ({ value: g.id, label: g.name }))
   ]);
+  const groupMultiOptions = $derived<MultiSelectOption[]>(
+    groups.map((g) => ({
+      value: g.id,
+      label: g.name,
+      description: `${g.members?.length ?? 0} ahli`
+    }))
+  );
+  const memberOptions = $derived<MultiSelectOption[]>(
+    members.map((member) => ({
+      value: member.id,
+      label: member.name,
+      description: member.email,
+      avatarUrl: member.avatarUrl ?? undefined,
+      role: member.role === 'owner' ? tr('common.owner') : tr('common.member')
+    }))
+  );
 
+  function boardLabelsFor(board: ApiTaskBoard): string[] {
+    if (!board.label || board.labels?.includes(board.label)) {
+      return board.labels ?? [];
+    }
+    return [...(board.labels ?? []), board.label];
+  }
+
+  const boardLabelOptions = $derived([
+    { value: '', label: tr('common.allLabels') },
+    ...[...new Set(boards.flatMap(boardLabelsFor))]
+      .sort((a, b) => a.localeCompare(b, $locale))
+      .map((label) => ({ value: label, label }))
+  ]);
+
+  $effect(() => {
+    if (boardLabelFilter && !boardLabelOptions.some((option) => option.value === boardLabelFilter)) {
+      boardLabelFilter = '';
+    }
+  });
+
+  const normalizedBoardSearch = $derived(boardSearch.trim().toLowerCase());
   const filteredBoards = $derived(
-    boardSearch.trim()
+    normalizedBoardSearch || boardLabelFilter
       ? boards.filter((board) => {
-          const query = boardSearch.trim().toLowerCase();
-          return (
+          const query = normalizedBoardSearch;
+          const matchesSearch =
+            !query ||
             board.name.toLowerCase().includes(query) ||
             (board.description ?? '').toLowerCase().includes(query) ||
-            (board.ownerName ?? '').toLowerCase().includes(query)
-          );
+            (board.ownerName ?? '').toLowerCase().includes(query) ||
+            boardLabelsFor(board).some((label) => label.toLowerCase().includes(query));
+          const matchesLabel =
+            !boardLabelFilter || boardLabelsFor(board).includes(boardLabelFilter);
+          return matchesSearch && matchesLabel;
         })
       : boards
   );
@@ -128,10 +190,14 @@
     loadingData = true;
     loadError = null;
     try {
-      const [res, groupsRes] = await Promise.all([
+      const [res, groupsRes, membersRes] = await Promise.all([
         api.listTaskBoards(data.workspace.id),
-        api.listWorkspaceMemberGroups(data.workspace.id).catch(() => ({ groups: [] }))
+        api.listWorkspaceMemberGroups(data.workspace.id).catch(() => ({ groups: [] })),
+        api.listWorkspaceMembers(data.workspace.id).catch(() => ({ members: [] }))
       ]);
+      boards = res.boards ?? [];
+      groups = groupsRes.groups ?? [];
+      members = membersRes.members ?? [];
       boards = res.boards ?? [];
       groups = groupsRes.groups ?? [];
     } catch (err) {
@@ -150,7 +216,10 @@
   function openCreate() {
     boardName = '';
     boardDescription = '';
+    boardLabels = [];
     boardGroupId = '';
+    boardGroupIds = [];
+    boardAllowedUserIds = [];
     createError = null;
     createOpen = true;
   }
@@ -163,7 +232,9 @@
       const res = await api.createTaskBoard(data.workspace.id, {
         name: boardName.trim(),
         description: boardDescription.trim() ? boardDescription.trim() : null,
-        workspaceMemberGroupId: boardGroupId ? boardGroupId : null
+        workspaceMemberGroupIds: boardGroupIds,
+        allowedUserIds: boardAllowedUserIds,
+        labels: boardLabels,
       });
       createOpen = false;
       await goto(`/dashboard/boards/${res.board.id}`);
@@ -196,6 +267,40 @@
     }
   }
 </script>
+{#snippet boardAccessBadge(b: ApiTaskBoard)}
+  {@const groupIds = (b.workspaceMemberGroupIds && b.workspaceMemberGroupIds.length > 0)
+    ? b.workspaceMemberGroupIds
+    : (b.workspaceMemberGroupId ? [b.workspaceMemberGroupId] : [])}
+  {@const allowedUsers = b.allowedUserIds ?? []}
+  {#if groupIds.length === 0 && allowedUsers.length === 0}
+    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">Publik</Badge>
+  {:else}
+    <div class="flex flex-wrap items-center gap-1">
+      {#if groupIds.length === 1}
+        {@const matchedGroup = groups.find((g) => g.id === groupIds[0])}
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+          <span>{matchedGroup?.name ?? '1 Departemen'}</span>
+        </Badge>
+      {:else if groupIds.length > 1}
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+          <span>{groupIds.length} Departemen</span>
+        </Badge>
+      {/if}
+      {#if allowedUsers.length === 1}
+        {@const matchedMember = members.find((m) => m.id === allowedUsers[0])}
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <span>{matchedMember?.name ?? '1 Pengguna'}</span>
+        </Badge>
+      {:else if allowedUsers.length > 1}
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <span>{allowedUsers.length} Pengguna</span>
+        </Badge>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
 
 <svelte:head><title>{tr('taskboard.title')} — actjom</title></svelte:head>
 
@@ -213,7 +318,7 @@
         <h1 class="ds-page-title text-ink">{tr('taskboard.title')}</h1>
         <p class="mt-1 text-sm font-normal leading-relaxed text-mute">{tr('taskboard.description')}</p>
       </div>
-      <Button variant="primary" onclick={openCreate} class="shadow-xs">
+      <Button variant="primary" onclick={openCreate} class="hidden sm:inline-flex shadow-xs">
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={2} />
         <span>{tr('taskboard.create')}</span>
       </Button>
@@ -222,11 +327,20 @@
 
   {#if !loadingData && !loadError && boards.length > 0}
     <div class="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
-      <SearchInput
-        bind:value={boardSearch}
-        placeholder={tr('taskboard.search')}
-        class="max-w-sm"
-      />
+      <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+        <SearchInput
+          bind:value={boardSearch}
+          placeholder={tr('taskboard.search')}
+          class="w-full sm:max-w-sm"
+        />
+        <SelectMenu
+          bind:value={boardLabelFilter}
+          options={boardLabelOptions}
+          disabled={boardLabelOptions.length <= 1}
+          variant="filter"
+          class="w-full sm:w-48"
+        />
+      </div>
       <div class="flex items-center justify-between sm:justify-end gap-3">
         <span class="text-[13px] font-medium text-mute">
           {filteredBoards.length} {tr('taskboard.cardCount')}
@@ -297,21 +411,21 @@
       onaction={openCreate}
     />
   {:else if filteredBoards.length === 0}
-    <div class="space-y-3 rounded-2xl border border-hairline bg-card p-10 text-center shadow-card">
-      <HugeiconsIcon icon={Search01Icon} size={32} strokeWidth={1.5} class="mx-auto text-faint" />
-      <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
-      <p class="text-sm font-normal leading-relaxed text-mute">
-        {tr('taskboard.emptySearch', { query: boardSearch.trim() })}
-      </p>
-      <Button variant="secondary" size="sm" onclick={() => (boardSearch = '')}>
-        {tr('common.clear')}
-      </Button>
-    </div>
+      <div class="space-y-3 rounded-2xl border border-hairline bg-card p-10 text-center shadow-card">
+        <HugeiconsIcon icon={Search01Icon} size={32} strokeWidth={1.5} class="mx-auto text-faint" />
+        <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
+        <p class="text-sm font-normal leading-relaxed text-mute">
+          {boardLabelFilter ? tr('common.noFilterResults') : tr('taskboard.emptySearch', { query: boardSearch.trim() })}
+        </p>
+        <Button variant="secondary" size="sm" onclick={() => { boardSearch = ''; boardLabelFilter = ''; }}>
+          {tr('common.clearFilters')}
+        </Button>
+      </div>
   {:else if viewMode === 'grid'}
-    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {#each filteredBoards as board (board.id)}
         {@const canManage = canManageBoard(board)}
-        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover">
+        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover min-w-0 overflow-hidden">
           <div class="space-y-3.5">
             <div class="flex items-start justify-between gap-3">
               <div class="flex min-w-0 items-center gap-3">
@@ -370,15 +484,15 @@
               <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">
                 {board.taskCount ?? 0} {tr('taskboard.cardCount')}
               </Badge>
-              {#if board.workspaceMemberGroupId}
-                {@const matchedGroup = groups.find((g) => g.id === board.workspaceMemberGroupId)}
-                <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] font-semibold">
-                  <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
-                  <span>{matchedGroup?.name ?? tr('taskboard.viewerGroup')}</span>
-                </Badge>
-              {:else}
-                <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">Publik</Badge>
+              {#if (board.labels && board.labels.length > 0) || board.label}
+                {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
+                {#each bLabels as l (l)}
+                  <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">
+                    {l}
+                  </Badge>
+                {/each}
               {/if}
+              {@render boardAccessBadge(board)}
             </div>
           </div>
 
@@ -427,18 +541,21 @@
                       {#if board.description}
                         <p class="text-xs text-mute truncate max-w-xs sm:max-w-md">{board.description}</p>
                       {/if}
+                      {#if (board.labels && board.labels.length > 0) || board.label}
+                        {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          {#each bLabels as l (l)}
+                            <Badge tone="queued" variant="soft" class="px-1.5 py-0.2 text-[10px] font-semibold">
+                              {l}
+                            </Badge>
+                          {/each}
+                        </div>
+                      {/if}
                     </div>
                   </div>
                 </td>
                 <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
-                  {#if board.workspaceMemberGroupId}
-                    <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[11px] font-semibold">
-                      <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
-                      <span>{matchedGroup?.name ?? tr('taskboard.viewerGroup')}</span>
-                    </Badge>
-                  {:else}
-                    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">Publik</Badge>
-                  {/if}
+                  {@render boardAccessBadge(board)}
                 </td>
                 <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap text-xs text-mute font-medium">
                   {board.ownerName ?? '—'}
@@ -494,6 +611,20 @@
       </div>
     </div>
   {/if}
+
+  <!-- Floating Add Button in Bottom Right -->
+  <div class="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 md:hidden z-30">
+    <button
+      type="button"
+      onclick={openCreate}
+      class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+      aria-label={tr('taskboard.create')}
+    >
+      <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
+      <span class="hidden sm:inline">{tr('taskboard.create')}</span>
+      <span class="sm:hidden">Tambah</span>
+    </button>
+  </div>
 </div>
 
 <Dialog bind:open={createOpen} title={tr('taskboard.createTitle')} description={tr('taskboard.createDescription')} size="md">
@@ -504,9 +635,36 @@
       {/snippet}
     </FormField>
 
-    <FormField label={tr('taskboard.viewerGroup')}>
-      {#snippet control(args)}
-        <SelectMenu {...args} bind:value={boardGroupId} options={groupOptions} />
+    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+      <div>
+        <p class="text-xs font-semibold text-ink">Hak Akses Papan</p>
+        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+      </div>
+      <FormField label="Akses Grup / Departemen">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={groupMultiOptions}
+            bind:values={boardGroupIds}
+            placeholder="Pilih departemen..."
+            emptyText="Tiada departemen"
+          />
+        {/snippet}
+      </FormField>
+      <FormField label="Akses Pengguna (Individu)">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={memberOptions}
+            bind:values={boardAllowedUserIds}
+            placeholder="Pilih pengguna khusus..."
+            emptyText={tr('setup.noMembers')}
+          />
+        {/snippet}
+      </FormField>
+    </div>
+
+    <FormField label={tr('taskboard.label') ?? 'Label'} helper={tr('taskboard.labelHelper')}>
+      {#snippet control(field)}
+        <TagInput bind:value={boardLabels} placeholder={tr('taskboard.labelPlaceholder') ?? 'cth. Task, Sprint, Operasi'} {...field} />
       {/snippet}
     </FormField>
 
@@ -542,9 +700,38 @@
       {/snippet}
     </FormField>
 
-    <FormField label={tr('taskboard.viewerGroup')}>
-      {#snippet control(args)}
-        <SelectMenu {...args} bind:value={editBoardGroupId} options={groupOptions} />
+    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+      <div>
+        <p class="text-xs font-semibold text-ink">Hak Akses Papan</p>
+        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+      </div>
+      <FormField label="Akses Grup / Departemen">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={groupMultiOptions}
+            bind:values={editBoardGroupIds}
+            disabled={editLoading}
+            placeholder="Pilih departemen..."
+            emptyText="Tiada departemen"
+          />
+        {/snippet}
+      </FormField>
+      <FormField label="Akses Pengguna (Individu)">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={memberOptions}
+            bind:values={editBoardAllowedUserIds}
+            disabled={editLoading}
+            placeholder="Pilih pengguna khusus..."
+            emptyText={tr('setup.noMembers')}
+          />
+        {/snippet}
+      </FormField>
+    </div>
+
+    <FormField label={tr('taskboard.label') ?? 'Label'} helper={tr('taskboard.labelHelper')}>
+      {#snippet control(field)}
+        <TagInput bind:value={editBoardLabels} placeholder={tr('taskboard.labelPlaceholder') ?? 'cth. Task, Sprint, Operasi'} {...field} />
       {/snippet}
     </FormField>
 

@@ -148,24 +148,41 @@ export const canManageBoard = (
 
 export type TaskBoardActor = { userId: string; role: 'owner' | 'member' };
 
-const isBoardViewer = async (
-  board: Pick<TaskBoard, 'workspaceId' | 'ownerId' | 'workspaceMemberGroupId'>,
+export const isBoardViewer = async (
+  board: Pick<TaskBoard, 'ownerId'> & {
+    workspaceId?: string;
+    workspaceMemberGroupId?: string | null;
+    workspaceMemberGroupIds?: string[] | null;
+    allowedUserIds?: string[] | null;
+  },
   actor: TaskBoardActor
 ) => {
-  if (actor.role === 'owner' || board.ownerId === actor.userId || !board.workspaceMemberGroupId) return true;
+  if (actor.role === 'owner' || board.ownerId === actor.userId) return true;
 
-  const [membership] = await db
-    .select({ id: workspaceMemberGroupMembers.id })
-    .from(workspaceMemberGroupMembers)
-    .where(
-      and(
-        eq(workspaceMemberGroupMembers.groupId, board.workspaceMemberGroupId),
-        eq(workspaceMemberGroupMembers.userId, actor.userId)
+  const groupIds = (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0)
+    ? board.workspaceMemberGroupIds
+    : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []);
+  const allowedUsers = board.allowedUserIds ?? [];
+
+  if (groupIds.length === 0 && allowedUsers.length === 0) return true;
+  if (allowedUsers.includes(actor.userId)) return true;
+
+  if (groupIds.length > 0) {
+    const [membership] = await db
+      .select({ id: workspaceMemberGroupMembers.id })
+      .from(workspaceMemberGroupMembers)
+      .where(
+        and(
+          inArray(workspaceMemberGroupMembers.groupId, groupIds),
+          eq(workspaceMemberGroupMembers.userId, actor.userId)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  return Boolean(membership);
+    return Boolean(membership);
+  }
+
+  return false;
 };
 
 const logActivity = async (input: {
@@ -312,7 +329,10 @@ export const listBoards = async (
       id: taskBoards.id,
       name: taskBoards.name,
       description: taskBoards.description,
+      labels: taskBoards.labels,
       workspaceMemberGroupId: taskBoards.workspaceMemberGroupId,
+      workspaceMemberGroupIds: taskBoards.workspaceMemberGroupIds,
+      allowedUserIds: taskBoards.allowedUserIds,
       ownerId: taskBoards.ownerId,
       createdAt: taskBoards.createdAt,
       updatedAt: taskBoards.updatedAt,
@@ -351,17 +371,38 @@ export const createBoard = async (
   input: {
     name: string;
     description?: string | null;
+    label?: string | null;
+    labels?: string[];
     ownerId: string;
     workspaceMemberGroupId?: string | null;
+    workspaceMemberGroupIds?: string[];
+    allowedUserIds?: string[];
   }
 ) => {
+  let workspaceMemberGroupIds = input.workspaceMemberGroupIds;
+  let workspaceMemberGroupId = input.workspaceMemberGroupId;
+  if (workspaceMemberGroupIds !== undefined && workspaceMemberGroupId === undefined) {
+    workspaceMemberGroupId = workspaceMemberGroupIds[0] ?? null;
+  } else if (workspaceMemberGroupId !== undefined && workspaceMemberGroupIds === undefined) {
+    workspaceMemberGroupIds = workspaceMemberGroupId ? [workspaceMemberGroupId] : [];
+  }
+  const allowedUserIds = input.allowedUserIds ?? [];
+  const labels =
+    input.labels !== undefined
+      ? input.labels.map((l) => l.trim()).filter(Boolean)
+      : input.label?.trim()
+        ? [input.label.trim()]
+        : [];
   const [board] = await db
     .insert(taskBoards)
     .values({
       workspaceId,
-      workspaceMemberGroupId: input.workspaceMemberGroupId ?? null,
+      workspaceMemberGroupId: workspaceMemberGroupId ?? null,
+      workspaceMemberGroupIds: workspaceMemberGroupIds ?? [],
+      allowedUserIds,
       name: input.name.trim(),
       description: input.description ?? null,
+      labels,
       ownerId: input.ownerId
     })
     .returning();
@@ -398,16 +439,37 @@ export const createBoard = async (
 
 export const updateBoard = async (
   boardId: string,
-  input: { name?: string; description?: string | null; workspaceMemberGroupId?: string | null }
+  input: {
+    name?: string;
+    description?: string | null;
+    label?: string | null;
+    labels?: string[];
+    workspaceMemberGroupId?: string | null;
+    workspaceMemberGroupIds?: string[];
+    allowedUserIds?: string[];
+  }
 ) => {
+  let workspaceMemberGroupIds = input.workspaceMemberGroupIds;
+  let workspaceMemberGroupId = input.workspaceMemberGroupId;
+  if (workspaceMemberGroupIds !== undefined && workspaceMemberGroupId === undefined) {
+    workspaceMemberGroupId = workspaceMemberGroupIds[0] ?? null;
+  } else if (workspaceMemberGroupId !== undefined && workspaceMemberGroupIds === undefined) {
+    workspaceMemberGroupIds = workspaceMemberGroupId ? [workspaceMemberGroupId] : [];
+  }
+
   const [board] = await db
     .update(taskBoards)
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.workspaceMemberGroupId !== undefined
-        ? { workspaceMemberGroupId: input.workspaceMemberGroupId }
-        : {}),
+      ...(input.labels !== undefined
+        ? { labels: input.labels.map((l) => l.trim()).filter(Boolean) }
+        : input.label !== undefined
+          ? { labels: input.label?.trim() ? [input.label.trim()] : [] }
+          : {}),
+      ...(workspaceMemberGroupId !== undefined ? { workspaceMemberGroupId } : {}),
+      ...(workspaceMemberGroupIds !== undefined ? { workspaceMemberGroupIds } : {}),
+      ...(input.allowedUserIds !== undefined ? { allowedUserIds: input.allowedUserIds } : {}),
       updatedAt: new Date()
     })
     .where(eq(taskBoards.id, boardId))

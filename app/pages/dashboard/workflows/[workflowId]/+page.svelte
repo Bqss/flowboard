@@ -244,17 +244,23 @@
       availableTags = boardRes.board?.tags ?? [];
       allWorkflows = workflowsRes.workflows ?? [];
       workflow = workflowsRes.workflows?.find((w) => w.id === workflowId) ?? null;
+      if (!workflow) {
+        toast.error('Aliran kerja tidak dijumpai atau anda tidak mempunyai akses.');
+        await goto('/dashboard/workflows');
+        return;
+      }
       members = membersRes.members ?? [];
       stages = setupRes.stages ?? [];
     } catch (err) {
       console.error('Failed to load workflow board data:', err);
+      toast.error('Aliran kerja tidak dijumpai atau anda tidak mempunyai akses.');
+      await goto('/dashboard/workflows');
+      return;
     } finally {
-      if (requestRevision === boardRequestRevision) {
-        loadingData = false;
-        requestAnimationFrame(() => {
-          window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
-        });
-      }
+      loadingData = false;
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('onboarding-page-ready'));
+      });
     }
   }
 
@@ -833,6 +839,16 @@
           <h1 class="text-sm font-bold tracking-tight text-ink sm:text-base select-none truncate">
             {workflow?.name ?? tr('board.title')}
           </h1>
+          {#if (workflow?.labels && workflow.labels.length > 0) || workflow?.label}
+            {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
+            <div class="flex items-center gap-1 shrink-0">
+              {#each wfLabels as tag (tag)}
+                <Badge tone="info" variant="soft" class="text-xs font-semibold">
+                  {tag}
+                </Badge>
+              {/each}
+            </div>
+          {/if}
           {#if workflow?.ownerName}
             <span class="text-xs text-mute hidden md:inline truncate shrink-0">
               · {tr('common.pic')}: <span class="font-medium text-ink-soft">{workflow.ownerName}</span>
@@ -1101,6 +1117,21 @@
       {/if}
     {/if}
   </div>
+  <!-- Floating Add Button in Bottom Right -->
+  {#if !isEditMode}
+    <div class="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 md:hidden z-30">
+      <button
+        type="button"
+        onclick={() => openCreateModal()}
+        class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+        aria-label={tr('board.addCustomer')}
+      >
+        <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
+        <span class="hidden sm:inline">{tr('board.addCustomer')}</span>
+        <span class="sm:hidden">Tambah</span>
+      </button>
+    </div>
+  {/if}
 </div>
 
 <!-- Customer Detail Drawer (Sheet) -->

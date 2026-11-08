@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import {
     api,
@@ -13,7 +14,8 @@
     Avatar
   } from '$lib/components/atoms/index.js';
   import {
-    DateRangePicker
+    DateRangePicker,
+    toast
   } from '$lib/components/molecules/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
@@ -77,10 +79,18 @@
         api.getWorkflowStats(data.workspace.id, workflowId, activityRangeDays()).catch(() => ({ stats: null }))
       ]);
       workflow = wfRes.workflows?.find((w) => w.id === workflowId) ?? null;
+      if (!workflow) {
+        toast.error('Aliran kerja tidak dijumpai atau anda tidak mempunyai akses.');
+        await goto('/dashboard/workflows');
+        return;
+      }
       members = membersRes.members ?? [];
       stats = statsRes.stats ?? null;
     } catch (err) {
       console.error('Failed to load stats:', err);
+      toast.error('Aliran kerja tidak dijumpai atau anda tidak mempunyai akses.');
+      await goto('/dashboard/workflows');
+      return;
     } finally {
       loadingData = false;
     }

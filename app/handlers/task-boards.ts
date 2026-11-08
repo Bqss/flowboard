@@ -51,13 +51,21 @@ type LabelParams = BoardParams & { labelId: string };
 type CreateBoardBody = {
   name: string;
   description?: string | null;
+  label?: string | null;
+  labels?: string[];
   workspaceMemberGroupId?: string | null;
+  workspaceMemberGroupIds?: string[];
+  allowedUserIds?: string[];
 };
 
 type UpdateBoardBody = {
   name?: string;
   description?: string | null;
+  label?: string | null;
+  labels?: string[];
   workspaceMemberGroupId?: string | null;
+  workspaceMemberGroupIds?: string[];
+  allowedUserIds?: string[];
 };
 
 type CreateColumnBody = {
@@ -167,7 +175,11 @@ export async function list({ user, workspace, membership, set }: Ctx<unknown, Wo
       id: row.id,
       name: row.name,
       description: row.description ?? null,
-      workspaceMemberGroupId: row.workspaceMemberGroupId,
+      label: row.labels?.[0] ?? null,
+      labels: row.labels ?? [],
+      workspaceMemberGroupId: row.workspaceMemberGroupId ?? (row.workspaceMemberGroupIds?.[0] ?? null),
+      workspaceMemberGroupIds: (row.workspaceMemberGroupIds && row.workspaceMemberGroupIds.length > 0) ? row.workspaceMemberGroupIds : (row.workspaceMemberGroupId ? [row.workspaceMemberGroupId] : []),
+      allowedUserIds: row.allowedUserIds ?? [],
       ownerId: row.ownerId,
       ownerName: row.ownerName,
       taskCount: row.taskCount,
@@ -192,7 +204,11 @@ export async function create({
   const { board, columns } = await createBoard(workspace.id, {
     name: body.name,
     description: body.description,
+    label: body.label,
+    labels: body.labels,
     workspaceMemberGroupId: body.workspaceMemberGroupId,
+    workspaceMemberGroupIds: body.workspaceMemberGroupIds,
+    allowedUserIds: body.allowedUserIds,
     ownerId: user.id
   });
 
@@ -200,9 +216,13 @@ export async function create({
     board: {
       id: board.id,
       workspaceId: board.workspaceId,
-      workspaceMemberGroupId: board.workspaceMemberGroupId,
+      workspaceMemberGroupId: board.workspaceMemberGroupId ?? (board.workspaceMemberGroupIds?.[0] ?? null),
+      workspaceMemberGroupIds: (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0) ? board.workspaceMemberGroupIds : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []),
+      allowedUserIds: board.allowedUserIds ?? [],
       name: board.name,
       description: board.description ?? null,
+      label: board.labels?.[0] ?? null,
+      labels: board.labels ?? [],
       ownerId: board.ownerId,
       createdAt: board.createdAt,
       updatedAt: board.updatedAt
@@ -221,9 +241,13 @@ export function show({ board, membership, set }: BoardCtx<unknown, BoardParams>)
     board: {
       id: board.id,
       workspaceId: board.workspaceId,
-      workspaceMemberGroupId: board.workspaceMemberGroupId,
+      workspaceMemberGroupId: board.workspaceMemberGroupId ?? (board.workspaceMemberGroupIds?.[0] ?? null),
+      workspaceMemberGroupIds: (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0) ? board.workspaceMemberGroupIds : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []),
+      allowedUserIds: board.allowedUserIds ?? [],
       name: board.name,
       description: board.description ?? null,
+      label: board.labels?.[0] ?? null,
+      labels: board.labels ?? [],
       ownerId: board.ownerId,
       createdAt: board.createdAt,
       updatedAt: board.updatedAt

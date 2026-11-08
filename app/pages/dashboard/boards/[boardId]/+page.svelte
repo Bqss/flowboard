@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import {
@@ -21,6 +22,7 @@
   import { locale } from '$lib/i18n/index.js';
   import {
     Avatar,
+    Badge,
     Button,
     Checkbox,
     IconButton,
@@ -37,7 +39,10 @@
     RichTextEditor,
     RichTextContent,
     SelectMenu,
+    MultiSelectCombobox,
+    type MultiSelectOption,
     TaskPicPicker,
+    TagInput,
     toast,
     type MenuItem
   } from '$lib/components/molecules/index.js';
@@ -116,6 +121,44 @@
   let commentMentionIds = $state<string[]>([]);
   let commentMentionsOpen = $state(false);
   let postingComment = $state(false);
+  let taskBuzzSending = $state(false);
+  let taskBuzzCooldownSec = $state(0);
+  let taskBuzzCooldownTimer: ReturnType<typeof setInterval> | null = null;
+
+  onDestroy(() => {
+    if (taskBuzzCooldownTimer) clearInterval(taskBuzzCooldownTimer);
+  });
+
+  async function handleBuzzTaskPic() {
+    if (!data.workspace?.id || !taskDetail || !editAssigneeId || taskBuzzSending || taskBuzzCooldownSec > 0) return;
+    taskBuzzSending = true;
+    try {
+      const res = await api.sendBuzz(data.workspace.id, {
+        taskId: taskDetail.id,
+        targetUserId: editAssigneeId,
+        note: `Perhatian! Sila semak tugasan: "${taskDetail.title}"`
+      });
+      if (!res.success) {
+        toast.error(res.error || 'Gagal menghantar buzz');
+      } else {
+        toast.success(`💥 Buzz dihantar kepada ${selectedMembers[0]?.name ?? 'PIC'}!`);
+        taskBuzzCooldownSec = 10;
+        if (taskBuzzCooldownTimer) clearInterval(taskBuzzCooldownTimer);
+        taskBuzzCooldownTimer = setInterval(() => {
+          taskBuzzCooldownSec--;
+          if (taskBuzzCooldownSec <= 0) {
+            clearInterval(taskBuzzCooldownTimer!);
+            taskBuzzCooldownTimer = null;
+          }
+        }, 1000);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Gagal menghantar buzz';
+      toast.error(msg);
+    } finally {
+      taskBuzzSending = false;
+    }
+  }
   let deletingCommentId = $state<string | null>(null);
   let commentComposerOpen = $state(false);
   let editingCommentId = $state<string | null>(null);
@@ -179,12 +222,23 @@
   let editBoardName = $state('');
   let editBoardDescription = $state('');
   let editBoardGroupId = $state('');
+  let editBoardLabels = $state<string[]>([]);
+  let editBoardGroupIds = $state<string[]>([]);
+  let editBoardAllowedUserIds = $state<string[]>([]);
 
   function openEditBoardSettings() {
     if (!board) return;
     editBoardName = board.name;
     editBoardDescription = board.description ?? '';
+    const initialGroupIds = (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0)
+      ? [...board.workspaceMemberGroupIds]
+      : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []);
+    editBoardGroupIds = initialGroupIds;
+    editBoardAllowedUserIds = board.allowedUserIds ? [...board.allowedUserIds] : [];
     editBoardGroupId = board.workspaceMemberGroupId ?? '';
+    editBoardLabels = (board.labels && board.labels.length > 0)
+      ? [...board.labels]
+      : (board.label ? [board.label] : []);
     editBoardError = null;
     editBoardOpen = true;
   }
@@ -197,7 +251,9 @@
       const res = await api.updateTaskBoard(data.workspace.id, board.id, {
         name: editBoardName.trim(),
         description: editBoardDescription.trim() ? editBoardDescription.trim() : null,
-        workspaceMemberGroupId: editBoardGroupId ? editBoardGroupId : null
+        workspaceMemberGroupIds: editBoardGroupIds,
+        allowedUserIds: editBoardAllowedUserIds,
+        labels: editBoardLabels,
       });
       board = res.board;
       editBoardOpen = false;
@@ -261,6 +317,22 @@
     { value: '', label: tr('taskboard.viewerAll') },
     ...groups.map((g) => ({ value: g.id, label: g.name }))
   ]);
+  const groupMultiOptions = $derived<MultiSelectOption[]>(
+    groups.map((g) => ({
+      value: g.id,
+      label: g.name,
+      description: `${g.members?.length ?? 0} ahli`
+    }))
+  );
+  const memberOptions = $derived<MultiSelectOption[]>(
+    members.map((member) => ({
+      value: member.id,
+      label: member.name,
+      description: member.email,
+      avatarUrl: member.avatarUrl ?? undefined,
+      role: member.role === 'owner' ? tr('common.owner') : tr('common.member')
+    }))
+  );
   const assigneeOptions = $derived([
     { value: '', label: tr('taskboard.unassigned') },
     ...members.map((member) => ({ value: member.id, label: member.name }))
@@ -273,12 +345,30 @@
     }))
   );
   const mentionOptions = $derived.by(() => {
-    const groupId = board?.workspaceMemberGroupId;
-    const groupMemberIds = groupId
-      ? new Set(groups.find((group) => group.id === groupId)?.members.map((member) => member.id) ?? [])
-      : null;
+    const groupIds = (board?.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0)
+      ? board.workspaceMemberGroupIds
+      : (board?.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []);
+    const allowedUserIds = board?.allowedUserIds ?? [];
+
+    if (groupIds.length === 0 && allowedUserIds.length === 0) {
+      return members.map((member) => ({
+        value: member.id,
+        label: member.name,
+        avatarUrl: member.avatarUrl ?? undefined
+      }));
+    }
+
+    const groupMemberIds = new Set<string>();
+    for (const gId of groupIds) {
+      const g = groups.find((group) => group.id === gId);
+      if (g?.members) {
+        for (const m of g.members) groupMemberIds.add(m.id);
+      }
+    }
+    const allowedSet = new Set(allowedUserIds);
+
     return members
-      .filter((member) => !groupMemberIds || member.role === 'owner' || groupMemberIds.has(member.id))
+      .filter((member) => member.role === 'owner' || groupMemberIds.has(member.id) || allowedSet.has(member.id))
       .map((member) => ({
         value: member.id,
         label: member.name,
@@ -1576,6 +1666,16 @@
             {board?.name ?? tr('taskboard.boardTitle')}
           </h1>
         {/if}
+        {#if (board?.labels && board.labels.length > 0) || board?.label}
+          {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
+          <div class="flex items-center gap-1 shrink-0">
+            {#each bLabels as l (l)}
+              <Badge tone="queued" variant="soft" class="text-xs font-semibold">
+                {l}
+              </Badge>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       <!-- Right: Bold, Highly Visible Avatars & Action Icons in Card -->
@@ -1703,6 +1803,7 @@
       </div>
     {:else}
       <KanbanBoard
+        class="h-full"
         columns={kanbanColumns}
         addLabel={tr('taskboard.addTask')}
         emptyTitle={tr('taskboard.emptyColumn')}
@@ -1725,6 +1826,19 @@
         oncolumnreorder={canManage ? handleColumnReorder : undefined}
       />
     {/if}
+  </div>
+  <!-- Floating Add Button in Bottom Right -->
+  <div class="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 md:hidden z-30">
+    <button
+      type="button"
+      onclick={() => openCreateTask('')}
+      class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+      aria-label={tr('taskboard.addTask')}
+    >
+      <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
+      <span class="hidden sm:inline">{tr('taskboard.addTask')}</span>
+      <span class="sm:hidden">Tambah</span>
+    </button>
   </div>
 </div>
 
@@ -1993,6 +2107,23 @@
                     </button>
                   {/snippet}
                 </TaskPicPicker>
+              {/if}
+              {#if editAssigneeId && editAssigneeId !== data.user?.id}
+                <Tooltip text={taskBuzzCooldownSec > 0 ? `Tunggu ${taskBuzzCooldownSec}s` : 'Hantar Bomb / Buzz kepada PIC (bunyi kuat & getar)'} side="top">
+                  <button
+                    type="button"
+                    onclick={handleBuzzTaskPic}
+                    disabled={taskBuzzSending || taskBuzzCooldownSec > 0}
+                    class="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 shadow-xs transition hover:bg-amber-100 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/20 cursor-pointer"
+                    aria-label="Buzz PIC"
+                  >
+                    <span>💥</span>
+                    <span>Buzz PIC</span>
+                    {#if taskBuzzCooldownSec > 0}
+                      <span class="text-[10px]">({taskBuzzCooldownSec}s)</span>
+                    {/if}
+                  </button>
+                </Tooltip>
               {/if}
             </div>
           </section>
@@ -2630,11 +2761,40 @@
       {/snippet}
     </FormField>
 
-    <FormField label={tr('taskboard.viewerGroup')}>
-      {#snippet control(args)}
-        <SelectMenu {...args} bind:value={editBoardGroupId} options={groupOptions} />
+    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+      <div>
+        <p class="text-xs font-semibold text-ink">Hak Akses Papan</p>
+        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+      </div>
+      <FormField label="Akses Grup / Departemen">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={groupMultiOptions}
+            bind:values={editBoardGroupIds}
+            disabled={editBoardLoading}
+            placeholder="Pilih departemen..."
+            emptyText="Tiada departemen"
+          />
+        {/snippet}
+      </FormField>
+      <FormField label="Akses Pengguna (Individu)">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={memberOptions}
+            bind:values={editBoardAllowedUserIds}
+            disabled={editBoardLoading}
+            placeholder="Pilih pengguna khusus..."
+            emptyText={tr('setup.noMembers')}
+          />
+        {/snippet}
+      </FormField>
+    </div>
+    <FormField label={tr('taskboard.label') ?? 'Label'} helper={tr('taskboard.labelHelper')}>
+      {#snippet control(field)}
+        <TagInput bind:value={editBoardLabels} placeholder={tr('taskboard.labelPlaceholder') ?? 'cth. Task, Sprint, Operasi'} {...field} />
       {/snippet}
     </FormField>
+
 
     <FormField label={tr('taskboard.boardDescription')}>
       {#snippet control(args)}

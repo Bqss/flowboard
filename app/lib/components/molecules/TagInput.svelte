@@ -1,15 +1,16 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { Chip } from '$lib/components/atoms/index.js';
 
-	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+	type Props = WithElementRef<Omit<HTMLAttributes<HTMLDivElement>, 'onchange'>> & {
 		value?: string[];
 		placeholder?: string;
 		id?: string;
 		max?: number;
 		disabled?: boolean;
 		invalid?: boolean;
+		bordered?: boolean;
+		size?: 'sm' | 'md';
 		tone?: 'neutral' | 'queued';
 		/** Keys that commit the current draft into a tag. */
 		separators?: string[];
@@ -25,9 +26,11 @@
 		max,
 		disabled = false,
 		invalid = false,
+		bordered = false,
+		size = 'md',
 		tone = 'queued',
 		separators = ['Enter', ','],
-		onchange,
+		onchange: onchangeProp,
 		class: className,
 		...rest
 	}: Props = $props();
@@ -45,12 +48,12 @@
 		}
 		value = [...value, tag];
 		draft = '';
-		onchange?.(value);
+		onchangeProp?.(value);
 	}
 
 	function remove(tag: string) {
 		value = value.filter((t) => t !== tag);
-		onchange?.(value);
+		onchangeProp?.(value);
 	}
 
 	function onkeydown(event: KeyboardEvent) {
@@ -69,17 +72,37 @@
 	onkeydown={(e) => e.key === 'Enter' && inputEl?.focus()}
 	role="presentation"
 	class={cn(
-		'flex w-full flex-wrap items-center gap-1.5 rounded-sm border bg-card px-2 py-1.5 transition-colors duration-150 focus-within:ring-2 focus-within:ring-[var(--focus)]',
+		'ds-body flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-full border bg-card px-4 py-1 text-ink transition-colors duration-150',
 		invalid
-			? 'border-status-urgent'
-			: 'border-hairline hover:border-primary-border focus-within:border-primary',
-		disabled && 'pointer-events-none bg-lane',
+			? 'border-status-urgent focus-within:border-status-urgent focus-within:ring-2 focus-within:ring-status-urgent/15'
+			: 'border-hairline hover:border-hairline-strong focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15',
+		disabled && 'pointer-events-none cursor-not-allowed bg-canvas-sunken opacity-60',
+		size === 'sm' ? 'min-h-9 px-3 py-0.5 text-[13px]' : 'min-h-10',
+		value.length > 2 && 'rounded-2xl',
 		className
 	)}
-	{...rest}
 >
 	{#each value as tag (tag)}
-		<Chip {tone} removable onremove={() => remove(tag)}>{tag}</Chip>
+		<span
+			class="inline-flex items-center gap-1 rounded-full border-0 bg-primary-soft text-primary text-xs font-semibold py-0.5 pl-2.5 pr-1.5 transition-colors select-none"
+		>
+			<span>{tag}</span>
+			{#if !disabled}
+				<button
+					type="button"
+					onclick={(e) => {
+						e.stopPropagation();
+						remove(tag);
+					}}
+					class="grid size-4 place-items-center rounded-full text-primary/70 hover:bg-primary/20 hover:text-primary focus-visible:outline-none transition-colors cursor-pointer"
+					aria-label={`Hapus ${tag}`}
+				>
+					<svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+						<path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
+					</svg>
+				</button>
+			{/if}
+		</span>
 	{/each}
 
 	<input
@@ -89,8 +112,8 @@
 		{onkeydown}
 		{disabled}
 		onblur={() => add(draft)}
-		placeholder={full ? `Maksimal ${max} tag` : value.length ? '' : placeholder}
+		placeholder={full ? `Maksimal ${max} tag` : value.length ? '+ Tambah label…' : placeholder}
 		readonly={full}
-		class="ds-body min-w-24 flex-1 bg-transparent px-1 py-0.5 text-ink outline-none placeholder:text-faint"
+		class="min-w-24 flex-1 border-0 border-none bg-transparent px-1 py-1 text-sm text-ink outline-none placeholder:text-mute focus:outline-none focus:ring-0 focus:border-none shadow-none"
 	/>
 </div>

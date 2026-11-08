@@ -5,6 +5,7 @@ import * as taskBoardHandlers from '@handlers/task-boards';
 import { createRequireAuth } from '@middlewares';
 import { resolveWorkspaceMember } from '@middlewares/workspace';
 import { isWorkspaceMemberInGroup } from '@services/workspace';
+import { isBoardViewer } from '@services/task-board';
 import {
   CreateTaskBoardSchema,
   CreateTaskColumnSchema,
@@ -47,9 +48,9 @@ const resolveBoard = async (
     .limit(1);
   if (
     !board ||
-    (board.workspaceMemberGroupId &&
-      base.membership?.role === 'member' &&
-      (!base.user || !(await isWorkspaceMemberInGroup(base.workspace.id, board.workspaceMemberGroupId, base.user.id))))
+    !base.user ||
+    !base.membership ||
+    !(await isBoardViewer(board, { userId: base.user.id, role: base.membership.role }))
   ) {
     return { ...base, board: null };
   }

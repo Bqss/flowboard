@@ -86,6 +86,8 @@ export async function saveDraft({
       workflow: {
         id: workflow.id,
         name: workflow.name,
+        label: workflow.labels?.[0] ?? null,
+        labels: workflow.labels ?? [],
         workspaceMemberGroupId: workflow.workspaceMemberGroupId,
         ownerId: workflow.ownerId,
         defaultAssigneeId: workflow.defaultAssigneeId,

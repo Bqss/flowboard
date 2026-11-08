@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import {
     api,
     ApiError,
@@ -23,7 +24,9 @@
     MultiSelectCombobox,
     SelectMenu,
     Tabs,
-    toast
+    toast,
+    TagInput,
+    type MultiSelectOption
   } from '$lib/components/molecules/index.js';
   import { Dialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -58,6 +61,8 @@
   let members = $state<ApiWorkspaceMember[]>([]);
   let groups = $state<ApiWorkspaceMemberGroup[]>([]);
   let workflowGroupId = $state<string>('');
+  let workflowGroupIds = $state<string[]>([]);
+  let workflowAllowedUserIds = $state<string[]>([]);
 
   const canManage = $derived(data.workspace?.role === 'owner' || workflow?.ownerId === data.user?.id);
 
@@ -65,6 +70,14 @@
     { value: '', label: 'Semua Pegawai (Publik Bisnis)' },
     ...groups.map((g) => ({ value: g.id, label: `Departemen: ${g.name}` }))
   ]);
+
+  const groupMultiOptions = $derived<MultiSelectOption[]>(
+    groups.map((g) => ({
+      value: g.id,
+      label: g.name,
+      description: `${g.members?.length ?? 0} ahli`
+    }))
+  );
 
   const memberOptions = $derived(
     members.map((m) => ({
@@ -86,6 +99,7 @@
   // Form Fields
   let workflowName = $state('');
   let workflowDescription = $state('');
+  let workflowLabels = $state<string[]>([]);
   let defaultAssigneeIds = $state<string[]>([]);
   let defaultAssigneeId = $state<string | null>(null);
   let urgency = $state<'high' | 'medium' | 'low'>('medium');
@@ -137,6 +151,9 @@
         workflowName = found.name;
         workflowDescription = found.description ?? '';
         defaultAssigneeId = found.defaultAssigneeId ?? null;
+        workflowLabels = (found.labels && found.labels.length > 0)
+          ? [...found.labels]
+          : (found.label ? [found.label] : []);
         defaultAssigneeIds = found.defaultAssigneeIds ?? (found.defaultAssigneeId ? [found.defaultAssigneeId] : []);
         urgency = (found.urgency as any) || 'medium';
         deadlineValue = found.deadlineValue == null ? '' : String(found.deadlineValue);
@@ -145,13 +162,24 @@
         reminderBeforeUnit = (found.reminderBeforeUnit as any) || 'hours';
         repeatRule = (found.repeatRule as any) || 'none';
         closureBy = (found.closureBy as any) || 'initiator';
+        const initialGroupIds = (found.workspaceMemberGroupIds && found.workspaceMemberGroupIds.length > 0)
+          ? [...found.workspaceMemberGroupIds]
+          : (found.workspaceMemberGroupId ? [found.workspaceMemberGroupId] : []);
+        workflowGroupIds = initialGroupIds;
+        workflowAllowedUserIds = found.allowedUserIds ? [...found.allowedUserIds] : [];
         workflowGroupId = found.workspaceMemberGroupId ?? '';
+      } else {
+        toast.error('Aliran kerja tidak dijumpai atau anda tidak mempunyai akses.');
+        await goto('/dashboard/workflows');
+        return;
       }
       members = membersRes.members ?? [];
       groups = groupsRes.groups ?? [];
       await loadSheetsConnections();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Gagal memuat tetapan aliran kerja');
+      await goto('/dashboard/workflows');
+      return;
     } finally {
       loadingData = false;
     }
@@ -168,7 +196,9 @@
       const res = await api.updateWorkflow(data.workspace.id, workflowId, {
         name: workflowName.trim(),
         description: workflowDescription.trim() || null,
-        workspaceMemberGroupId: workflowGroupId ? workflowGroupId : null,
+        labels: workflowLabels,
+        workspaceMemberGroupIds: workflowGroupIds,
+        allowedUserIds: workflowAllowedUserIds,
         defaultAssigneeIds,
         urgency,
         deadlineValue: deadlineValue.trim() ? Number(deadlineValue) : null,
@@ -184,6 +214,7 @@
           ...res.workflow,
           name: res.workflow.name,
           description: res.workflow.description ?? null,
+          label: res.workflow.label ?? null,
           defaultAssigneeId: res.workflow.defaultAssigneeId,
           defaultAssigneeIds: res.workflow.defaultAssigneeIds ?? defaultAssigneeIds
         };
@@ -497,6 +528,20 @@
               />
             {/snippet}
           </FormField>
+          <FormField
+            label={tr('workflows.label') ?? 'Label'}
+            helper={tr('workflows.labelHelper') ?? 'Tambah label untuk mengkategori dan membezakan aliran kerja ini.'}
+          >
+            {#snippet control(field)}
+              <TagInput
+                bind:value={workflowLabels}
+                disabled={!canManage}
+                placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'}
+                {...field}
+              />
+            {/snippet}
+          </FormField>
+
 
           <FormField
             label={tr('setup.workflowDescription')}
@@ -539,19 +584,34 @@
             <p class="ds-caption text-mute">Kawal akses ahli dan tetapkan agihan tugasan pelanggan secara automatik.</p>
           </div>
 
-          <FormField
-            label="Hak Akses Alur Kerja"
-            helper="Pilih departemen pemegang alur kerja ini atau jadikan publik untuk semua pegawai."
-          >
-            {#snippet control(args)}
-              <SelectMenu
-                {...args}
-                bind:value={workflowGroupId}
-                disabled={!canManage}
-                options={groupOptions}
-              />
-            {/snippet}
-          </FormField>
+          <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+            <div>
+              <p class="text-xs font-semibold text-ink">Hak Akses Alur Kerja</p>
+              <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan mengakses alur kerja ini. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+            </div>
+            <FormField label="Akses Grup / Departemen">
+              {#snippet control()}
+                <MultiSelectCombobox
+                  options={groupMultiOptions}
+                  bind:values={workflowGroupIds}
+                  disabled={!canManage}
+                  placeholder="Pilih departemen..."
+                  emptyText="Tiada departemen"
+                />
+              {/snippet}
+            </FormField>
+            <FormField label="Akses Pengguna (Individu)">
+              {#snippet control()}
+                <MultiSelectCombobox
+                  options={memberOptions}
+                  bind:values={workflowAllowedUserIds}
+                  disabled={!canManage}
+                  placeholder="Pilih pengguna khusus..."
+                  emptyText={tr('setup.noMembers')}
+                />
+              {/snippet}
+            </FormField>
+          </div>
 
           <FormField
             label={tr('setup.assignees')}

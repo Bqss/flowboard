@@ -254,6 +254,36 @@
 		if (suppressClick) return;
 		oncardclick?.(columnId, cardId);
 	}
+
+	$effect(() => {
+		const el = ref;
+		if (!el) return;
+		const handleWheel = (event: WheelEvent) => {
+			// Native shift-wheel or touchpad horizontal swipe handled natively
+			if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+				return;
+			}
+			const target = event.target as HTMLElement | null;
+			const scrollableChild = target?.closest('.overflow-y-auto') as HTMLElement | null;
+			if (scrollableChild && scrollableChild !== el) {
+				const { scrollTop, scrollHeight, clientHeight } = scrollableChild;
+				const canScrollUp = event.deltaY < 0 && scrollTop > 0;
+				const canScrollDown = event.deltaY > 0 && scrollTop + clientHeight < scrollHeight - 1;
+				if (canScrollUp || canScrollDown) {
+					return;
+				}
+			}
+			if (el.scrollWidth > el.clientWidth) {
+				event.preventDefault();
+				el.scrollLeft += event.deltaY;
+			}
+		};
+
+		el.addEventListener('wheel', handleWheel, { passive: false });
+		return () => {
+			el.removeEventListener('wheel', handleWheel);
+		};
+	});
 </script>
 {#snippet editIconSnippet()}
 	<HugeiconsIcon icon={PencilEdit01Icon} size={15} strokeWidth={1.8} />
@@ -266,7 +296,7 @@
 
 <div
 	bind:this={ref}
-	class={cn('flex items-start gap-4 overflow-x-auto pb-2 pt-1 kanban-scrollbar-hidden', className)}
+	class={cn('flex w-full items-start gap-4 overflow-x-auto pb-3.5 pt-1 kanban-board-scroll', className)}
 	ondragover={(event) => {
 		if (draggingColumnId) {
 			event.preventDefault();
@@ -679,4 +709,5 @@
 			</button>
 		</div>
 	{/if}
+	<div class="w-2 shrink-0" aria-hidden="true"></div>
 </div>

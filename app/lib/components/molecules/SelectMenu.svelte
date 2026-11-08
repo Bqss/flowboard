@@ -13,8 +13,8 @@
 		disabled?: boolean;
 		invalid?: boolean;
 		size?: 'sm' | 'md';
-		/** Matches the quiet in-card period picker ("Monthly ▾"). */
-		variant?: 'input' | 'button';
+		/** Matches the quiet in-card period picker or a rounded toolbar filter. */
+		variant?: 'input' | 'button' | 'filter';
 		onchange?: (value: string) => void;
 		class?: string;
 	};
@@ -105,19 +105,21 @@
 		aria-haspopup="listbox"
 		aria-expanded={open}
 		class={cn(
-			'flex w-full items-center justify-between gap-2 transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane disabled:text-mute',
+			'flex w-full items-center justify-between gap-2 transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed',
 			variant === 'input'
 				? cn(
-						'ds-body rounded-sm border bg-card text-left text-ink',
+						'ds-body rounded-sm border bg-card text-left text-ink disabled:bg-lane disabled:text-mute',
 						size === 'sm' ? 'px-2.5 py-1.5 text-[13px]' : 'px-3 py-2.5',
 						invalid
 							? 'border-status-urgent'
 							: 'border-hairline hover:border-primary-border focus-visible:border-primary'
 					)
-				: cn(
-						'ds-button-text w-auto rounded-md border border-hairline bg-card text-ink hover:border-primary-border hover:bg-lane',
-						size === 'sm' ? 'h-8 px-3' : 'h-10 px-4'
-					)
+				: variant === 'filter'
+					? 'ds-body h-10 rounded-full border border-hairline bg-card px-4 text-left text-ink hover:border-primary-border focus-visible:border-primary disabled:bg-lane disabled:text-mute'
+					: cn(
+							'ds-button-text w-auto rounded-md border border-hairline bg-card text-ink hover:border-primary-border hover:bg-lane disabled:bg-lane disabled:text-mute',
+							size === 'sm' ? 'h-8 px-3' : 'h-10 px-4'
+						)
 		)}
 	>
 		<span class={cn('truncate', !selected && 'text-faint')}>

@@ -4,7 +4,7 @@ import { db, workflows } from '@db';
 import * as workflowHandlers from '@handlers/workflows';
 import { createRequireAuth } from '@middlewares';
 import { resolveWorkspaceMember } from '@middlewares/workspace';
-import { isWorkspaceMemberInGroup } from '@services/workspace';
+import { isWorkflowViewer } from '@services/workflow';
 import {
   CreateCardSchema,
   CreateChecklistTemplateSchema,
@@ -39,7 +39,7 @@ const resolveWorkflow = async (
   request?: Request
 ) => {
   const base = await resolveWorkspaceMember(cookie, workspaceId, request);
-  if (!base.workspace || !workflowId) {
+  if (!base.workspace || !workflowId || !base.user || !base.membership) {
     return { ...base, workflow: null };
   }
   const [workflow] = await db
@@ -49,9 +49,7 @@ const resolveWorkflow = async (
     .limit(1);
   if (
     !workflow ||
-    (workflow.workspaceMemberGroupId &&
-      base.membership?.role === 'member' &&
-      (!base.user || !(await isWorkspaceMemberInGroup(base.workspace.id, workflow.workspaceMemberGroupId, base.user.id))))
+    !(await isWorkflowViewer(workflow, { userId: base.user.id, role: base.membership.role }))
   ) {
     return { ...base, workflow: null };
   }

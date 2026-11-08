@@ -11,6 +11,7 @@
     MultiSelectCombobox,
     SelectMenu,
     toast,
+    TagInput,
     type MultiSelectOption
   } from '$lib/components/molecules/index.js';
   import { Dialog, ConfirmDialog } from '$lib/components/organisms/index.js';
@@ -101,6 +102,7 @@
   let workflows = $state<ApiWorkflow[]>([]);
   let members = $state<ApiWorkspaceMember[]>([]);
   let workflowSearch = $state('');
+  let workflowLabelFilter = $state('');
   let viewMode = $state<'grid' | 'list'>('list');
 
   $effect(() => {
@@ -122,12 +124,17 @@
   let editingWorkflow = $state<ApiWorkflow | null>(null);
   let editWorkflowOpen = $state(false);
   let editWorkflowName = $state('');
+  let editWorkflowLabels = $state<string[]>([]);
   let editAssigneeIds = $state<string[]>([]);
   let editPrimaryAssigneeId = $state<string | null>(null);
   let savingWorkflow = $state(false);
   let groups = $state<ApiWorkspaceMemberGroup[]>([]);
   let manualGroupId = $state<string>('');
+  let manualGroupIds = $state<string[]>([]);
+  let manualAllowedUserIds = $state<string[]>([]);
   let editWorkflowGroupId = $state<string>('');
+  let editWorkflowGroupIds = $state<string[]>([]);
+  let editWorkflowAllowedUserIds = $state<string[]>([]);
 
   let workflowToDelete = $state<ApiWorkflow | null>(null);
   let deletingWorkflow = $state(false);
@@ -145,22 +152,70 @@
       role: member.role === 'owner' ? tr('common.owner') : tr('common.member')
     }))
   );
+  const groupMultiOptions = $derived<MultiSelectOption[]>(
+    groups.map((g) => ({
+      value: g.id,
+      label: g.name,
+      description: `${g.members?.length ?? 0} ahli`
+    }))
+  );
+
+  const accessibleWorkflows = $derived(
+    workflows.filter((wf) => {
+      if (data.workspace?.role === 'owner' || wf.ownerId === data.user?.id) {
+        return true;
+      }
+      const groupIds = (wf.workspaceMemberGroupIds && wf.workspaceMemberGroupIds.length > 0)
+        ? wf.workspaceMemberGroupIds
+        : (wf.workspaceMemberGroupId ? [wf.workspaceMemberGroupId] : []);
+      const allowedUsers = wf.allowedUserIds ?? [];
+
+      if (groupIds.length === 0 && allowedUsers.length === 0) return true;
+      if (allowedUsers.includes(data.user?.id ?? '')) return true;
+      return groups.some((g) => groupIds.includes(g.id));
+    })
+  );
+
+  function workflowLabelsFor(workflow: ApiWorkflow): string[] {
+    if (!workflow.label || workflow.labels?.includes(workflow.label)) {
+      return workflow.labels ?? [];
+    }
+    return [...(workflow.labels ?? []), workflow.label];
+  }
+
+  const workflowLabelOptions = $derived([
+    { value: '', label: tr('common.allLabels') },
+    ...[...new Set(accessibleWorkflows.flatMap(workflowLabelsFor))]
+      .sort((a, b) => a.localeCompare(b, $locale))
+      .map((label) => ({ value: label, label }))
+  ]);
+
+  $effect(() => {
+    if (workflowLabelFilter && !workflowLabelOptions.some((option) => option.value === workflowLabelFilter)) {
+      workflowLabelFilter = '';
+    }
+  });
+
+  const normalizedWorkflowSearch = $derived(workflowSearch.trim().toLowerCase());
 
   const filteredWorkflows = $derived(
-    workflowSearch.trim()
-      ? workflows.filter((wf) => {
-          const query = workflowSearch.trim().toLowerCase();
+    normalizedWorkflowSearch || workflowLabelFilter
+      ? accessibleWorkflows.filter((wf) => {
+          const query = normalizedWorkflowSearch;
           const nameMatch = wf.name.toLowerCase().includes(query);
           const ownerMatch = (wf.ownerName ?? '').toLowerCase().includes(query);
           const assigneeMatch = (wf.defaultAssigneeIds ?? []).some((id) => {
             const m = members.find((mem) => mem.id === id);
             return m && m.name.toLowerCase().includes(query);
           });
-          return nameMatch || ownerMatch || assigneeMatch;
+          const labelMatch = workflowLabelsFor(wf).some((label) => label.toLowerCase().includes(query));
+          const matchesSearch = !query || nameMatch || ownerMatch || assigneeMatch || labelMatch;
+          const matchesLabel =
+            !workflowLabelFilter || workflowLabelsFor(wf).includes(workflowLabelFilter);
+          return matchesSearch && matchesLabel;
         })
-      : workflows
+      : accessibleWorkflows
   );
-
   const canManageWorkflow = (workflow: ApiWorkflow) =>
     data.workspace?.role === 'owner' || workflow.ownerId === data.user?.id;
 
@@ -195,6 +250,7 @@
   let chooseOpen = $state(false);
   let manualOpen = $state(false);
   let name = $state('');
+  let manualLabels = $state<string[]>([]);
   let manualUrgency = $state<'high' | 'medium' | 'low'>('medium');
   let manualAssigneeIds = $state<string[]>([]);
   let manualDeadlineValue = $state<string | number>('');
@@ -211,6 +267,7 @@
   function startManual() {
     chooseOpen = false;
     name = '';
+    manualLabels = [];
     manualUrgency = 'medium';
     manualAssigneeIds = [];
     manualGroupId = '';
@@ -252,7 +309,9 @@
       const deadlineVal = rawDeadline ? Number(rawDeadline) : null;
       const { workflow } = await api.createWorkflow(data.workspace.id, {
         name: name.trim(),
-        workspaceMemberGroupId: manualGroupId ? manualGroupId : null,
+        workspaceMemberGroupIds: manualGroupIds,
+        allowedUserIds: manualAllowedUserIds,
+        labels: manualLabels,
         defaultAssigneeIds: manualAssigneeIds,
         urgency: manualUrgency,
         deadlineValue: deadlineVal && deadlineVal > 0 ? deadlineVal : null,
@@ -282,8 +341,15 @@
     editingWorkflow = workflow;
     editWorkflowName = workflow.name;
     editAssigneeIds = assigneeIds;
+    editWorkflowLabels = (workflow.labels && workflow.labels.length > 0)
+      ? [...workflow.labels]
+      : (workflow.label ? [workflow.label] : []);
     editPrimaryAssigneeId = workflow.defaultAssigneeId ?? assigneeIds[0] ?? null;
-    editWorkflowGroupId = workflow.workspaceMemberGroupId ?? '';
+    const initialGroupIds = (workflow.workspaceMemberGroupIds && workflow.workspaceMemberGroupIds.length > 0)
+      ? [...workflow.workspaceMemberGroupIds]
+      : (workflow.workspaceMemberGroupId ? [workflow.workspaceMemberGroupId] : []);
+    editWorkflowGroupIds = initialGroupIds;
+    editWorkflowAllowedUserIds = workflow.allowedUserIds ? [...workflow.allowedUserIds] : [];
     editWorkflowOpen = true;
   }
 
@@ -298,7 +364,9 @@
           : editAssigneeIds[0] ?? null;
       const response = await api.updateWorkflow(data.workspace.id, workflowId, {
         name: editWorkflowName.trim(),
-        workspaceMemberGroupId: editWorkflowGroupId ? editWorkflowGroupId : null,
+        workspaceMemberGroupIds: editWorkflowGroupIds,
+        allowedUserIds: editWorkflowAllowedUserIds,
+        labels: editWorkflowLabels,
         defaultAssigneeIds: editAssigneeIds,
         defaultAssigneeId
       });
@@ -344,6 +412,40 @@
   }
 
 </script>
+{#snippet workflowAccessBadge(wf: ApiWorkflow)}
+  {@const groupIds = (wf.workspaceMemberGroupIds && wf.workspaceMemberGroupIds.length > 0)
+    ? wf.workspaceMemberGroupIds
+    : (wf.workspaceMemberGroupId ? [wf.workspaceMemberGroupId] : [])}
+  {@const allowedUsers = wf.allowedUserIds ?? []}
+  {#if groupIds.length === 0 && allowedUsers.length === 0}
+    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">Publik</Badge>
+  {:else}
+    <div class="flex flex-wrap items-center gap-1">
+      {#if groupIds.length === 1}
+        {@const matchedGroup = groups.find((g) => g.id === groupIds[0])}
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+          <span>{matchedGroup?.name ?? '1 Departemen'}</span>
+        </Badge>
+      {:else if groupIds.length > 1}
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
+          <span>{groupIds.length} Departemen</span>
+        </Badge>
+      {/if}
+      {#if allowedUsers.length === 1}
+        {@const matchedMember = members.find((m) => m.id === allowedUsers[0])}
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <span>{matchedMember?.name ?? '1 Pengguna'}</span>
+        </Badge>
+      {:else if allowedUsers.length > 1}
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+          <span>{allowedUsers.length} Pengguna</span>
+        </Badge>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
 
 <svelte:head><title>{tr('common.workflows')} — actjom</title></svelte:head>
 
@@ -365,7 +467,7 @@
         <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-ink">{tr('common.workflows')}</h1>
         <p class="text-xs sm:text-sm font-normal leading-relaxed text-mute mt-0.5 sm:mt-1 truncate sm:whitespace-normal">{tr('workflows.description')}</p>
       </div>
-      <Button variant="primary" size="sm" onclick={openChooser} class="sm:h-10 sm:px-4 sm:text-sm shrink-0 shadow-xs" data-onboarding="create-workflow">
+      <Button variant="primary" size="sm" onclick={openChooser} class="hidden sm:inline-flex sm:h-10 sm:px-4 sm:text-sm shrink-0 shadow-xs" data-onboarding="create-workflow">
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={2} />
         <span>{tr('workflows.create')}</span>
       </Button>
@@ -373,30 +475,39 @@
   </header>
 
   <!-- TOOLBAR: SEARCH & COUNT -->
-  {#if !loadingData && workflows.length > 0}
-    <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between pb-2 sm:pb-4">
-      <div class="relative w-full sm:max-w-sm" data-onboarding="workflow-search">
-        <HugeiconsIcon
-          icon={Search01Icon}
-          size={16}
-          strokeWidth={1.8}
-          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+  {#if !loadingData && accessibleWorkflows.length > 0}
+    <div class="flex flex-col gap-2.5 pb-2 sm:flex-row sm:items-center sm:justify-between sm:pb-4">
+      <div class="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row sm:items-center">
+        <div class="relative w-full sm:max-w-sm" data-onboarding="workflow-search">
+          <HugeiconsIcon
+            icon={Search01Icon}
+            size={16}
+            strokeWidth={1.8}
+            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+          />
+          <input
+            class="h-9 sm:h-10 w-full rounded-xl bg-card pl-9 pr-8 text-sm sm:text-base text-ink placeholder:text-mute/70 ring-1 ring-hairline/30 transition-all focus:ring-2 focus:ring-[var(--focus)] focus:outline-none"
+            bind:value={workflowSearch}
+            placeholder={tr('common.search') + '…'}
+          />
+          {#if workflowSearch}
+            <button
+              type="button"
+              onclick={() => (workflowSearch = '')}
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 flex size-4 items-center justify-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink"
+              aria-label="Clear search"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={2} />
+            </button>
+          {/if}
+        </div>
+        <SelectMenu
+          bind:value={workflowLabelFilter}
+          options={workflowLabelOptions}
+          variant="filter"
+          disabled={workflowLabelOptions.length <= 1}
+          class="w-full sm:w-48"
         />
-        <input
-          class="h-9 sm:h-10 w-full rounded-xl bg-card pl-9 pr-8 text-sm sm:text-base text-ink placeholder:text-mute/70 ring-1 ring-hairline/30 transition-all focus:ring-2 focus:ring-[var(--focus)] focus:outline-none"
-          bind:value={workflowSearch}
-          placeholder={tr('common.search') + '…'}
-        />
-        {#if workflowSearch}
-          <button
-            type="button"
-            onclick={() => (workflowSearch = '')}
-            class="absolute right-2.5 top-1/2 -translate-y-1/2 flex size-4 items-center justify-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink"
-            aria-label="Clear search"
-          >
-            <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={2} />
-          </button>
-        {/if}
       </div>
 
       <div class="flex items-center justify-between sm:justify-end gap-3 text-xs sm:text-[13px] text-mute font-medium px-0.5 sm:px-0">
@@ -453,7 +564,7 @@
         </div>
       {/each}
     </div>
-  {:else if workflows.length === 0}
+  {:else if accessibleWorkflows.length === 0}
     <EmptyStateBlock
       title={tr('workflows.empty')}
       description={tr('workflows.emptyDescription')}
@@ -464,22 +575,24 @@
     <div class="rounded-2xl border border-hairline bg-card p-10 text-center space-y-3 shadow-card">
       <HugeiconsIcon icon={Search01Icon} size={32} strokeWidth={1.5} class="mx-auto text-faint" />
       <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
-      <p class="text-sm font-normal leading-relaxed text-mute">Tidak ada workflow yang cocok dengan kata kunci "{workflowSearch}".</p>
-      <Button variant="secondary" size="sm" onclick={() => (workflowSearch = '')}>
-        {tr('common.clearSearch')}
+      <p class="text-sm font-normal leading-relaxed text-mute">
+        {workflowLabelFilter ? tr('common.noFilterResults') : `Tidak ada workflow yang cocok dengan kata kunci "${workflowSearch}".`}
+      </p>
+      <Button variant="secondary" size="sm" onclick={() => { workflowSearch = ''; workflowLabelFilter = ''; }}>
+        {tr('common.clearFilters')}
       </Button>
     </div>
   {:else}
     <div data-onboarding="workflows-grid">
       {#if viewMode === 'grid'}
-        <div class="grid gap-3.5 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-3.5 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {#each filteredWorkflows as workflow, i (workflow.id)}
             {@const assigned = (workflow.defaultAssigneeIds ?? [])
               .map((id) => members.find((m) => m.id === id))
               .filter((m): m is ApiWorkspaceMember => Boolean(m))}
             {@const canManage = canManageWorkflow(workflow)}
 
-            <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
+            <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover min-w-0 overflow-hidden" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
               <!-- TOP SECTION -->
               <div class="space-y-3 sm:space-y-3.5">
                 <div class="flex items-start justify-between gap-3">
@@ -496,6 +609,16 @@
                       >
                         {workflow.name}
                       </a>
+                      {#if (workflow.labels && workflow.labels.length > 0) || workflow.label}
+                        {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          {#each wfLabels as tag (tag)}
+                            <Badge tone="info" variant="soft" class="px-1.5 py-0.2 text-[10px] font-semibold">
+                              {tag}
+                            </Badge>
+                          {/each}
+                        </div>
+                      {/if}
                       {#if workflow.createdAt}
                         <span class="block text-[11px] text-faint">
                           {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -526,8 +649,8 @@
                 </div>
 
                 <!-- ASSIGNEES / PIC INFO -->
-                <div class="rounded-xl bg-canvas-sunken/60 p-2.5 flex items-center justify-between gap-2 border border-hairline/60">
-                  <div class="flex items-center gap-2 min-w-0">
+                <div class="rounded-xl bg-canvas-sunken/60 p-2.5 flex items-center justify-between gap-2 border border-hairline/60 min-w-0">
+                  <div class="flex items-center gap-2 min-w-0 flex-1">
                     {#if assigned.length > 0}
                       <div class="flex items-center -space-x-2 shrink-0">
                         {#each assigned.slice(0, 3) as member (member.id)}
@@ -562,39 +685,31 @@
                 </div>
 
                 <div class="flex items-center gap-1.5 pt-0.5">
-                  {#if workflow.workspaceMemberGroupId}
-                    {@const matchedGroup = groups.find((g) => g.id === workflow.workspaceMemberGroupId)}
-                    <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] font-semibold">
-                      <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
-                      <span>{matchedGroup?.name ?? 'Departemen'}</span>
-                    </Badge>
-                  {:else}
-                    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">Publik</Badge>
-                  {/if}
+                  {@render workflowAccessBadge(workflow)}
                 </div>
               </div>
 
               <!-- FOOTER ACTIONS -->
-              <div class="mt-4 sm:mt-5 flex items-center justify-between gap-2 border-t border-hairline pt-3 sm:pt-3.5">
+              <div class="mt-4 sm:mt-5 flex items-center justify-between gap-2 border-t border-hairline pt-3 sm:pt-3.5 min-w-0">
                 <Button
                   href="/dashboard/workflows/{workflow.id}/settings"
                   variant="secondary"
                   size="sm"
-                  class="flex-1 sm:flex-none justify-center gap-1.5 text-xs text-mute hover:text-ink"
+                  class="flex-1 min-w-0 justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs text-mute hover:text-ink truncate"
                   {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
                 >
-                  <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} />
-                  <span>{tr('workflows.setup')}</span>
+                  <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} class="shrink-0" />
+                  <span class="truncate">{tr('workflows.setup')}</span>
                 </Button>
 
                 <Button
                   href="/dashboard/workflows/{workflow.id}"
                   variant="primary"
                   size="sm"
-                  class="flex-1 sm:flex-none justify-center gap-1.5 shadow-xs"
+                  class="flex-1 min-w-0 justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 shadow-xs text-xs sm:text-sm"
                   {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
                 >
-                  <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} />
+                  <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} class="shrink-0" />
                   <span class="truncate">{tr('workflows.openBoard')}</span>
                   <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={2.2} class="shrink-0 transition-transform group-hover:translate-x-0.5" />
                 </Button>
@@ -640,6 +755,16 @@
                           >
                             {workflow.name}
                           </a>
+                          {#if (workflow.labels && workflow.labels.length > 0) || workflow.label}
+                            {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
+                            <div class="flex flex-wrap gap-1 mt-1">
+                              {#each wfLabels as tag (tag)}
+                                <Badge tone="info" variant="soft" class="px-1.5 py-0.2 text-[10px] font-semibold">
+                                  {tag}
+                                </Badge>
+                              {/each}
+                            </div>
+                          {/if}
                           {#if workflow.createdAt}
                             <p class="text-[11px] text-faint">
                               {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -651,14 +776,7 @@
 
                     <!-- Access / Group -->
                     <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
-                      {#if workflow.workspaceMemberGroupId}
-                        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[11px] font-semibold">
-                          <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
-                          <span>{matchedGroup?.name ?? 'Departemen'}</span>
-                        </Badge>
-                      {:else}
-                        <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">Publik</Badge>
-                      {/if}
+                      {@render workflowAccessBadge(workflow)}
                     </td>
 
                     <!-- PIC / Assignees -->
@@ -742,6 +860,20 @@
       {/if}
     </div>
   {/if}
+
+  <!-- Floating Add Button in Bottom Right -->
+  <div class="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 md:hidden z-30">
+    <button
+      type="button"
+      onclick={openChooser}
+      class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+      aria-label={tr('workflows.create')}
+    >
+      <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
+      <span class="hidden sm:inline">{tr('workflows.create')}</span>
+      <span class="sm:hidden">Tambah</span>
+    </button>
+  </div>
 </div>
 
 <!-- WORKFLOW CREATION MODALS -->
@@ -791,6 +923,12 @@
         <Input {...args} bind:value={name} placeholder={tr('workflows.namePlaceholder')} />
       {/snippet}
     </FormField>
+    <FormField label={tr('workflows.label') ?? 'Label'} helper={tr('workflows.labelHelper')}>
+      {#snippet control(field)}
+        <TagInput bind:value={manualLabels} placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'} {...field} />
+      {/snippet}
+    </FormField>
+
 
     <FormField label={tr('setup.assignees')} helper={tr('setup.assigneesHelper')}>
       {#snippet control()}
@@ -874,15 +1012,32 @@
       {/snippet}
     </FormField>
 
-    <FormField label="Hak Akses Alur Kerja" helper="Pilih departemen pemegang alur kerja ini atau jadikan publik untuk semua pegawai.">
-      {#snippet control(args)}
-        <SelectMenu
-          {...args}
-          bind:value={manualGroupId}
-          options={groupOptions}
-        />
-      {/snippet}
-    </FormField>
+    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+      <div>
+        <p class="text-xs font-semibold text-ink">Hak Akses Alur Kerja</p>
+        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+      </div>
+      <FormField label="Akses Grup / Departemen">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={groupMultiOptions}
+            bind:values={manualGroupIds}
+            placeholder="Pilih departemen..."
+            emptyText="Tiada departemen"
+          />
+        {/snippet}
+      </FormField>
+      <FormField label="Akses Pengguna (Individu)">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={memberOptions}
+            bind:values={manualAllowedUserIds}
+            placeholder="Pilih pengguna khusus..."
+            emptyText={tr('setup.noMembers')}
+          />
+        {/snippet}
+      </FormField>
+    </div>
     {#if error}
       <p class="text-sm font-normal leading-relaxed text-status-urgent">{error}</p>
     {/if}
@@ -919,6 +1074,17 @@
         />
       {/snippet}
     </FormField>
+    <FormField label={tr('workflows.label') ?? 'Label'} helper={tr('workflows.labelHelper')}>
+      {#snippet control(field)}
+        <TagInput
+          bind:value={editWorkflowLabels}
+          disabled={savingWorkflow}
+          placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'}
+          {...field}
+        />
+      {/snippet}
+    </FormField>
+
 
     <FormField
       label={tr('setup.assignees')}
@@ -937,19 +1103,34 @@
       {/snippet}
     </FormField>
 
-    <FormField
-      label="Hak Akses Alur Kerja"
-      helper="Pilih departemen pemegang alur kerja ini atau jadikan publik untuk semua pegawai."
-    >
-      {#snippet control(args)}
-        <SelectMenu
-          {...args}
-          bind:value={editWorkflowGroupId}
-          disabled={savingWorkflow}
-          options={groupOptions}
-        />
-      {/snippet}
-    </FormField>
+    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+      <div>
+        <p class="text-xs font-semibold text-ink">Hak Akses Alur Kerja</p>
+        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+      </div>
+      <FormField label="Akses Grup / Departemen">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={groupMultiOptions}
+            bind:values={editWorkflowGroupIds}
+            disabled={savingWorkflow}
+            placeholder="Pilih departemen..."
+            emptyText="Tiada departemen"
+          />
+        {/snippet}
+      </FormField>
+      <FormField label="Akses Pengguna (Individu)">
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={memberOptions}
+            bind:values={editWorkflowAllowedUserIds}
+            disabled={savingWorkflow}
+            placeholder="Pilih pengguna khusus..."
+            emptyText={tr('setup.noMembers')}
+          />
+        {/snippet}
+      </FormField>
+    </div>
   </form>
   {#snippet footer()}
     <div class="flex justify-end gap-2">

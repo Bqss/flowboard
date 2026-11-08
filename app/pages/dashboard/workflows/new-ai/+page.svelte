@@ -4,7 +4,7 @@
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, Input, Skeleton, Textarea } from '$lib/components/atoms/index.js';
-  import { Breadcrumb, FormField, SelectMenu, Stepper, toast } from '$lib/components/molecules/index.js';
+  import { Breadcrumb, FormField, SelectMenu, Stepper, TagInput, toast } from '$lib/components/molecules/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     AiMagicIcon,
@@ -37,6 +37,7 @@
   let saving = $state(false);
   let provider = $state<'ai' | 'heuristic'>('heuristic');
   let draft = $state<ApiWorkflowDraft | null>(null);
+  let aiDraftLabels = $state<string[]>([]);
 
   const steps = $derived([
     { id: 'prompt', label: tr('ai.promptStep') },
@@ -86,6 +87,9 @@
       const res = await api.generateWorkflowDraft(data.workspace.id, { prompt: prompt.trim() });
       draft = res.draft;
       provider = res.provider;
+      aiDraftLabels = (res.draft.labels && res.draft.labels.length > 0)
+        ? [...res.draft.labels]
+        : (res.draft.label ? [res.draft.label] : []);
       step = 2;
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : tr('ai.generateError'));
@@ -98,6 +102,7 @@
     if (!draft || !data.workspace?.id) return;
     saving = true;
     try {
+      draft = { ...draft, labels: aiDraftLabels, label: aiDraftLabels[0] ?? null };
       const res = await api.saveWorkflowDraft(data.workspace.id, draft);
       toast.success(tr('ai.saved'));
       await goto(`/dashboard/workflows/${res.workflow.id}/setup`);
@@ -289,6 +294,16 @@
 
         <!-- Config fields -->
         <div class="mt-5 grid gap-4 border-t border-hairline pt-5 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField label={tr('workflows.label') ?? 'Label'} helper={tr('workflows.labelHelper')}>
+            {#snippet control(field)}
+              <TagInput
+                bind:value={aiDraftLabels}
+                placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'}
+                {...field}
+              />
+            {/snippet}
+          </FormField>
+
           <FormField label={tr('setup.urgency')} helper={tr('setup.urgencyHelper')}>
             {#snippet control(args)}
               <SelectMenu

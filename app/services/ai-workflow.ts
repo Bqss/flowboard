@@ -24,6 +24,8 @@ export type WorkflowDraftStage = {
 export type WorkflowDraft = {
   name: string;
   stages: WorkflowDraftStage[];
+  label?: string | null;
+  labels?: string[];
   urgency?: 'high' | 'medium' | 'low';
   deadlineValue?: number | null;
   deadlineUnit?: 'hours' | 'days';
@@ -250,6 +252,12 @@ export const generateWorkflowDraft = async (prompt: string, userPhone?: string |
 
 export const normalizeWorkflowDraft = (draft: WorkflowDraft): WorkflowDraft => ({
   name: draft.name.trim() || 'Workflow Baru',
+  label: draft.label?.trim() || null,
+  labels: draft.labels && draft.labels.length > 0
+    ? draft.labels.map((l) => l.trim()).filter(Boolean)
+    : draft.label?.trim()
+      ? [draft.label.trim()]
+      : [],
   stages: draft.stages.map((stage, index) => ({
     name: stage.name.trim() || `Stage ${index + 1}`,
     color: stage.color ?? STAGE_COLORS[index % STAGE_COLORS.length],

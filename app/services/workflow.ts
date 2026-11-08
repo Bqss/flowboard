@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, inArray, isNotNull, isNull, lt, lte, gte, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lt, lte, gte, or, sql } from 'drizzle-orm';
 import {
   cards,
   chatConversations,
@@ -9,6 +9,8 @@ import {
   stages,
   users,
   workflows,
+  workspaceMemberGroupMembers,
+  workspaceMemberGroups,
   type Workflow
 } from '@db';
 import { createScopedChatConversation } from './workspace';
@@ -51,13 +53,62 @@ export const canManageWorkflow = (
   userId: string,
   workflow: Pick<Workflow, 'ownerId'>
 ) => membershipRole === 'owner' || workflow.ownerId === userId;
-export const listWorkflows = async (workspaceId: string) =>
-  db
+
+export type WorkflowActor = { userId: string; role: 'owner' | 'member' };
+
+export const isWorkflowViewer = async (
+  workflow: Pick<Workflow, 'ownerId'> & {
+    workspaceMemberGroupId?: string | null;
+    workspaceMemberGroupIds?: string[] | null;
+    allowedUserIds?: string[] | null;
+  },
+  actor: WorkflowActor
+) => {
+  if (actor.role === 'owner' || workflow.ownerId === actor.userId) {
+    return true;
+  }
+
+  const groupIds = (workflow.workspaceMemberGroupIds && workflow.workspaceMemberGroupIds.length > 0)
+    ? workflow.workspaceMemberGroupIds
+    : (workflow.workspaceMemberGroupId ? [workflow.workspaceMemberGroupId] : []);
+  const allowedUsers = workflow.allowedUserIds ?? [];
+
+  if (groupIds.length === 0 && allowedUsers.length === 0) {
+    return true;
+  }
+
+  if (allowedUsers.includes(actor.userId)) {
+    return true;
+  }
+
+  if (groupIds.length > 0) {
+    const [membership] = await db
+      .select({ id: workspaceMemberGroupMembers.id })
+      .from(workspaceMemberGroupMembers)
+      .where(
+        and(
+          inArray(workspaceMemberGroupMembers.groupId, groupIds),
+          eq(workspaceMemberGroupMembers.userId, actor.userId)
+        )
+      )
+      .limit(1);
+
+    return Boolean(membership);
+  }
+
+  return false;
+};
+
+export const listWorkflows = async (workspaceId: string, actor?: WorkflowActor) => {
+  const rows = await db
     .select({
       id: workflows.id,
       name: workflows.name,
       description: workflows.description,
+      labels: workflows.labels,
       workspaceMemberGroupId: workflows.workspaceMemberGroupId,
+      workspaceMemberGroupIds: workflows.workspaceMemberGroupIds,
+      allowedUserIds: workflows.allowedUserIds,
       ownerId: workflows.ownerId,
       defaultAssigneeId: workflows.defaultAssigneeId,
       defaultAssigneeIds: workflows.defaultAssigneeIds,
@@ -77,12 +128,47 @@ export const listWorkflows = async (workspaceId: string) =>
     .where(eq(workflows.workspaceId, workspaceId))
     .orderBy(asc(workflows.name));
 
+  if (!actor || actor.role === 'owner') {
+    return rows;
+  }
+
+  const userGroupMemberships = await db
+    .select({ groupId: workspaceMemberGroupMembers.groupId })
+    .from(workspaceMemberGroupMembers)
+    .innerJoin(
+      workspaceMemberGroups,
+      and(
+        eq(workspaceMemberGroups.id, workspaceMemberGroupMembers.groupId),
+        eq(workspaceMemberGroups.workspaceId, workspaceId)
+      )
+    )
+    .where(eq(workspaceMemberGroupMembers.userId, actor.userId));
+
+  const allowedGroupIds = new Set(userGroupMemberships.map((g) => g.groupId));
+
+  return rows.filter((row) => {
+    if (row.ownerId === actor.userId) return true;
+    const groupIds = (row.workspaceMemberGroupIds && row.workspaceMemberGroupIds.length > 0)
+      ? row.workspaceMemberGroupIds
+      : (row.workspaceMemberGroupId ? [row.workspaceMemberGroupId] : []);
+    const allowedUsers = row.allowedUserIds ?? [];
+
+    if (groupIds.length === 0 && allowedUsers.length === 0) return true;
+    if (allowedUsers.includes(actor.userId)) return true;
+    return groupIds.some((gId) => allowedGroupIds.has(gId));
+  });
+};
+
 export const createWorkflow = async (
   workspaceId: string,
   input: {
     name: string;
     description?: string | null;
+    label?: string | null;
+    labels?: string[];
     workspaceMemberGroupId?: string | null;
+    workspaceMemberGroupIds?: string[];
+    allowedUserIds?: string[];
     ownerId: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
@@ -95,6 +181,15 @@ export const createWorkflow = async (
     closureBy?: 'initiator' | 'assignee';
   }
 ) => {
+  let workspaceMemberGroupIds = input.workspaceMemberGroupIds;
+  let workspaceMemberGroupId = input.workspaceMemberGroupId;
+  if (workspaceMemberGroupIds !== undefined && workspaceMemberGroupId === undefined) {
+    workspaceMemberGroupId = workspaceMemberGroupIds[0] ?? null;
+  } else if (workspaceMemberGroupId !== undefined && workspaceMemberGroupIds === undefined) {
+    workspaceMemberGroupIds = workspaceMemberGroupId ? [workspaceMemberGroupId] : [];
+  }
+  const allowedUserIds = input.allowedUserIds ?? [];
+
   const defaultAssigneeIds =
     input.defaultAssigneeIds !== undefined
       ? input.defaultAssigneeIds
@@ -106,15 +201,25 @@ export const createWorkflow = async (
     input.defaultAssigneeId !== undefined
       ? input.defaultAssigneeId
       : (defaultAssigneeIds[0] ?? input.ownerId);
+  const labels =
+    input.labels !== undefined
+      ? input.labels.map((l) => l.trim()).filter(Boolean)
+      : input.label?.trim()
+        ? [input.label.trim()]
+        : [];
+
 
   const [workflow] = await db
     .insert(workflows)
     .values({
       workspaceId,
-      workspaceMemberGroupId: input.workspaceMemberGroupId ?? null,
+      workspaceMemberGroupId: workspaceMemberGroupId ?? null,
+      workspaceMemberGroupIds: workspaceMemberGroupIds ?? [],
+      allowedUserIds,
       name: input.name.trim(),
       description: input.description ?? null,
       ownerId: input.ownerId,
+      labels,
       defaultAssigneeId,
       defaultAssigneeIds,
       urgency: input.urgency ?? 'medium',
@@ -165,7 +270,15 @@ export const createWorkflowFromDraft = async (
     .values({
       workspaceId,
       workspaceMemberGroupId: workspaceMemberGroupId ?? null,
+      workspaceMemberGroupIds: workspaceMemberGroupId ? [workspaceMemberGroupId] : [],
+      allowedUserIds: [],
       name: draft.name,
+      labels:
+        draft.labels && draft.labels.length > 0
+          ? draft.labels.map((l) => l.trim()).filter(Boolean)
+          : draft.label?.trim()
+            ? [draft.label.trim()]
+            : [],
       ownerId,
       defaultAssigneeId: ownerId,
       defaultAssigneeIds: [ownerId],
@@ -234,7 +347,11 @@ export const updateWorkflow = async (
   input: {
     name?: string;
     description?: string | null;
+    label?: string | null;
+    labels?: string[];
     workspaceMemberGroupId?: string | null;
+    workspaceMemberGroupIds?: string[];
+    allowedUserIds?: string[];
     ownerId?: string;
     defaultAssigneeId?: string | null;
     defaultAssigneeIds?: string[];
@@ -247,6 +364,14 @@ export const updateWorkflow = async (
     closureBy?: 'initiator' | 'assignee';
   }
 ) => {
+  let workspaceMemberGroupIds = input.workspaceMemberGroupIds;
+  let workspaceMemberGroupId = input.workspaceMemberGroupId;
+  if (workspaceMemberGroupIds !== undefined && workspaceMemberGroupId === undefined) {
+    workspaceMemberGroupId = workspaceMemberGroupIds[0] ?? null;
+  } else if (workspaceMemberGroupId !== undefined && workspaceMemberGroupIds === undefined) {
+    workspaceMemberGroupIds = workspaceMemberGroupId ? [workspaceMemberGroupId] : [];
+  }
+
   let defaultAssigneeIds = input.defaultAssigneeIds;
   let defaultAssigneeId = input.defaultAssigneeId;
 
@@ -261,9 +386,14 @@ export const updateWorkflow = async (
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.workspaceMemberGroupId !== undefined
-        ? { workspaceMemberGroupId: input.workspaceMemberGroupId }
-        : {}),
+      ...(input.labels !== undefined
+        ? { labels: input.labels.map((l) => l.trim()).filter(Boolean) }
+        : input.label !== undefined
+          ? { labels: input.label?.trim() ? [input.label.trim()] : [] }
+          : {}),
+      ...(workspaceMemberGroupId !== undefined ? { workspaceMemberGroupId } : {}),
+      ...(workspaceMemberGroupIds !== undefined ? { workspaceMemberGroupIds } : {}),
+      ...(input.allowedUserIds !== undefined ? { allowedUserIds: input.allowedUserIds } : {}),
       ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
       ...(defaultAssigneeId !== undefined ? { defaultAssigneeId } : {}),
       ...(defaultAssigneeIds !== undefined ? { defaultAssigneeIds } : {}),
@@ -992,12 +1122,14 @@ export const relayCardToNextWorkflow = async (sourceWorkflowId: string, cardId: 
   };
 };
 
-export const listWaitingActionCards = async (workspaceId: string) =>
-  db
+export const listWaitingActionCards = async (workspaceId: string, actor?: WorkflowActor) => {
+  const rows = await db
     .select({
       cardId: cards.id,
       workflowId: workflows.id,
       workflowName: workflows.name,
+      workflowOwnerId: workflows.ownerId,
+      workflowGroupId: workflows.workspaceMemberGroupId,
       customerName: customers.name,
       customerWa: customers.wa,
       stageName: stages.name,
@@ -1021,21 +1153,81 @@ export const listWaitingActionCards = async (workspaceId: string) =>
     )
     .orderBy(asc(cards.updatedAt));
 
+  let visibleRows = rows;
+  if (actor && actor.role !== 'owner') {
+    const userGroupMemberships = await db
+      .select({ groupId: workspaceMemberGroupMembers.groupId })
+      .from(workspaceMemberGroupMembers)
+      .innerJoin(
+        workspaceMemberGroups,
+        and(
+          eq(workspaceMemberGroups.id, workspaceMemberGroupMembers.groupId),
+          eq(workspaceMemberGroups.workspaceId, workspaceId)
+        )
+      )
+      .where(eq(workspaceMemberGroupMembers.userId, actor.userId));
+
+    const allowedGroupIds = new Set(userGroupMemberships.map((g) => g.groupId));
+
+    visibleRows = rows.filter(
+      (row) =>
+        !row.workflowGroupId ||
+        row.workflowOwnerId === actor.userId ||
+        allowedGroupIds.has(row.workflowGroupId)
+    );
+  }
+
+  return visibleRows.map(({ workflowOwnerId, workflowGroupId, ...card }) => card);
+};
+
 export const bulkReassignCards = async (
   workspaceId: string,
   cardIds: string[],
-  assigneeId: string | null
+  assigneeId: string | null,
+  actor?: WorkflowActor
 ) => {
   if (cardIds.length === 0) return { updated: 0 };
 
   const rows = await db
-    .select({ cardId: cards.id, workflowId: cards.workflowId })
+    .select({
+      cardId: cards.id,
+      workflowId: cards.workflowId,
+      workflowOwnerId: workflows.ownerId,
+      workflowGroupId: workflows.workspaceMemberGroupId
+    })
     .from(cards)
     .innerJoin(workflows, eq(cards.workflowId, workflows.id))
     .where(and(eq(workflows.workspaceId, workspaceId), inArray(cards.id, cardIds)));
 
   if (rows.length !== cardIds.length) {
     throw new WorkflowError('Beberapa card tidak valid untuk workspace ini.');
+  }
+
+  if (actor && actor.role !== 'owner') {
+    const userGroupMemberships = await db
+      .select({ groupId: workspaceMemberGroupMembers.groupId })
+      .from(workspaceMemberGroupMembers)
+      .innerJoin(
+        workspaceMemberGroups,
+        and(
+          eq(workspaceMemberGroups.id, workspaceMemberGroupMembers.groupId),
+          eq(workspaceMemberGroups.workspaceId, workspaceId)
+        )
+      )
+      .where(eq(workspaceMemberGroupMembers.userId, actor.userId));
+
+    const allowedGroupIds = new Set(userGroupMemberships.map((g) => g.groupId));
+
+    const unauthorized = rows.some(
+      (row) =>
+        row.workflowGroupId &&
+        row.workflowOwnerId !== actor.userId &&
+        !allowedGroupIds.has(row.workflowGroupId)
+    );
+
+    if (unauthorized) {
+      throw new WorkflowError('Akses ditolak ke alur kerja kad ini.', 'forbidden');
+    }
   }
 
   await db
@@ -1045,6 +1237,7 @@ export const bulkReassignCards = async (
 
   return { updated: rows.length };
 };
+
 
 export const toggleChecklistItem = async (
   workflowId: string,
@@ -1203,13 +1396,40 @@ export const moveCardToStage = async (
   return updated;
 };
 
-export const getDashboardStats = async (workspaceId: string, workflowId?: string) => {
-  const workflowRows = workflowId
+export const getDashboardStats = async (
+  workspaceId: string,
+  workflowId?: string,
+  actor?: WorkflowActor
+) => {
+  let workflowRows = workflowId
     ? await db
         .select()
         .from(workflows)
         .where(and(eq(workflows.workspaceId, workspaceId), eq(workflows.id, workflowId)))
     : await db.select().from(workflows).where(eq(workflows.workspaceId, workspaceId));
+
+  if (actor && actor.role !== 'owner') {
+    const userGroupMemberships = await db
+      .select({ groupId: workspaceMemberGroupMembers.groupId })
+      .from(workspaceMemberGroupMembers)
+      .innerJoin(
+        workspaceMemberGroups,
+        and(
+          eq(workspaceMemberGroups.id, workspaceMemberGroupMembers.groupId),
+          eq(workspaceMemberGroups.workspaceId, workspaceId)
+        )
+      )
+      .where(eq(workspaceMemberGroupMembers.userId, actor.userId));
+
+    const allowedGroupIds = new Set(userGroupMemberships.map((g) => g.groupId));
+
+    workflowRows = workflowRows.filter(
+      (wf) =>
+        !wf.workspaceMemberGroupId ||
+        wf.ownerId === actor.userId ||
+        allowedGroupIds.has(wf.workspaceMemberGroupId)
+    );
+  }
 
   let pending = 0;
   let progress = 0;

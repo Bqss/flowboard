@@ -22,7 +22,8 @@
   import {
     StatCard,
     EmptyStateBlock,
-    FormField
+    FormField,
+    TagInput
   } from '$lib/components/molecules/index.js';
   import { Dialog } from '$lib/components/organisms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -125,6 +126,7 @@
 
   let createOpen = $state(false);
   let name = $state('');
+  let workflowLabels = $state<string[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
 
@@ -133,10 +135,14 @@
     loading = true;
     error = null;
     try {
-      const { workflow } = await api.createWorkflow(data.workspace.id, { name: name.trim() });
+      const { workflow } = await api.createWorkflow(data.workspace.id, {
+        name: name.trim(),
+        labels: workflowLabels
+      });
       window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'create_workflow' }));
       createOpen = false;
       name = '';
+      workflowLabels = [];
       await goto(`/dashboard/workflows/${workflow.id}/setup`);
     } catch (err) {
       error = err instanceof ApiError ? err.message : tr('home.createError');
@@ -402,8 +408,20 @@
         {#each workflows.slice(0, 3) as workflow (workflow.id)}
           <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
             <div>
-              <!-- 4px Signature Tag Strip -->
-              <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
+              <!-- 4px Signature Tag Strip + Label -->
+              <div class="mb-3 flex items-center justify-between gap-2">
+                <div class="h-1 w-7 rounded-full bg-primary shrink-0"></div>
+                {#if (workflow.labels && workflow.labels.length > 0) || workflow.label}
+                  {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
+                  <div class="flex flex-wrap gap-1">
+                    {#each wfLabels as tag (tag)}
+                      <Badge tone="info" variant="soft" class="text-[10px] px-1.5 py-0.2 font-semibold">
+                        {tag}
+                      </Badge>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
 
               <a
                 href="/dashboard/workflows/{workflow.id}"
@@ -471,8 +489,20 @@
         {#each taskBoards.slice(0, 3) as board (board.id)}
           <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
             <div>
-              <!-- 4px Signature Tag Strip (Sky/Cyan for Board) -->
-              <div class="mb-3 h-1 w-7 rounded-full bg-sky-500"></div>
+              <!-- 4px Signature Tag Strip + Label (Sky/Cyan for Board) -->
+              <div class="mb-3 flex items-center justify-between gap-2">
+                <div class="h-1 w-7 rounded-full bg-sky-500 shrink-0"></div>
+                {#if (board.labels && board.labels.length > 0) || board.label}
+                  {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
+                  <div class="flex flex-wrap gap-1">
+                    {#each bLabels as tag (tag)}
+                      <Badge tone="queued" variant="soft" class="text-[10px] px-1.5 py-0.2 font-semibold">
+                        {tag}
+                      </Badge>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
 
               <a
                 href="/dashboard/boards/{board.id}"
@@ -520,6 +550,11 @@
     <FormField label={tr('home.workflowName')} required>
       {#snippet control(args)}
         <Input {...args} bind:value={name} placeholder={tr('home.workflowNamePlaceholder')} />
+      {/snippet}
+    </FormField>
+    <FormField label={tr('workflows.label') ?? 'Label'} helper={tr('workflows.labelHelper')}>
+      {#snippet control(field)}
+        <TagInput bind:value={workflowLabels} placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'} {...field} />
       {/snippet}
     </FormField>
     {#if error}
