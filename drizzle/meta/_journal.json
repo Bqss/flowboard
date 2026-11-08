@@ -162,6 +162,55 @@
       "when": 1793632730289,
       "tag": "0022_married_punisher",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794049070722,
+      "tag": "0023_sharp_beyonder",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794050219032,
+      "tag": "0024_sticky_cerebro",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794050617594,
+      "tag": "0025_unique_leader",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794053954302,
+      "tag": "0026_lumpy_golden_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794103155724,
+      "tag": "0027_true_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794109356371,
+      "tag": "0028_young_gravity",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794109548089,
+      "tag": "0029_same_golden_guardian",
+      "breakpoints": true
     }
   ]
 }

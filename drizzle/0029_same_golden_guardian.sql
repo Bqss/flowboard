@@ -1,0 +1,1 @@
+ALTER TYPE "public"."notification_type" ADD VALUE 'chat_reaction' BEFORE 'task_assigned';

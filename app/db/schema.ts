@@ -33,9 +33,12 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'handover',
   'workflow_action',
   'chat_message',
+  'chat_reaction',
   'task_assigned',
   'task_comment',
-  'task_mention'
+  'task_mention',
+  'task_due_soon',
+  'task_overdue'
 ]);
 export const urgencyEnum = pgEnum('urgency', ['high', 'medium', 'low']);
 export const deadlineUnitEnum = pgEnum('deadline_unit', ['hours', 'days']);
@@ -303,6 +306,8 @@ export const chatMessages = pgTable(
     replyToMessageId: uuid('reply_to_message_id'),
     editedAt: timestamp('edited_at', { withTimezone: true }),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    pinnedAt: timestamp('pinned_at', { withTimezone: true }),
+    pinnedById: uuid('pinned_by_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
@@ -333,11 +338,7 @@ export const chatReactions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
-    uniqueIndex('chat_reactions_message_user_reaction_idx').on(
-      table.messageId,
-      table.userId,
-      table.reaction
-    ),
+    uniqueIndex('chat_reactions_message_user_idx').on(table.messageId, table.userId),
     index('chat_reactions_message_idx').on(table.messageId)
   ]
 );
@@ -394,8 +395,11 @@ export const workflows = pgTable('workflows', {
   workspaceMemberGroupId: uuid('workspace_member_group_id').references(() => workspaceMemberGroups.id, {
     onDelete: 'set null'
   }),
+  workspaceMemberGroupIds: text('workspace_member_group_ids').array().notNull().default(sql`'{}'::text[]`),
+  allowedUserIds: text('allowed_user_ids').array().notNull().default(sql`'{}'::text[]`),
   name: text('name').notNull(),
   description: text('description'),
+  labels: text('labels').array().notNull().default(sql`ARRAY[]::text[]`),
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'restrict' }),
@@ -1048,6 +1052,9 @@ export const taskBoards = pgTable('task_boards', {
   }),
   name: text('name').notNull(),
   description: text('description'),
+  workspaceMemberGroupIds: text('workspace_member_group_ids').array().notNull().default(sql`'{}'::text[]`),
+  allowedUserIds: text('allowed_user_ids').array().notNull().default(sql`'{}'::text[]`),
+  labels: text('labels').array().notNull().default(sql`ARRAY[]::text[]`),
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'restrict' }),
