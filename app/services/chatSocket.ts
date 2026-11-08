@@ -36,6 +36,15 @@ export type ChatSocketEvent =
   | { type: 'message:pin'; conversationId: string; messageId: string; pinnedAt: string | null; pinnedById: string | null }
   | { type: 'reaction:toggle'; conversationId: string; messageId: string; userId: string; userName?: string; reaction: string; action: 'added' | 'removed' }
   | { type: 'read'; conversationId: string; userId: string }
+  | {
+      type: 'receipt';
+      conversationId: string;
+      userId: string;
+      /** ISO timestamp of the participant's delivery cursor. */
+      deliveredAt: string | null;
+      /** ISO timestamp of the participant's read cursor. */
+      readAt: string | null;
+    }
   | { type: 'conversation:update'; conversationId: string }
   | { type: 'presence:state'; userIds: string[] }
   | { type: 'presence:user_online'; userId: string }
@@ -255,14 +264,16 @@ export async function handleClientMessage(
 /**
  * Broadcast an event to all active participants of a conversation.
  * `participantIds` is the list of userIds that should receive the event.
+ * Returns the userIds that had at least one socket successfully sent to.
  */
 export function broadcastToUsers(
   workspaceId: string,
   participantIds: string[],
   event: ChatSocketEvent,
   excludeSocket?: ChatSocket
-): void {
-  if (connections.size === 0) return;
+): Set<string> {
+  const reached = new Set<string>();
+  if (connections.size === 0) return reached;
   const payload = JSON.stringify(event);
   for (const [socket, meta] of connections) {
     if (
@@ -272,12 +283,14 @@ export function broadcastToUsers(
       socket.readyState === OPEN
     ) {
       try {
-        socket.send(payload);
+        // Bun returns 0 when the message was dropped; `ws` returns void.
+        if (socket.send(payload) !== 0) reached.add(meta.userId);
       } catch {
         connections.delete(socket);
       }
     }
   }
+  return reached;
 }
 /** Get the count of active connections (for debugging). */
 export function connectionCount(): number {
