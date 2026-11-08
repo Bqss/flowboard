@@ -31,7 +31,8 @@
     Tooltip,
     Icon,
     Image,
-    Portal
+    Portal,
+    MessageTicks
   } from '$lib/components/atoms/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
@@ -309,6 +310,26 @@
       <Avatar name="Budi" size={28} />
       <Logo size={32} />
       <Logo size={40} />
+    </div>
+    <Separator class="my-5" />
+    <p class="ds-label mb-3 text-ink-soft">MessageTicks · chat read receipts</p>
+    <div class="flex flex-wrap items-center gap-6">
+      <div class="flex items-center gap-3 rounded-xl border border-hairline bg-card px-3 py-2">
+        {#each ['sent', 'delivered', 'read'] as const as status (status)}
+          <span class="ds-caption flex items-center gap-1 text-mute">
+            {status}
+            <MessageTicks {status} />
+          </span>
+        {/each}
+      </div>
+      <div class="flex items-center gap-3 rounded-xl bg-[#2563eb] px-3 py-2">
+        {#each ['sent', 'delivered', 'read'] as const as status (status)}
+          <span class="ds-caption flex items-center gap-1 text-white/80">
+            {status}
+            <MessageTicks {status} tone="onPrimary" />
+          </span>
+        {/each}
+      </div>
     </div>
   </ShowcaseSection>
 

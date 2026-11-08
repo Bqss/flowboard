@@ -39,6 +39,7 @@ import Image from './Image.svelte';
 import Logo from './Logo.svelte';
 import Portal from './Portal.svelte';
 import GoogleButton from './GoogleButton.svelte';
+import MessageTicks from './MessageTicks.svelte';
 
 export {
 	Heading,
@@ -81,4 +82,5 @@ export {
 	Logo,
 	Portal,
 	GoogleButton,
+	MessageTicks,
 };
