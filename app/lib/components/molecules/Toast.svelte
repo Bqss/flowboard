@@ -42,22 +42,26 @@
 	const toneConfig = {
 		success: {
 			icon: CheckmarkCircle02Icon,
-			iconColor: 'text-status-done',
+			iconColor: 'text-status-done-ink',
+			iconBackground: 'bg-status-done-soft',
 			ariaLabel: 'Sukses'
 		},
 		error: {
 			icon: CancelCircleIcon,
-			iconColor: 'text-status-urgent',
+			iconColor: 'text-status-urgent-ink',
+			iconBackground: 'bg-status-urgent-soft',
 			ariaLabel: 'Gagal'
 		},
 		warning: {
 			icon: Alert02Icon,
-			iconColor: 'text-status-progress',
+			iconColor: 'text-status-progress-ink',
+			iconBackground: 'bg-status-progress-soft',
 			ariaLabel: 'Peringatan'
 		},
 		info: {
 			icon: InformationCircleIcon,
-			iconColor: 'text-primary',
+			iconColor: 'text-primary-ink',
+			iconBackground: 'bg-primary-soft',
 			ariaLabel: 'Informasi'
 		}
 	} as const;
@@ -71,42 +75,48 @@
 	aria-live="polite"
 	data-testid="toast-item"
 	class={cn(
-		'pointer-events-auto flex max-w-sm items-center gap-3 rounded-full border border-hairline bg-card py-2.5 pl-4 pr-3.5 shadow-popover transition-all duration-200 hover:shadow-lg',
+		'pointer-events-auto relative flex w-[calc(100vw-4.5rem)] max-w-[22rem] items-start gap-3 rounded-2xl border border-hairline bg-card p-3.5 shadow-popover transition-shadow duration-200 hover:shadow-lg',
 		className
 	)}
 	{...rest}
 >
-	<div class={cn('flex shrink-0 items-center justify-center', cfg.iconColor)} aria-hidden="true">
+	<div
+		class={cn(
+			'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+			cfg.iconColor,
+			cfg.iconBackground
+		)}
+		aria-hidden="true"
+	>
 		<HugeiconsIcon icon={cfg.icon} size={18} strokeWidth={1.8} />
 	</div>
 
-	<div class="min-w-0 flex-1">
+	<div class="min-w-0 flex-1 pr-6">
 		<p class="ds-label text-sm font-semibold text-ink-soft leading-snug break-words">
 			{message}
 		</p>
 		{#if description}
-			<p class="ds-caption text-xs text-mute mt-0.5 leading-tight break-words">
+			<p class="ds-caption mt-1 line-clamp-2 break-words text-xs leading-snug text-mute">
 				{description}
 			</p>
 		{/if}
+		{#if action}
+			<button
+				type="button"
+				onclick={action.onclick}
+				class="mt-2 inline-flex min-h-8 w-fit items-center rounded-full bg-primary-soft px-3 text-xs font-semibold text-primary-ink transition-colors hover:bg-primary-soft-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+			>
+				{action.label}
+			</button>
+		{/if}
 	</div>
-
-	{#if action}
-		<button
-			type="button"
-			onclick={action.onclick}
-			class="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-primary transition-colors hover:bg-primary-soft cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-		>
-			{action.label}
-		</button>
-	{/if}
 
 	{#if onclose}
 		<button
 			type="button"
 			onclick={onclose}
 			aria-label={closeLabel}
-			class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+			class="absolute right-2 top-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 		>
 			<HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={1.8} />
 		</button>
