@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { api, type ApiChatAttachment, type ApiChatConversation, type ApiChatMessage, type ApiChatMember } from '$lib/api/client';
+  import { api, type ApiChatAttachment, type ApiChatConversation, type ApiChatMessage, type ApiChatMember, type ApiChatReceiptCursor } from '$lib/api/client';
+  import { applyLegacyReadEvent, applyReceiptEvent, getMessageStatus } from '$lib/chat/receipts.js';
   import { isStickerMessage, parseSticker, type ChatSticker } from '$lib/chat/stickers.js';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
-  import { Avatar, Badge, Button, Skeleton } from '$lib/components/atoms/index.js';
+  import { Avatar, Badge, Button, MessageTicks, Skeleton } from '$lib/components/atoms/index.js';
   import {
     SearchInput,
     AlertInline,
@@ -16,6 +17,7 @@
     toast
   } from '$lib/components/molecules/index.js';
   import { ConfirmDialog } from '$lib/components/organisms/index.js';
+  import ChatMessageInfoDialog from './ChatMessageInfoDialog.svelte';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     BubbleChatIcon,
@@ -249,6 +251,10 @@
   let activeConversationId = $state<string | null>(null);
   let activeConversation = $state<ApiChatConversation | null>(null);
   let messages = $state<ApiChatMessage[]>([]);
+  let receiptCursors = $state<ApiChatReceiptCursor[]>([]);
+  let infoOpen = $state(false);
+
+  let infoMessage = $state<ApiChatMessage | null>(null);
   let messagesLoading = $state(false);
   let showMsgSkeleton = $state(false);
   let msgSkeletonTimer: ReturnType<typeof setTimeout> | null = null;
@@ -356,6 +362,7 @@
       threadAvatar = conv.partner.avatarUrl;
     }
     dockMode = 'thread';
+    receiptCursors = [];
     await loadMessages();
     await api.markChatRead(workspaceId, conv.id).catch(() => {});
     // Update local unread
@@ -449,7 +456,8 @@
         const oldest = messages[0];
         before = `${new Date(oldest.createdAt).toISOString()}:${oldest.id}`;
       }
-      const res = await api.getChatMessages(workspaceId, activeConversationId!, before);
+      const convId = activeConversationId!;
+      const res = await api.getChatMessages(workspaceId, convId, before);
       if (older) {
         if (res.messages.length === 0) {
           hasOlderMessages = false;
@@ -464,6 +472,7 @@
         }
       } else {
         messages = res.messages;
+        receiptCursors = res.receipts ?? [];
         hasOlderMessages = res.messages.length >= 50;
       }
     } catch {
@@ -475,6 +484,18 @@
       showMsgSkeleton = false;
     }
   }
+
+  // Mark the open thread read when the tab becomes visible again
+  $effect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') return;
+      if (dockMode === 'thread' && activeConversationId && workspaceId) {
+        void api.markChatRead(workspaceId, activeConversationId).catch(() => {});
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  });
 
   // WebSocket event handler — updates local state from server-pushed events
   function handleWsEvent(data: any) {
@@ -502,6 +523,9 @@
         }
         if (msg.senderId !== userId) {
           playNotificationSound();
+          if (dockMode === 'thread' && activeConversationId === convId && document.visibilityState === 'visible') {
+            void api.markChatRead(workspaceId, convId).catch(() => {});
+          }
         }
         break;
       }
@@ -549,9 +573,17 @@
         }
         break;
       }
+      case 'receipt': {
+        if (data.conversationId === activeConversationId && typeof data.userId === 'string') {
+          receiptCursors = applyReceiptEvent(receiptCursors, data);
+        }
+        break;
+      }
       case 'read': {
         if (data.userId !== userId) {
-          // No local state to update for other users' read receipts yet
+          if (data.conversationId === activeConversationId && typeof data.userId === 'string') {
+            receiptCursors = applyLegacyReadEvent(receiptCursors, data.userId);
+          }
         } else {
           conversations = conversations.map((c) =>
             c.id === data.conversationId ? { ...c, unreadCount: 0 } : c
@@ -1755,7 +1787,7 @@
                           {/each}
                         </div>
                       {/if}
-                      <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}</div>
+                      <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}{#if isOwnMessage(msg) && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="neutral" size={12} class="ml-1" />{/if}</div>
                     </div>
                   </div>
                 {/each}
@@ -2375,7 +2407,7 @@
                       {/each}
                     </div>
                   {/if}
-                  <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}</div>
+                  <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}{#if isOwnMessage(msg) && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="neutral" size={12} class="ml-1" />{/if}</div>
                 </div>
               </div>
             {/each}
@@ -2606,7 +2638,9 @@
   onpin={togglePinMessage}
   onedit={startEdit}
   ondelete={(msg) => (deleteTargetId = msg.id)}
+  oninfo={(msg) => { infoMessage = msg; infoOpen = true; }}
 />
+<ChatMessageInfoDialog bind:open={infoOpen} message={infoMessage} receipts={receiptCursors} />
 <ChatForwardDialog
   bind:open={forwardDialogOpen}
   message={forwardSourceMessage}
