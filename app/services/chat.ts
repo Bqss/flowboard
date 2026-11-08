@@ -408,6 +408,151 @@ const getParticipantUserIds = async (conversationId: string): Promise<string[]> 
   return rows.map((r) => r.userId);
 };
 
+/* ------------------------------------------------------- receipts */
+
+type ReceiptCursorRow = {
+  conversationId: string;
+  workspaceId: string;
+  userId: string;
+  lastDeliveredAt: Date | null;
+  lastReadAt: Date | null;
+};
+
+const receiptReturning = {
+  conversationId: chatParticipants.conversationId,
+  workspaceId: chatParticipants.workspaceId,
+  userId: chatParticipants.userId,
+  lastDeliveredAt: chatParticipants.lastDeliveredAt,
+  lastReadAt: chatParticipants.lastReadAt
+};
+
+const toIso = (date: Date | null) => (date ? date.toISOString() : null);
+
+/** Broadcast `receipt` events for updated cursors to all active participants of each conversation. */
+const broadcastReceipts = async (rows: ReceiptCursorRow[]) => {
+  const byConversation = new Map<string, ReceiptCursorRow[]>();
+  for (const row of rows) {
+    const list = byConversation.get(row.conversationId) ?? [];
+    list.push(row);
+    byConversation.set(row.conversationId, list);
+  }
+  for (const [conversationId, list] of byConversation) {
+    const participantIds = await getParticipantUserIds(conversationId);
+    for (const row of list) {
+      broadcastToUsers(row.workspaceId, participantIds, {
+        type: 'receipt',
+        conversationId,
+        userId: row.userId,
+        deliveredAt: toIso(row.lastDeliveredAt),
+        readAt: toIso(row.lastReadAt)
+      });
+    }
+  }
+};
+
+/**
+ * Mark `userIds` as having received everything in `conversationId` up to now.
+ * Fire-and-forget safe: never throws.
+ */
+export const markDelivered = async (
+  workspaceId: string,
+  conversationId: string,
+  userIds: string[]
+): Promise<void> => {
+  const ids = [...new Set(userIds)];
+  if (ids.length === 0) return;
+  try {
+    const rows = await db
+      .update(chatParticipants)
+      .set({ lastDeliveredAt: sql`GREATEST(${chatParticipants.lastDeliveredAt}, now())` })
+      .where(
+        and(
+          eq(chatParticipants.workspaceId, workspaceId),
+          eq(chatParticipants.conversationId, conversationId),
+          inArray(chatParticipants.userId, ids),
+          isNull(chatParticipants.leftAt)
+        )
+      )
+      .returning(receiptReturning);
+    await broadcastReceipts(rows);
+  } catch (error) {
+    console.error('[chat] markDelivered failed:', error);
+  }
+};
+
+/**
+ * Advance `userId`'s delivery cursor on every active participation that has
+ * newer messages from others than the current cursor. Optionally scoped to a
+ * workspace and/or a single conversation. Never throws.
+ */
+const markDeliveredWhereBehind = async (
+  userId: string,
+  scope: { workspaceId?: string | null; conversationId?: string } = {}
+): Promise<void> => {
+  try {
+    const conditions = [
+      eq(chatParticipants.userId, userId),
+      isNull(chatParticipants.leftAt),
+      sql`EXISTS (
+        SELECT 1 FROM ${chatMessages}
+        WHERE ${chatMessages.conversationId} = ${chatParticipants.conversationId}
+          AND ${chatMessages.senderId} <> ${userId}
+          AND (
+            ${chatParticipants.lastDeliveredAt} IS NULL
+            OR ${chatMessages.createdAt} > ${chatParticipants.lastDeliveredAt}
+          )
+      )`
+    ];
+    if (scope.workspaceId) conditions.push(eq(chatParticipants.workspaceId, scope.workspaceId));
+    if (scope.conversationId) conditions.push(eq(chatParticipants.conversationId, scope.conversationId));
+
+    const rows = await db
+      .update(chatParticipants)
+      .set({ lastDeliveredAt: sql`GREATEST(${chatParticipants.lastDeliveredAt}, now())` })
+      .where(and(...conditions))
+      .returning(receiptReturning);
+    await broadcastReceipts(rows);
+  } catch (error) {
+    console.error('[chat] markDeliveredWhereBehind failed:', error);
+  }
+};
+
+/**
+ * Mark every conversation of `userId` (optionally within one workspace) that has
+ * unseen messages from others as delivered. Called when the client loads its inbox.
+ */
+export const markDeliveredForUser = (workspaceId: string | null, userId: string): Promise<void> =>
+  markDeliveredWhereBehind(userId, { workspaceId });
+
+export type ChatReceiptCursor = {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  joinedAt: Date;
+  lastDeliveredAt: Date | null;
+  lastReadAt: Date | null;
+};
+
+/** Delivery/read cursors of all active participants (requester included). */
+const getReceiptCursors = async (conversationId: string): Promise<ChatReceiptCursor[]> =>
+  db
+    .select({
+      userId: chatParticipants.userId,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+      joinedAt: chatParticipants.joinedAt,
+      lastDeliveredAt: chatParticipants.lastDeliveredAt,
+      lastReadAt: chatParticipants.lastReadAt
+    })
+    .from(chatParticipants)
+    .innerJoin(users, eq(users.id, chatParticipants.userId))
+    .where(
+      and(
+        eq(chatParticipants.conversationId, conversationId),
+        isNull(chatParticipants.leftAt)
+      )
+    );
+
 /** For direct conversations, get the other participant's info. */
 const getDirectPartner = async (conversationId: string, userId: string) => {
   const [participant] = await db
@@ -508,6 +653,9 @@ export const listConversations = async (
       }
     }
   }
+
+  // Loading the inbox means this device has received everything up to now.
+  void markDeliveredForUser(workspaceId, userId);
 
   // Get all active conversations for the user in this workspace
   const participantRows = await db
@@ -652,6 +800,8 @@ export const listConversations = async (
 /* ------------------------------------------------------- unread total */
 
 export const countUnread = async (workspaceId: string, userId: string) => {
+  void markDeliveredForUser(workspaceId, userId);
+
   const [row] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(chatMessages)
@@ -1243,17 +1393,27 @@ type MessageRow = {
   attachments: Array<{ id: string; fileName: string; filePath: string; fileType: string; fileSize: number; width: number | null; height: number | null }>;
 };
 
+export type GetMessagesResult = {
+  messages: MessageRow[];
+  /** Cursors of all active participants (requester included); clients compute tick status from these. */
+  receipts: ChatReceiptCursor[];
+};
+
 export const getMessages = async (
   workspaceId: string,
   conversationId: string,
   userId: string,
   before?: { createdAt: Date; id: string }
-): Promise<MessageRow[]> => {
+): Promise<GetMessagesResult> => {
   const conversation = await getConversation(workspaceId, conversationId);
-  if (!conversation) return [];
+  if (!conversation) return { messages: [], receipts: [] };
 
   const participation = await assertParticipant(conversationId, userId);
-  if (!participation) return [];
+  if (!participation) return { messages: [], receipts: [] };
+
+  // Opening the thread means the requester has received it; then read cursors (reflecting that update).
+  await markDeliveredWhereBehind(userId, { conversationId });
+  const receipts = await getReceiptCursors(conversationId);
 
   // Build query with optional cursor
   const conditions = [eq(chatMessages.conversationId, conversationId)];
@@ -1289,7 +1449,7 @@ export const getMessages = async (
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(THREAD_LIMIT);
 
-  if (messages.length === 0) return [];
+  if (messages.length === 0) return { messages: [], receipts };
 
   // Fetch reply targets
   const replyIds = messages.filter((m) => m.replyToMessageId).map((m) => m.replyToMessageId!);
@@ -1375,7 +1535,7 @@ export const getMessages = async (
     };
   });
 
-  return result.reverse();
+  return { messages: result.reverse(), receipts };
 };
 
 /* ------------------------------------------------------- messages: send */
@@ -1547,11 +1707,14 @@ export const sendMessage = async (
 
   // Broadcast to all conversation participants via WebSocket
   const participantIds = await getParticipantUserIds(conversationId);
-  broadcastToUsers(workspaceId, participantIds, {
+  const reached = broadcastToUsers(workspaceId, participantIds, {
     type: 'message:new',
     conversationId,
     message: result
   });
+  // Recipients with a live socket have received the message.
+  reached.delete(userId);
+  await markDelivered(workspaceId, conversationId, [...reached]);
   if (inserted) {
     let preview = 'New message.';
     if (trimmed) {
@@ -1836,7 +1999,7 @@ export const forwardMessage = async (
       .where(eq(chatConversations.id, targetConvId));
 
     const participantIds = await getParticipantUserIds(targetConvId);
-    broadcastToUsers(workspaceId, participantIds, {
+    const reached = broadcastToUsers(workspaceId, participantIds, {
       type: 'message:new',
       conversationId: targetConvId,
       message: {
@@ -1847,6 +2010,8 @@ export const forwardMessage = async (
         attachments: linkedAttachments
       }
     });
+    reached.delete(userId);
+    await markDelivered(workspaceId, targetConvId, [...reached]);
 
     forwardedCount++;
   }
@@ -2014,22 +2179,38 @@ export const markRead = async (
   const participation = await assertParticipant(conversationId, userId);
   if (!participation) return false;
 
-  await db
+  // Read implies delivered.
+  const [cursor] = await db
     .update(chatParticipants)
-    .set({ lastReadAt: new Date() })
+    .set({
+      lastReadAt: sql`now()`,
+      lastDeliveredAt: sql`GREATEST(${chatParticipants.lastDeliveredAt}, now())`
+    })
     .where(
       and(
         eq(chatParticipants.conversationId, conversationId),
         eq(chatParticipants.userId, userId),
         isNull(chatParticipants.leftAt)
       )
-    );
+    )
+    .returning({
+      lastDeliveredAt: chatParticipants.lastDeliveredAt,
+      lastReadAt: chatParticipants.lastReadAt
+    });
 
   const participantIds = await getParticipantUserIds(conversationId);
+  // Legacy event, kept for older clients.
   broadcastToUsers(workspaceId, participantIds, {
     type: 'read',
     conversationId,
     userId
+  });
+  broadcastToUsers(workspaceId, participantIds, {
+    type: 'receipt',
+    conversationId,
+    userId,
+    deliveredAt: toIso(cursor?.lastDeliveredAt ?? null),
+    readAt: toIso(cursor?.lastReadAt ?? null)
   });
   return true;
 };

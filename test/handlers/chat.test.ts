@@ -38,7 +38,7 @@ const listAllChatConversationsMock = mock(() =>
 );
 const countAllChatUnreadMock = mock(() => Promise.resolve(0));
 const listWorkspaceMembersForChatMock = mock(() => Promise.resolve([]));
-const getMessagesMock = mock(() => Promise.resolve([]));
+const getMessagesMock = mock(() => Promise.resolve({ messages: [], receipts: [] }));
 const editMessageMock = mock(() => Promise.resolve(true));
 const deleteMessageMock = mock(() => Promise.resolve(true));
 const toggleReactionMock = mock(() => Promise.resolve('added' as const));

@@ -220,8 +220,8 @@ export async function getMessagesHandler(ctx: Ctx<unknown, ConversationParams>) 
       before = { createdAt: new Date(createdAtStr), id };
     }
   }
-  const messages = await getMessages(ctx.workspace.id, ctx.params.conversationId, ctx.user.id, before);
-  return { messages };
+  const { messages, receipts } = await getMessages(ctx.workspace.id, ctx.params.conversationId, ctx.user.id, before);
+  return { messages, receipts };
 }
 
 export async function sendMessageHandler(ctx: Ctx<SendMessageBody, ConversationParams>) {
