@@ -76,6 +76,6 @@
 
 		{@render actions?.()}
 
-		<ThemeToggle size="sm" labels={themeLabels} />
+		<ThemeToggle size="sm" labels={themeLabels} class="hidden sm:inline-grid" />
 	</div>
 </header>

@@ -153,30 +153,79 @@ body {
 
 
 /* Thin scrollbar using the active workspace surface ladder. */
-* {
+*:not(.no-scrollbar):not(.scrollbar-none):not(.kanban-scrollbar-hidden):not(.filter-scroll-container) {
   scrollbar-width: thin;
   scrollbar-color: var(--color-stone) transparent;
 }
-*::-webkit-scrollbar {
+*:not(.no-scrollbar):not(.scrollbar-none):not(.kanban-scrollbar-hidden):not(.filter-scroll-container)::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-*::-webkit-scrollbar-thumb {
+*:not(.no-scrollbar):not(.scrollbar-none):not(.kanban-scrollbar-hidden):not(.filter-scroll-container)::-webkit-scrollbar-thumb {
   background: var(--color-stone);
   border-radius: 9999px;
   border: 3px solid var(--color-canvas);
 }
 
-/* Hide board scrollbars without disabling wheel, touch, or trackpad scrolling. */
-.kanban-scrollbar-hidden {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+/* Hide scrollbars without disabling wheel, touch, or trackpad scrolling. */
+.no-scrollbar,
+.scrollbar-none,
+.kanban-scrollbar-hidden,
+.filter-scroll-container {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-.kanban-scrollbar-hidden::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar,
+.kanban-scrollbar-hidden::-webkit-scrollbar,
+.filter-scroll-container::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.no-scrollbar::-webkit-scrollbar-track,
+.no-scrollbar::-webkit-scrollbar-thumb,
+.scrollbar-none::-webkit-scrollbar-track,
+.scrollbar-none::-webkit-scrollbar-thumb,
+.kanban-scrollbar-hidden::-webkit-scrollbar-track,
+.kanban-scrollbar-hidden::-webkit-scrollbar-thumb,
+.filter-scroll-container::-webkit-scrollbar-track,
+.filter-scroll-container::-webkit-scrollbar-thumb {
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+/* Visible, smooth horizontal scroller for Kanban boards */
+.kanban-board-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-hairline-strong, #cbd5e1) var(--color-canvas-sunken, #eef2f7);
+}
+
+.kanban-board-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.kanban-board-scroll::-webkit-scrollbar-track {
+  background: var(--color-canvas-sunken, #eef2f7);
+  border-radius: 9999px;
+  margin-inline: 4px;
+}
+
+.kanban-board-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-hairline-strong, #cbd5e1);
+  border-radius: 9999px;
+  border: 1px solid var(--color-canvas-sunken, #eef2f7);
+}
+
+.kanban-board-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-mute, #64748b);
 }
 
 /* Focus ring follows the shared indigo action language. */
@@ -236,6 +285,7 @@ body {
   opacity: 1;
   visibility: visible;
 }
+
 
 @media (prefers-reduced-motion: reduce) {
   html {

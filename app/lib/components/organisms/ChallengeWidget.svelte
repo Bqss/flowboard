@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cn } from '$lib/utils.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Rocket01Icon,
@@ -29,9 +30,10 @@
       completed: string;
       goalLabel: string;
     };
+    sidebarCollapsed?: boolean;
   };
 
-  let { challenges, labels }: Props = $props();
+  let { challenges, labels, sidebarCollapsed = false }: Props = $props();
 
   let expanded = $state(false);
   let hidden = $state(false);
@@ -68,22 +70,21 @@
 </script>
 
 {#if hidden}
-  <!-- Hidden to side: docked tab flush against the right edge -->
-  <div class="fixed bottom-24 right-0 z-[210] sm:bottom-28" data-onboarding="challenge-widget">
+  <!-- Hidden to side: docked tab flush against the left edge -->
+  <div
+    class={cn(
+      'fixed bottom-24 left-0 z-[210] sm:bottom-28 transition-[left] duration-200',
+      sidebarCollapsed ? 'md:left-[68px]' : 'md:left-[248px]'
+    )}
+    data-onboarding="challenge-widget"
+  >
     <button
       type="button"
       onclick={() => toggleHide(false)}
-      class="group flex items-center gap-2 rounded-l-full border-y border-l border-hairline bg-card py-2.5 pl-3 pr-1.5 shadow-popover transition-all hover:border-hairline-strong hover:bg-canvas-sunken hover:pl-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
+      class="group flex items-center gap-2 rounded-r-full border-y border-r border-hairline bg-card py-2.5 pr-3 pl-1.5 shadow-popover transition-all hover:border-hairline-strong hover:bg-canvas-sunken hover:pr-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
       title="{labels.goalLabel} ({completedCount}/{totalCount}) - Klik untuk buka"
       aria-label="{labels.goalLabel} ({completedCount}/{totalCount})"
     >
-      <HugeiconsIcon
-        icon={ArrowLeft01Icon}
-        size={15}
-        strokeWidth={2}
-        class="text-mute transition-transform group-hover:-translate-x-0.5 text-primary"
-      />
-
       <!-- Progress ring -->
       <div class="relative flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-soft">
         <svg class="absolute inset-0 -rotate-90" viewBox="0 0 36 36" fill="none">
@@ -103,11 +104,24 @@
       <span class="max-w-0 overflow-hidden whitespace-nowrap text-xs font-medium text-ink transition-all duration-300 group-hover:max-w-xs group-hover:pr-1">
         {labels.goalLabel}
       </span>
+
+      <HugeiconsIcon
+        icon={ArrowRight01Icon}
+        size={15}
+        strokeWidth={2}
+        class="text-mute transition-transform group-hover:translate-x-0.5 text-primary"
+      />
     </button>
   </div>
 {:else}
-  <!-- Normal floating widget at bottom right -->
-  <div class="fixed bottom-4 right-4 z-[210] sm:bottom-6 sm:right-6" data-onboarding="challenge-widget">
+  <!-- Normal floating widget at bottom left -->
+  <div
+    class={cn(
+      'fixed bottom-20 left-4 z-[210] sm:bottom-6 sm:left-6 transition-[left] duration-200',
+      sidebarCollapsed ? 'md:left-[84px]' : 'md:left-[264px]'
+    )}
+    data-onboarding="challenge-widget"
+  >
     {#if expanded}
       <!-- Expanded panel — matches desktop panel style -->
       <div class="flex w-[320px] flex-col rounded-2xl border border-hairline bg-card shadow-popover overflow-hidden h-[460px] max-h-[calc(100vh-120px)] animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -201,12 +215,27 @@
     {:else}
       <!-- Collapsed pill with hide to side button -->
       <div class="flex items-center rounded-full border border-hairline bg-card shadow-popover transition-all hover:border-hairline-strong hover:shadow-card-hover">
+        <!-- Hide to side button (on left, hides toward left edge) -->
+        <button
+          type="button"
+          onclick={() => toggleHide(true)}
+          class="flex size-8 items-center justify-center rounded-full text-mute transition-colors hover:bg-canvas-sunken hover:text-ink ml-1.5 mr-0.5 cursor-pointer"
+          title="Sembunyikan ke tepi / Hide to side"
+          aria-label="Sembunyikan ke tepi"
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={1.8} />
+        </button>
+
+        <div class="h-4 w-px bg-hairline"></div>
+
         <button
           type="button"
           onclick={() => (expanded = true)}
-          class="flex items-center gap-2.5 py-3 pl-4 pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] rounded-l-full cursor-pointer"
+          class="flex items-center gap-2.5 py-3 pr-4 pl-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] rounded-r-full cursor-pointer"
           aria-label="{labels.goalLabel} - Buka senarai"
         >
+          <span class="ds-label text-ink">{labels.goalLabel}</span>
+
           <!-- Progress ring -->
           <div class="relative flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-soft">
             <svg class="absolute inset-0 -rotate-90" viewBox="0 0 36 36" fill="none">
@@ -223,22 +252,7 @@
             <span class="text-[10px] font-bold text-primary">{completedCount}/{totalCount}</span>
           </div>
 
-          <span class="ds-label text-ink">{labels.goalLabel}</span>
-
           <HugeiconsIcon icon={ChevronDownIcon} size={16} strokeWidth={1.8} class="shrink-0 text-mute rotate-180" />
-        </button>
-
-        <div class="h-4 w-px bg-hairline"></div>
-
-        <!-- Hide to side button -->
-        <button
-          type="button"
-          onclick={() => toggleHide(true)}
-          class="flex size-8 items-center justify-center rounded-full text-mute transition-colors hover:bg-canvas-sunken hover:text-ink mr-1.5 ml-0.5 cursor-pointer"
-          title="Sembunyikan ke tepi / Hide to side"
-          aria-label="Sembunyikan ke tepi"
-        >
-          <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} />
         </button>
       </div>
     {/if}

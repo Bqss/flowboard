@@ -11,9 +11,9 @@
 	let { position = 'bottom-right', class: className = '' }: Props = $props();
 
 	const positionClasses = {
-		'bottom-right': 'bottom-6 right-6 items-end',
-		'bottom-left': 'bottom-6 left-6 items-start',
-		'bottom-center': 'bottom-6 left-1/2 -translate-x-1/2 items-center',
+		'bottom-right': 'bottom-36 right-6 items-end sm:bottom-6',
+		'bottom-left': 'bottom-36 left-6 items-start sm:bottom-6',
+		'bottom-center': 'bottom-36 left-1/2 -translate-x-1/2 items-center sm:bottom-6',
 		'top-right': 'top-6 right-6 items-end',
 		'top-left': 'top-6 left-6 items-start',
 		'top-center': 'top-6 left-1/2 -translate-x-1/2 items-center'

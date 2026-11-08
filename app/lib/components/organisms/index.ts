@@ -7,6 +7,7 @@ import CommandPalette from './CommandPalette.svelte';
 import NotificationCenter from './NotificationCenter.svelte';
 import DashboardLayout from './DashboardLayout.svelte';
 import ChatDock from './ChatDock.svelte';
+import MobileMenuDrawer from './MobileMenuDrawer.svelte';
 
 // Data
 import CardGrid from './CardGrid.svelte';
@@ -104,6 +105,7 @@ export {
 	PwaInstallPrompt,
 	ImpersonateSwitcher,
 	ChatDock,
+	MobileMenuDrawer,
 	FormSection,
 	MultiStepForm,
 	FilterBar,

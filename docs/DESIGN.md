@@ -1035,6 +1035,7 @@ Rules that follow from the table:
 - **Topbar** at mobile: logo tile + wordmark left, `Menu01Icon` right. Breadcrumbs collapse to the last crumb only. The action cluster (notification / invite / share / avatar) moves onto its own row beneath the page title as a 40px icon-button row — as in `../reference/image copy 2.png`.
 - **Detail drawer → full-screen sheet** at mobile, `{rounded.3xl}` top corners only, with a 4px × 40px `{colors.hairline-strong}` drag handle centered at the top.
 - **Modal → bottom sheet** at mobile.
+- **Keyboard-aware modal** at mobile: size against the visual viewport and scroll the focused field fully above the on-screen keyboard.
 
 ### Touch Targets
 `{component.button-primary}` 40px and `{component.button-primary-lane}` 44px both clear WCAG AA. `{component.icon-button}` is 40px. `{component.icon-button-bare}` is 28px visually — pad its hit area to 40px with `-m-1.5 p-1.5` or equivalent. `{component.status-pill}` and `{component.badge-soft}` are display-only and exempt; if you make them interactive (filter-by-tag), raise them to a 36px hit area. `{component.avatar}` at 28px must be padded to 40px when clickable.

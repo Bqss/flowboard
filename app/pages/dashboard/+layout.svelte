@@ -4,13 +4,19 @@
   import { api, ApiError } from '$lib/api/client';
   import type { ApiAccount, ApiNotification } from '$lib/api/client';
   import type { LayoutData } from '../$types';
-  import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget, Dialog } from '$lib/components/organisms/index.js';
+  import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget, Dialog, BottomTabBar, MobileMenuDrawer } from '$lib/components/organisms/index.js';
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
-  import { Avatar, Button, Input } from '$lib/components/atoms/index.js';
+  import { Avatar, Button, Input, Logo } from '$lib/components/atoms/index.js';
   import { DropdownMenu, FormField, toast, type MenuItem } from '$lib/components/molecules/index.js';
   import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
   import { locale, locales, setLocale } from '$lib/i18n/index.js';
-  import { playNotificationSound, unlockNotificationSound } from '$lib/notifications/sound.js';
+  import { setMode, userPrefersMode } from 'mode-watcher';
+  import { unlockNotificationSound } from '$lib/notifications/sound.js';
+  import { triggerBuzz } from '$lib/notifications/buzz.js';
+  import {
+    isAutoBuzzTaskNotification,
+    shouldAutoBuzzIncomingMessage
+  } from '$lib/notifications/auto-buzz.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Home09Icon,
@@ -33,7 +39,10 @@
     UserSwitchIcon,
     Add01Icon,
     BubbleChatIcon,
-    PanelLeftOpenIcon
+    PanelLeftOpenIcon,
+    Globe02Icon,
+    Sun02Icon,
+    Moon02Icon
   } from '@hugeicons/core-free-icons';
   let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
@@ -48,10 +57,12 @@
       case 'card_due_soon':
       case 'handover':
       case 'workflow_action':
-      case 'chat_message':
+      case 'chat_reaction':
       case 'task_assigned':
       case 'task_comment':
       case 'task_mention':
+      case 'task_due_soon':
+      case 'task_overdue':
         return true;
       default:
         return false;
@@ -140,16 +151,15 @@
         return tr('notifications.taskComment');
       case 'task_mention':
         return tr('notifications.taskMention');
+      case 'task_due_soon':
+        return tr('notifications.taskDueSoon');
+      case 'task_overdue':
+        return tr('notifications.taskOverdue');
       default:
         return item.title;
     }
   };
 
-  const isAudibleNotification = (type: ApiNotification['type']) =>
-    type === 'chat_message' ||
-    type === 'task_assigned' ||
-    type === 'task_comment' ||
-    type === 'task_mention';
   const themeLabels = $derived({
     light: tr('shell.themeLight'),
     dark: tr('shell.themeDark'),
@@ -174,6 +184,7 @@
     Array<{ id: string; name: string; slug: string; role: 'owner' | 'member'; joinedAt: string }>
   >([]);
   let mobileNavOpen = $state(false);
+  let mobileDrawerOpen = $state(false);
   let creatingWorkspace = $state(false);
   let createWorkspaceOpen = $state(false);
   let newWorkspaceName = $state('');
@@ -258,6 +269,12 @@
               : null;
             if (notification) handleIncomingNotification(notification);
           }
+          if (payload.type === 'buzz:send') {
+            handleIncomingBuzz(payload);
+          }
+          if (payload.type === 'message:new') {
+            handleIncomingMessage(payload, workspaceId);
+          }
           if (
             payload.type === 'message:new' ||
             payload.type === 'message:delete' ||
@@ -291,15 +308,10 @@
     };
   });
 
-  $effect(() => {
-    if (typeof localStorage !== 'undefined') {
-      sidebarCollapsed = localStorage.getItem('flowboard-sidebar-collapsed') === 'true';
-    }
-  });
 
   function toggleSidebar() {
     sidebarCollapsed = !sidebarCollapsed;
-    if (typeof localStorage !== 'undefined') {
+    if (typeof localStorage !== 'undefined' && !isBoardDetailPage) {
       localStorage.setItem('flowboard-sidebar-collapsed', String(sidebarCollapsed));
     }
   }
@@ -369,6 +381,73 @@
     }
   ]);
 
+  const isMenuDrawerPageActive = $derived(
+    mobileDrawerOpen ||
+    $page.url.pathname.startsWith('/dashboard/members') ||
+    $page.url.pathname.startsWith('/dashboard/settings') ||
+    $page.url.pathname.startsWith('/dashboard/admin')
+  );
+
+  const bottomNavItems = $derived([
+    {
+      href: '/dashboard/chat',
+      label: 'Chat',
+      active: $page.url.pathname.startsWith('/dashboard/chat'),
+      badge: unreadMessageCount > 0 ? (unreadMessageCount > 99 ? '99+' : unreadMessageCount) : undefined,
+      icon: messagesIcon
+    },
+    {
+      href: '/dashboard/workflows',
+      label: 'Workflow',
+      active: $page.url.pathname.startsWith('/dashboard/workflows'),
+      icon: workflowsIcon
+    },
+    {
+      href: '/dashboard',
+      label: 'Home',
+      active: $page.url.pathname === '/dashboard' || $page.url.pathname === '/dashboard/',
+      icon: homeIcon
+    },
+    {
+      href: '/dashboard/boards',
+      label: 'Taskboard',
+      active: $page.url.pathname.startsWith('/dashboard/boards'),
+      icon: boardsIcon
+    },
+    {
+      label: 'Menu',
+      onselect: () => {
+        mobileDrawerOpen = !mobileDrawerOpen;
+      },
+      active: isMenuDrawerPageActive,
+      icon: menuIcon
+    }
+  ]);
+
+  const mobilePageTitle = $derived.by(() => {
+    const path = $page.url.pathname;
+    if (path.startsWith('/dashboard/chat')) return tr('nav.messages') || 'Mesej';
+    if (path.startsWith('/dashboard/workflows')) return 'Workflow';
+    if (path.startsWith('/dashboard/boards')) return 'Taskboard';
+    if (path.startsWith('/dashboard/members')) return tr('nav.members') || 'Ahli';
+    if (path.startsWith('/dashboard/settings/integrations')) return tr('nav.integrations') || 'Integrasi';
+    if (path.startsWith('/dashboard/settings')) return tr('nav.settings') || 'Tetapan';
+    if (path.startsWith('/dashboard/admin')) return tr('nav.admin') || 'Pentadbiran';
+    return tr('nav.dashboard') || 'Papan Pemuka';
+  });
+
+  const mobilePageSubtitle = $derived.by(() => {
+    const path = $page.url.pathname;
+    if (path.startsWith('/dashboard/chat')) return 'Perbualan & aliran kerja';
+    if (path.startsWith('/dashboard/workflows')) return 'Automasi aliran kerja';
+    if (path.startsWith('/dashboard/boards')) return 'Pengurusan tugasan';
+    if (path.startsWith('/dashboard/members')) return 'Ahli ruang kerja';
+    if (path.startsWith('/dashboard/settings/integrations')) return 'WhatsApp & sambungan luaran';
+    if (path.startsWith('/dashboard/settings')) return 'Profil & keselamatan';
+    if (path.startsWith('/dashboard/admin')) return 'Panel pentadbir';
+    return data.workspace?.name ?? 'actjom';
+  });
+
   const isChatPage = $derived($page.url.pathname.startsWith('/dashboard/chat'));
   const isBoardDetailPage = $derived(
     $page.url.pathname.startsWith('/dashboard/boards/') &&
@@ -381,6 +460,24 @@
     !$page.url.pathname.endsWith('/stats') &&
     !$page.url.pathname.endsWith('/settings')
   );
+
+  let previousNavPath = '';
+
+  $effect(() => {
+    const currentPath = $page.url.pathname;
+    const isBoard = isBoardDetailPage;
+
+    if (currentPath !== previousNavPath) {
+      if (isBoard) {
+        sidebarCollapsed = true;
+      } else {
+        if (typeof localStorage !== 'undefined') {
+          sidebarCollapsed = localStorage.getItem('flowboard-sidebar-collapsed') === 'true';
+        }
+      }
+      previousNavPath = currentPath;
+    }
+  });
 
   const settingsItems = $derived([
     {
@@ -607,7 +704,7 @@
   };
 
   const notificationTargetUrl = (item: ApiNotification, workspaceId: string) => {
-    if (item.type === 'chat_message' && item.conversationId) {
+    if ((item.type === 'chat_message' || item.type === 'chat_reaction') && item.conversationId) {
       return `/dashboard/chat?workspaceId=${encodeURIComponent(workspaceId)}&conversationId=${encodeURIComponent(item.conversationId)}`;
     }
     if (item.boardId && item.taskId) {
@@ -634,19 +731,74 @@
     workspaceId: string,
     targetUrl?: string
   ) {
+    if (item.type === 'chat_message') return;
+
+    if (isAutoBuzzTaskNotification(item.type)) {
+      if (item.title.startsWith('💥 BOMB!')) return;
+      const actionUrl = targetUrl ?? notificationTargetUrl(item, workspaceId) ?? undefined;
+      triggerBuzz({
+        senderName: 'ActJom',
+        title: notificationTitle(item),
+        note: item.body,
+        actionUrl,
+        onaction: actionUrl
+          ? () => {
+              void openNotification(item, workspaceId, targetUrl);
+            }
+          : undefined,
+        sound: soundAlertsEnabled
+      });
+      return;
+    }
+
     if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
 
     toast.info(notificationTitle(item), {
       description: item.body,
       duration: 7000,
-      action: {
-        label: tr('shell.openNotification'),
-        onclick: () => {
-          void openNotification(item, workspaceId, targetUrl);
-        }
-      }
+      action:
+        item.type === 'chat_reaction'
+          ? undefined
+          : {
+              label: tr('shell.openNotification'),
+              onclick: () => {
+                void openNotification(item, workspaceId, targetUrl);
+              }
+            }
     });
-    if (soundAlertsEnabled && isAudibleNotification(item.type)) playNotificationSound();
+  }
+
+  function handleIncomingMessage(payload: unknown, workspaceId: string) {
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      !('message' in payload) ||
+      !('conversationId' in payload) ||
+      typeof payload.conversationId !== 'string'
+    ) return;
+
+    const message = payload.message;
+    if (!message || typeof message !== 'object' || !('senderId' in message)) return;
+    if (!shouldAutoBuzzIncomingMessage(message.senderId, data.user?.id)) return;
+
+    const senderName =
+      'senderName' in message && typeof message.senderName === 'string'
+        ? message.senderName
+        : 'Rakan sekerja';
+    const body = 'body' in message && typeof message.body === 'string' ? message.body.trim() : '';
+    const hasAttachments =
+      'attachments' in message && Array.isArray(message.attachments) && message.attachments.length > 0;
+
+    triggerBuzz({
+      senderName,
+      title: tr('notifications.chatMessage'),
+      note: body
+        ? `${senderName}: ${body}`
+        : hasAttachments
+          ? `${senderName}: 📎 Lampiran baharu diterima.`
+          : `${senderName}: Anda menerima mesej baharu.`,
+      sound: soundAlertsEnabled
+    });
   }
 
   function handleIncomingNotification(notification: ApiNotification & { workspaceId: string }) {
@@ -681,6 +833,37 @@
     if (alert.workspaceId === data.workspace?.id) notificationUnreadCount += 1;
     showNotificationAlert(notification, alert.workspaceId, alert.url);
     if (alert.workspaceId === data.workspace?.id) void loadNotifications();
+  }
+
+  function handleIncomingBuzz(dataPayload: unknown) {
+    if (!dataPayload || typeof dataPayload !== 'object') return;
+    const buzz = dataPayload as {
+      senderId?: string;
+      senderName?: string;
+      conversationId?: string;
+      taskId?: string;
+      taskTitle?: string;
+      note?: string;
+      workspaceId?: string;
+    };
+    if (buzz.senderId === data.user?.id || buzz.conversationId) return;
+
+    const actionUrl = buzz.taskId
+      ? `/dashboard/boards?workspaceId=${encodeURIComponent(buzz.workspaceId || data.workspace?.id || '')}&task=${encodeURIComponent(buzz.taskId)}`
+      : undefined;
+
+    triggerBuzz({
+      senderName: buzz.senderName || 'Rakan sekerja',
+      title: `Buzz dari ${buzz.senderName || 'Rakan sekerja'}`,
+      note: buzz.note || (buzz.taskTitle ? `Perhatian untuk tugasan: "${buzz.taskTitle}"` : 'Perhatian! Mesej penting memerlukan tindakan anda segera!'),
+      actionUrl,
+      onaction: actionUrl
+        ? () => {
+            void goto(actionUrl);
+          }
+        : undefined,
+      sound: soundAlertsEnabled
+    });
   }
 
   async function loadNotifications() {
@@ -873,6 +1056,45 @@
       icon: userSwitchIcon,
       submenu: switchAccountMenuItems
     },
+    ...(data.user?.platformAdmin
+      ? [
+          {
+            label: adminMode ? (tr('nav.exitAdmin') || 'Keluar Mod Pentadbir') : (tr('nav.adminMode') || 'Mod Pentadbir'),
+            icon: shieldUserIcon,
+            onselect: toggleAdminMode
+          }
+        ]
+      : []),
+    {
+      label: tr('language.label') || 'Bahasa',
+      icon: globeIcon,
+      submenu: locales.map((lang) => ({
+        label: `${tr(`language.${lang.code}`) || (lang.code === 'ms' ? 'Bahasa Melayu' : 'English')} (${lang.short})`,
+        icon: $locale === lang.code ? checkIcon : undefined,
+        onselect: () => setLocale(lang.code)
+      }))
+    },
+    {
+      label: tr('theme.label') || 'Tema',
+      icon: sunIcon,
+      submenu: [
+        {
+          label: 'Terang',
+          icon: userPrefersMode.current === 'light' ? checkIcon : sunIcon,
+          onselect: () => setMode('light')
+        },
+        {
+          label: 'Gelap',
+          icon: userPrefersMode.current === 'dark' ? checkIcon : moonIcon,
+          onselect: () => setMode('dark')
+        },
+        {
+          label: 'Sistem',
+          icon: userPrefersMode.current === 'system' ? checkIcon : undefined,
+          onselect: () => setMode('system')
+        }
+      ]
+    },
     {
       label: tr('shell.profileSettings'),
       icon: settingsIcon,
@@ -952,6 +1174,21 @@
 {#snippet vouchersIcon()}
   <HugeiconsIcon icon={GiftIcon} size={20} strokeWidth={1.8} />
 {/snippet}
+{#snippet menuIcon()}
+  <HugeiconsIcon icon={Menu01Icon} size={20} strokeWidth={1.8} />
+{/snippet}
+{#snippet globeIcon()}
+  <HugeiconsIcon icon={Globe02Icon} size={16} strokeWidth={1.8} />
+{/snippet}
+{#snippet sunIcon()}
+  <HugeiconsIcon icon={Sun02Icon} size={16} strokeWidth={1.8} />
+{/snippet}
+{#snippet moonIcon()}
+  <HugeiconsIcon icon={Moon02Icon} size={16} strokeWidth={1.8} />
+{/snippet}
+{#snippet shieldUserIcon()}
+  <HugeiconsIcon icon={ShieldUserIcon} size={16} strokeWidth={1.8} />
+{/snippet}
 
 <div data-theme="app" class="flex min-h-screen w-full bg-canvas text-body">
   <SidebarRail
@@ -986,7 +1223,7 @@
     }}
   />
 
-  <div class="flex h-screen min-w-0 flex-1 flex-col {isChatPage || isBoardDetailPage || isWorkflowDetailPage ? 'overflow-hidden' : 'overflow-y-auto'} transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
+  <div class="flex h-[100dvh] max-h-[100dvh] min-w-0 flex-1 flex-col {isChatPage || isBoardDetailPage || isWorkflowDetailPage ? 'overflow-hidden' : 'overflow-y-auto'} transition-[padding] duration-200 ease-out {sidebarCollapsed ? 'md:pl-[68px]' : 'md:pl-[248px]'}">
     <Topbar
       title={data.workspace?.name ?? 'actjom'}
       showSearch={false}
@@ -994,17 +1231,24 @@
       themeLabels={themeLabels}
     >
       {#snippet heading()}
-        <div class="flex items-center gap-2">
-          <!-- Mobile Menu Button -->
-          <button
-            type="button"
-            onclick={() => (mobileNavOpen = true)}
-            class="flex size-9 shrink-0 items-center justify-center rounded-lg text-mute transition-colors hover:bg-canvas-sunken hover:text-ink md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-            aria-label="Open menu"
-          >
-            <HugeiconsIcon icon={Menu01Icon} size={20} strokeWidth={2} />
-          </button>
+        <!-- Mobile Header (matching Image #1) -->
+        <div class="flex items-center gap-2.5 md:hidden min-w-0">
+          <a href="/dashboard" class="flex flex-col items-center shrink-0 leading-none">
+            <Logo size={28} />
+            <span class="text-[9px] font-bold text-primary tracking-tight -mt-0.5">actjom</span>
+          </a>
+          <div class="min-w-0">
+            <h1 class="text-base font-bold text-ink leading-tight truncate">
+              {mobilePageTitle}
+            </h1>
+            <p class="text-[11px] text-mute leading-tight truncate">
+              {mobilePageSubtitle}
+            </p>
+          </div>
+        </div>
 
+        <!-- Desktop Header -->
+        <div class="hidden md:flex items-center gap-2">
           {#if sidebarCollapsed}
             <button
               type="button"
@@ -1098,7 +1342,7 @@
     </Topbar>
 
     {#if isChatPage}
-      <main class="flex min-h-0 flex-1 flex-col overflow-hidden bg-canvas p-0">
+      <main class="flex min-h-0 flex-1 flex-col overflow-hidden bg-canvas p-0 pb-16 md:pb-0">
         <div class="flex h-full w-full min-h-0 flex-1 flex-col">
           <OnboardingProvider>
             {@render children()}
@@ -1107,7 +1351,7 @@
       </main>
     {:else if isBoardDetailPage || isWorkflowDetailPage}
       <div class="flex min-h-0 flex-1 overflow-hidden">
-        <main class="flex-1 min-w-0 flex flex-col overflow-hidden bg-canvas p-0">
+        <main class="flex-1 min-w-0 flex flex-col overflow-hidden bg-canvas p-0 pb-16 md:pb-0">
           <div class="flex h-full w-full min-h-0 flex-1 flex-col">
             <OnboardingProvider>
               {@render children()}
@@ -1126,7 +1370,7 @@
       </div>
     {:else}
       <div class="flex min-h-0 flex-1 overflow-hidden">
-        <main class="flex-1 min-w-0 overflow-y-auto bg-canvas px-3.5 pt-4 pb-8 sm:px-6 md:px-8 md:pt-16 md:pb-10">
+        <main class="flex-1 min-w-0 overflow-y-auto bg-canvas px-3.5 pt-4 pb-24 sm:px-6 md:px-8 md:pt-16 md:pb-10">
           <div class="mx-auto w-full max-w-[1280px]">
             <OnboardingProvider>
               {@render children()}
@@ -1144,9 +1388,11 @@
         {/if}
       </div>
     {/if}
+
+    <BottomTabBar items={bottomNavItems} />
   </div>
   {#if challengeData && !isChatPage}
-    <ChallengeWidget challenges={challengeData.challenges} labels={challengeData.labels} />
+    <ChallengeWidget challenges={challengeData.challenges} labels={challengeData.labels} sidebarCollapsed={sidebarCollapsed} />
   {/if}
   <Toaster />
 
@@ -1194,4 +1440,40 @@
       </div>
     {/snippet}
   </Dialog>
+
+  <MobileMenuDrawer
+    bind:open={mobileDrawerOpen}
+    currentPath={$page.url.pathname}
+    workspaceName={data.workspace?.name ?? 'actjom'}
+    workspaceRole={data.workspace?.role}
+    currentWorkspaceId={data.workspace?.id}
+    workspaces={workspaces}
+    onSwitchWorkspace={switchWorkspace}
+    onCreateWorkspace={openCreateWorkspace}
+    userName={data.user?.name ?? 'User'}
+    userEmail={data.user?.email}
+    userRole={data.user?.platformAdmin ? 'Platform Admin' : (data.workspace?.role === 'owner' ? 'Owner' : 'Member')}
+    userSrc={data.user?.avatarUrl ?? undefined}
+    accounts={accounts}
+    currentUserId={data.user?.id}
+    onSwitchAccount={switchAccount}
+    isPlatformAdmin={Boolean(data.user?.platformAdmin)}
+    adminMode={adminMode}
+    onToggleAdminMode={toggleAdminMode}
+    onLogout={logout}
+    labels={{
+      menuTitle: tr('nav.menu') || 'Menu Utama',
+      members: tr('nav.members') || 'Ahli',
+      integrations: tr('nav.integrations') || 'Integrasi',
+      settings: tr('nav.settings') || 'Tetapan',
+      signOut: tr('shell.signOut') || 'Log Keluar',
+      addWorkspace: tr('shell.addWorkspace') || 'Cipta baharu',
+      adminMode: tr('nav.adminMode') || 'Mod Pentadbir',
+      exitAdmin: tr('nav.exitAdmin') || 'Keluar Mod Pentadbir',
+      adminOverview: tr('admin.nav.overview') || 'Ringkasan Platform',
+      adminUsers: tr('admin.nav.users') || 'Pengguna',
+      adminSubscriptions: tr('admin.nav.subscriptions') || 'Langganan',
+      adminVouchers: tr('admin.nav.vouchers') || 'Baucar'
+    }}
+  />
 </div>
