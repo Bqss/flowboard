@@ -27,6 +27,7 @@
     Dialog,
     Sheet,
     ConfirmDialog,
+    ChatMessageInfoDialog,
     Popover,
     AlertBanner,
     Toaster,
@@ -58,6 +59,34 @@
   let dialogOpen = $state(false);
   let sheetOpen = $state(false);
   let confirmOpen = $state(false);
+  let messageInfoOpen = $state(false);
+
+  const demoNow = Date.now();
+  const demoIso = (minutesAgo: number) => new Date(demoNow - minutesAgo * 60_000).toISOString();
+  const demoChatMessage = {
+    id: 'demo-msg',
+    senderId: 'me',
+    senderName: 'Saya',
+    senderAvatarUrl: null,
+    body: 'Tolong cek progres kartu onboarding sebelum rapat sore ini ya, terutama bagian checklist dokumen.',
+    replyToMessageId: null,
+    replyToBody: null,
+    replyToSenderName: null,
+    replyToDeleted: null,
+    editedAt: null,
+    deletedAt: null,
+    createdAt: demoIso(90),
+    reactions: [],
+    attachments: []
+  };
+  const demoReceipts = [
+    { userId: 'me', name: 'Saya', avatarUrl: null, joinedAt: demoIso(100000), lastDeliveredAt: demoIso(1), lastReadAt: demoIso(1) },
+    { userId: 'u1', name: 'Ahmad Rizki', avatarUrl: null, joinedAt: demoIso(100000), lastDeliveredAt: demoIso(80), lastReadAt: demoIso(75) },
+    { userId: 'u2', name: 'Sarah Chen', avatarUrl: null, joinedAt: demoIso(100000), lastDeliveredAt: demoIso(60 * 24), lastReadAt: demoIso(60 * 24) },
+    { userId: 'u3', name: 'Budi Santoso', avatarUrl: null, joinedAt: demoIso(100000), lastDeliveredAt: demoIso(85), lastReadAt: demoIso(200) },
+    { userId: 'u4', name: 'Dewi Lestari', avatarUrl: null, joinedAt: demoIso(100000), lastDeliveredAt: demoIso(300), lastReadAt: demoIso(300) },
+    { userId: 'u5', name: 'Joko (baru gabung)', avatarUrl: null, joinedAt: demoIso(10), lastDeliveredAt: null, lastReadAt: null }
+  ];
   let popoverOpen = $state(false);
   let cmdOpen = $state(false);
   let bannerVisible = $state(true);
@@ -186,7 +215,7 @@
     'SidebarRail', 'Topbar', 'BottomTabBar', 'AppFooter', 'CommandPalette', 'NotificationCenter',
     'DashboardLayout', 'CardGrid', 'ChartCard', 'GaugeCard', 'ListCard', 'ProfileCard', 'TableCard',
     'DataTable', 'SecurityCard', 'Timeline', 'TreeView', 'KanbanBoard', 'FileUploader', 'Dialog',
-    'Sheet', 'ConfirmDialog', 'Popover', 'AlertBanner', 'Toaster', 'FormSection', 'MultiStepForm', 'FilterBar',
+    'Sheet', 'ConfirmDialog', 'ChatMessageInfoDialog', 'Popover', 'AlertBanner', 'Toaster', 'FormSection', 'MultiStepForm', 'FilterBar',
     'LoginForm', 'SettingsPanel', 'HeroSection', 'FeatureGrid', 'PricingTable', 'TestimonialSlider',
     'FAQAccordion', 'CTASection', 'LogoCloud'
   ];
@@ -323,6 +352,7 @@
       <Button onclick={() => (dialogOpen = true)}>Dialog</Button>
       <Button variant="secondary" onclick={() => (sheetOpen = true)}>Sheet</Button>
       <Button variant="warning" onclick={() => (confirmOpen = true)}>Confirm</Button>
+      <Button variant="secondary" onclick={() => (messageInfoOpen = true)}>Info Pesan</Button>
       <Popover bind:open={popoverOpen} label="Quick actions">
         {#snippet trigger({ toggle })}
           <Button variant="ghost" onclick={toggle}>Popover</Button>
@@ -352,6 +382,8 @@
         <Button class="w-full" onclick={() => (sheetOpen = false)}>Close</Button>
       {/snippet}
     </Sheet>
+
+    <ChatMessageInfoDialog bind:open={messageInfoOpen} message={demoChatMessage} receipts={demoReceipts} />
 
     <ConfirmDialog
       bind:open={confirmOpen}

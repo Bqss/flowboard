@@ -28,6 +28,7 @@ import WorkflowStageEditor from './WorkflowStageEditor.svelte';
 import Dialog from './Dialog.svelte';
 import Sheet from './Sheet.svelte';
 import ConfirmDialog from './ConfirmDialog.svelte';
+import ChatMessageInfoDialog from './ChatMessageInfoDialog.svelte';
 import Popover from './Popover.svelte';
 import AlertBanner from './AlertBanner.svelte';
 import Spotlight from './Spotlight.svelte';
@@ -96,6 +97,7 @@ export {
 	Dialog,
 	Sheet,
 	ConfirmDialog,
+	ChatMessageInfoDialog,
 	Popover,
 	AlertBanner,
 	Spotlight,
