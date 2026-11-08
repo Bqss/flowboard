@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
 import {
   db,
   chatAttachments,
@@ -177,6 +177,8 @@ export const syncContextParticipants = async (conversationId: string) => {
   }
 
   let eligibleUserIds: string[] = [];
+  // Only reconcile (remove stale participants) when the board/workflow was actually resolved.
+  let contextResolved = false;
 
   const wsMembers = await db
     .select({ userId: workspaceMembers.userId, role: workspaceMembers.role })
@@ -198,6 +200,7 @@ export const syncContextParticipants = async (conversationId: string) => {
       .limit(1);
 
     if (board) {
+      contextResolved = true;
       const groupIds = (board.workspaceMemberGroupIds && board.workspaceMemberGroupIds.length > 0)
         ? board.workspaceMemberGroupIds
         : (board.workspaceMemberGroupId ? [board.workspaceMemberGroupId] : []);
@@ -235,6 +238,7 @@ export const syncContextParticipants = async (conversationId: string) => {
       .limit(1);
 
     if (wf) {
+      contextResolved = true;
       const groupIds = (wf.workspaceMemberGroupIds && wf.workspaceMemberGroupIds.length > 0)
         ? wf.workspaceMemberGroupIds
         : (wf.workspaceMemberGroupId ? [wf.workspaceMemberGroupId] : []);
@@ -261,8 +265,27 @@ export const syncContextParticipants = async (conversationId: string) => {
     }
   }
 
-  if (eligibleUserIds.length > 0) {
-    await db
+  // Access requires workspace membership (see checkContextAccess) — drop stale allow-list entries.
+  const wsMemberIds = new Set(wsMembers.map((m) => m.userId));
+  eligibleUserIds = eligibleUserIds.filter((id) => wsMemberIds.has(id));
+
+  if (!contextResolved || eligibleUserIds.length === 0) return;
+
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    // Revoke participants who no longer have access to the board/workflow.
+    await tx
+      .update(chatParticipants)
+      .set({ leftAt: now })
+      .where(
+        and(
+          eq(chatParticipants.conversationId, conversationId),
+          notInArray(chatParticipants.userId, eligibleUserIds),
+          isNull(chatParticipants.leftAt)
+        )
+      );
+    // Enroll new members and reactivate those whose access came back.
+    await tx
       .insert(chatParticipants)
       .values(
         eligibleUserIds.map((userId) => ({
@@ -272,8 +295,12 @@ export const syncContextParticipants = async (conversationId: string) => {
           role: userId === conversation.createdById ? ('admin' as const) : ('member' as const)
         }))
       )
-      .onConflictDoNothing();
-  }
+      .onConflictDoUpdate({
+        target: [chatParticipants.conversationId, chatParticipants.userId],
+        set: { leftAt: null },
+        setWhere: isNotNull(chatParticipants.leftAt)
+      });
+  });
 };
 
 /** Verify that `userId` is an active participant of `conversationId`. */
@@ -473,7 +500,11 @@ export const listConversations = async (
             userId,
             role: 'member'
           })
-          .onConflictDoNothing();
+          .onConflictDoUpdate({
+            target: [chatParticipants.conversationId, chatParticipants.userId],
+            set: { leftAt: null },
+            setWhere: isNotNull(chatParticipants.leftAt)
+          });
       }
     }
   }
@@ -1400,6 +1431,11 @@ export const sendMessage = async (
   // Allow empty body only if there are attachments
   if (!trimmed && (!attachmentIds || attachmentIds.length === 0)) return null;
 
+  // Sync context participants BEFORE inserting so newly-eligible members' joinedAt precedes the message.
+  if (conversation.contextType === 'taskboard' || conversation.contextType === 'workflow') {
+    await syncContextParticipants(conversationId);
+  }
+
   // Insert with idempotency — on conflict, fetch existing
   const [inserted] = await db
     .insert(chatMessages)
@@ -1508,11 +1544,6 @@ export const sendMessage = async (
     reactions: [],
     attachments: linkedAttachments
   };
-
-  // If this conversation is scoped to a taskboard or workflow, sync participants before broadcasting
-  if (conversation.contextType === 'taskboard' || conversation.contextType === 'workflow') {
-    await syncContextParticipants(conversationId);
-  }
 
   // Broadcast to all conversation participants via WebSocket
   const participantIds = await getParticipantUserIds(conversationId);
@@ -1741,6 +1772,15 @@ export const forwardMessage = async (
   for (const targetConvId of targetConversationIds) {
     const targetPart = await assertParticipant(targetConvId, userId);
     if (!targetPart) continue;
+
+    const [targetConv] = await db
+      .select({ contextType: chatConversations.contextType })
+      .from(chatConversations)
+      .where(eq(chatConversations.id, targetConvId))
+      .limit(1);
+    if (targetConv?.contextType === 'taskboard' || targetConv?.contextType === 'workflow') {
+      await syncContextParticipants(targetConvId);
+    }
 
     const clientMsgId = `fwd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const [inserted] = await db
