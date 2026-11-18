@@ -1338,7 +1338,7 @@
       }
     } catch (error) {
       globalDirectError = error instanceof ApiError && error.status === 404
-        ? 'Akun Flowboard dengan email itu tidak ditemukan.'
+        ? 'Akun actjom dengan email itu tidak ditemukan.'
         : error instanceof ApiError && error.status === 400
           ? 'Email tidak valid atau itu email akun Anda sendiri.'
           : 'Gagal memulai obrolan. Coba lagi.';
@@ -2827,9 +2827,9 @@
 {/if}
 
 <!-- Modal: Tulis Pesan Baru (Direct) -->
-<Dialog bind:open={newDirectOpen} title="Tulis Pesan Baru" description="Masukkan email akun Flowboard untuk memulai obrolan langsung." size="md">
+<Dialog bind:open={newDirectOpen} title="Tulis Pesan Baru" description="Masukkan email akun actjom untuk memulai obrolan langsung." size="md">
   <form class="space-y-3" onsubmit={(event) => { event.preventDefault(); void startDirectChat(); }}>
-    <FormField label="Email akun Flowboard" required>
+    <FormField label="Email akun actjom" required>
       {#snippet control(args)}
         <Input {...args} bind:value={memberSearch} type="email" autocomplete="email" placeholder="nama@email.com" />
       {/snippet}

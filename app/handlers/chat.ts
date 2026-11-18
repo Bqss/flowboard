@@ -138,7 +138,7 @@ export async function createGlobalDirectHandler(ctx: Ctx<{ email: string }, Work
   const result = await findOrCreateGlobalDirect(ctx.workspace.id, ctx.user.id, email);
   if (!result) {
     ctx.set.status = 404;
-    return { error: 'No Flowboard account was found for that email' };
+    return { error: 'No actjom account was found for that email' };
   }
   return result;
 }

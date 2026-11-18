@@ -1026,7 +1026,7 @@ export const findOrCreateDirect = async (
   };
 };
 
-/** Start a direct message with any registered Flowboard user by email. */
+/** Start a direct message with any registered actjom user by email. */
 export const findOrCreateGlobalDirect = async (
   workspaceId: string,
   userId: string,
