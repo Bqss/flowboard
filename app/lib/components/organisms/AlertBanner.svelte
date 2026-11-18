@@ -41,9 +41,9 @@
 >
 	<div class="min-w-0 flex-1">
 		{#if title}
-			<p class="ds-body font-semibold">{title}</p>
+			<p class="text-sm font-semibold leading-5">{title}</p>
 		{/if}
-		<div class={cn('ds-body', title && 'mt-0.5')}>
+		<div class={cn('text-sm leading-5', title && 'mt-0.5')}>
 			{@render children?.()}
 		</div>
 	</div>

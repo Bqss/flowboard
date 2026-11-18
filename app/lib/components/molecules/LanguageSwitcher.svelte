@@ -1,15 +1,18 @@
 <script lang="ts" module>
+	import { HugeiconsIcon } from '@hugeicons/svelte';
+	import { Tick02Icon } from '@hugeicons/core-free-icons';
 	export type Language = { code: string; label: string; short?: string };
 </script>
 
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { Select as SelectPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
+	import Flag from '$lib/components/atoms/Flag.svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { dismissable, panelClass, panelItemClass } from './shared.js';
-	import GlobeIcon from '@lucide/svelte/icons/globe';
-	import CheckIcon from '@lucide/svelte/icons/check';
+	import { panelClass, panelItemClass } from './shared.js';
 
-	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+	type Props = WithElementRef<Omit<HTMLAttributes<HTMLDivElement>, 'onchange'>> & {
 		value?: string;
 		languages?: Language[];
 		/** `compact` shows the code only — fits the 76px rail and topbar. */
@@ -38,69 +41,62 @@
 	let open = $state(false);
 
 	const active = $derived(languages.find((l) => l.code === value) ?? languages[0]);
-
-	function pick(code: string) {
-		value = code;
-		onchange?.(code);
-		open = false;
-	}
+	const bitsItems = $derived(languages.map((l) => ({ value: l.code, label: l.label })));
 </script>
 
-<div
-	bind:this={ref}
-	class={cn('relative inline-flex', className)}
-	use:dismissable={() => (open = false)}
-	{...rest}
->
-	<button
-		type="button"
-		onclick={() => (open = !open)}
-		aria-haspopup="listbox"
-		aria-expanded={open}
-		aria-label="Ganti bahasa"
-		class={cn(
-			'ds-button-text inline-flex items-center gap-2 rounded-md text-mute transition-colors duration-150 ease-out hover:bg-primary-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]',
-			variant === 'compact' ? 'h-9 px-2.5' : 'h-10 border border-hairline bg-card px-3'
-		)}
+<div bind:this={ref} class={cn('relative inline-flex', className)} {...rest}>
+	<SelectPrimitive.Root
+		type="single"
+		bind:value
+		bind:open
+		items={bitsItems}
+		allowDeselect={false}
+		onValueChange={(next) => onchange?.(next)}
 	>
-		<GlobeIcon class="size-4" />
-		<span>{variant === 'compact' ? (active?.short ?? active?.code.toUpperCase()) : active?.label}</span>
-	</button>
-
-	{#if open}
-		<div
-			role="listbox"
-			aria-label="Bahasa"
+		<SelectPrimitive.Trigger
+			aria-label="Ganti bahasa"
 			class={cn(
-				panelClass,
-				'absolute top-[calc(100%+6px)]',
-				align === 'end' ? 'right-0' : 'left-0'
+				'ds-button-text inline-flex h-10 items-center gap-2 rounded-md border border-hairline bg-card px-2.5 text-ink-soft shadow-control transition-colors duration-150 ease-out hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]',
+				variant === 'labelled' && 'px-3'
 			)}
 		>
-			{#each languages as language (language.code)}
-				<div
-					role="option"
-					tabindex="-1"
-					aria-selected={language.code === value}
-					onclick={() => pick(language.code)}
-					onkeydown={(e) => e.key === 'Enter' && pick(language.code)}
-					class={cn(
-						panelItemClass,
-						'justify-between whitespace-nowrap',
-						language.code === value && 'font-medium'
-					)}
-				>
-					<span class="inline-flex items-center gap-2.5">
-						<span class="ds-caption ds-mono w-6 text-mute">
-							{language.short ?? language.code.toUpperCase()}
-						</span>
-						{language.label}
-					</span>
-					{#if language.code === value}
-						<CheckIcon class="size-4 shrink-0 text-primary" />
-					{/if}
-				</div>
-			{/each}
-		</div>
-	{/if}
+			{#snippet children()}
+				<Flag code={active?.code ?? 'id'} class="h-3.5 w-6" />
+				<span>{variant === 'compact' ? (active?.short ?? active?.code.toUpperCase()) : active?.label}</span>
+			{/snippet}
+		</SelectPrimitive.Trigger>
+
+		<Portal>
+			<SelectPrimitive.Content
+				sideOffset={6}
+				align={align === 'end' ? 'end' : 'start'}
+				aria-label="Bahasa"
+				class={cn(panelClass, 'z-[400] min-w-[10rem] whitespace-nowrap')}
+			>
+				<SelectPrimitive.Viewport>
+					{#each languages as language (language.code)}
+						<SelectPrimitive.Item
+							value={language.code}
+							label={language.label}
+							class={cn(
+								panelItemClass,
+								'justify-between whitespace-nowrap data-[highlighted]:bg-primary-soft',
+								language.code === value && 'font-medium'
+							)}
+						>
+							{#snippet children({ selected })}
+								<span class="inline-flex items-center gap-2.5">
+									<Flag code={language.code} class="h-3.5 w-6" />
+									{language.label}
+								</span>
+								{#if selected}
+									<HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={2} class="size-4 shrink-0 text-primary" />
+								{/if}
+							{/snippet}
+						</SelectPrimitive.Item>
+					{/each}
+				</SelectPrimitive.Viewport>
+			</SelectPrimitive.Content>
+		</Portal>
+	</SelectPrimitive.Root>
 </div>

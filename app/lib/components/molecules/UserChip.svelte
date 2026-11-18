@@ -31,7 +31,7 @@
 >
 	<Avatar {name} {src} size={avatarSize} />
 	<div class="min-w-0">
-		<p class={cn('truncate text-ink', size === 'sm' ? 'text-[13px] font-medium' : 'ds-body font-semibold')}>
+		<p class={cn('truncate text-ink', size === 'sm' ? 'text-meta font-medium' : 'ds-body font-semibold')}>
 			{name}
 		</p>
 		{#if role}

@@ -28,7 +28,7 @@ in: Inter, white workspace surfaces, indigo actions, pill controls,
 rounded cards, slate metadata, and a clear status vocabulary.
 
 Light is the default landing mode. The navbar theme toggle switches the complete
-surface to the dark app extension; sections never mix light and dark tokens.
+surface to the dark extension; sections never mix light and dark tokens.
 
 ## Routing glass direction (v1.2)
 
@@ -71,7 +71,7 @@ pointer events, and is suppressed under `prefers-reduced-motion`.
 - Full pills are reserved for buttons, tags, and compact controls.
 - Cards and product records use 16–20px radii; the landing has no sharp rectangular panels.
 - Status colors carry workflow meaning: indigo queued, amber in progress, rose urgent or handover, green done.
-- Typography is Inter throughout. Metadata may use uppercase tracking, but not decorative monospace.
+- Typography: Geist for landing display headings, Inter for body, UI labels and metadata. Metadata may use uppercase tracking, but not decorative monospace.
 
 ### Signature artifact
 
@@ -89,8 +89,9 @@ The record is illustrative, not a claim about a real customer.
 
 ## Palette
 
-These values mirror `app/ds.css` so marketing, auth, and workspace surfaces read
-as one product. `app/app.css` exposes the same roles to landing utility classes.
+Roles, status colors, radii and focus match `app/ds.css` so marketing, auth, and
+workspace surfaces read as one product. Canvas and canvas-sunken are landing-specific
+(`app/app.css`); the app surface uses `#f6f8fb` from `app/ds.css`.
 
 ### Light default
 
@@ -136,8 +137,8 @@ as one product. `app/app.css` exposes the same roles to landing utility classes.
 
 ## Typography
 
-- Primary face: Inter, 500–800 weights loaded in `app/app.html`.
-- Hero heading: 44–68px fluid, 800 weight, approximately `-0.04em` tracking.
+- Body and UI face: Inter, 500–800 weights. Display face: Geist (400–700), used on the landing only via `.marketing-shell`. Both loaded in `app/app.html`.
+- Hero heading: 44–68px fluid, 800 weight, approximately `-0.04em` tracking. Target state; the current code uses 600 and is aligned in Fase 4.
 - Section heading: 30–48px fluid, 800 weight, approximately `-0.035em` tracking.
 - Body: 18px, 1.6 line height, maximum 65–75 characters per line.
 - UI labels: 13–15px, 600–700 weight.
@@ -170,6 +171,11 @@ as one product. `app/app.css` exposes the same roles to landing utility classes.
 - Links use the same semibold slate text as dashboard navigation.
 - Primary action is a pill. Theme toggle and language switcher remain
   available on desktop and mobile.
+- The language switcher is the shared `LanguageSwitcher` dropdown (flag and
+  code on the trigger, flag and name in the list), the same control the
+  dashboard uses. It is not a segmented row of text buttons.
+- Signed-in visitors see a single workspace action ("Buka ruang kerja"). Sign
+  out lives in the dashboard user menu, not in the marketing navigation.
 - Mobile navigation becomes a rounded drawer with the same action order.
 
 ### Hero

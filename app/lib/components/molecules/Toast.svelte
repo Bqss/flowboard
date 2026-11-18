@@ -75,7 +75,7 @@
 	aria-live="polite"
 	data-testid="toast-item"
 	class={cn(
-		'pointer-events-auto relative flex w-[calc(100vw-4.5rem)] max-w-[22rem] items-start gap-3 rounded-2xl border border-hairline bg-card p-3.5 shadow-popover transition-shadow duration-200 hover:shadow-lg',
+		'pointer-events-auto relative flex w-[calc(100vw-4.5rem)] max-w-[22rem] items-center gap-3 rounded-2xl border border-hairline bg-card p-3.5 shadow-popover transition-shadow duration-200 hover:shadow-lg',
 		className
 	)}
 	{...rest}
@@ -92,11 +92,11 @@
 	</div>
 
 	<div class="min-w-0 flex-1 pr-6">
-		<p class="ds-label text-sm font-semibold text-ink-soft leading-snug break-words">
+		<p class="text-sm font-semibold text-ink leading-5 break-words">
 			{message}
 		</p>
 		{#if description}
-			<p class="ds-caption mt-1 line-clamp-2 break-words text-xs leading-snug text-mute">
+			<p class="mt-0.5 line-clamp-2 break-words text-badge leading-4 text-mute">
 				{description}
 			</p>
 		{/if}

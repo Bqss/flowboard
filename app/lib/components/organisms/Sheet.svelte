@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { Dialog as DialogPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { dismissable } from '$lib/components/molecules/shared.js';
 	import XIcon from '@lucide/svelte/icons/x';
 	import { dashboardText } from '$lib/i18n/dashboard.js';
 	import { locale } from '$lib/i18n/index.js';
@@ -29,54 +30,61 @@
 		headerActions,
 		...rest
 	}: Props = $props();
+
 	const closeLabel = $derived(dashboardText($locale, 'common.close'));
 
-	function close() {
-		open = false;
-		onclose?.();
+	function handleOpenChange(next: boolean) {
+		if (!next) onclose?.();
 	}
 </script>
 
-{#if open}
-	<div class="fixed inset-0 z-[300]" use:dismissable={close}>
-		<div class="fixed inset-0 bg-[var(--overlay-scrim)]" aria-hidden="true"></div>
+<DialogPrimitive.Root bind:open onOpenChange={handleOpenChange}>
+	<Portal>
+		<DialogPrimitive.Overlay forceMount>
+			{#snippet child({ props, open: isOpen })}
+				{#if isOpen}
+					<div {...props} class="fixed inset-0 z-[300] bg-[var(--overlay-scrim)]"></div>
+				{/if}
+			{/snippet}
+		</DialogPrimitive.Overlay>
 
-		<div
-			bind:this={ref}
-			role="dialog"
-			aria-modal="true"
-			aria-label={title}
-			class={cn(
-			'fixed inset-y-0 z-[301] flex w-full max-w-md flex-col bg-card shadow-[var(--shadow-modal)]',
-				side === 'right' ? 'right-0 rounded-l-xl' : 'left-0 rounded-r-xl',
-				className
-			)}
-			{...rest}
-		>
-			<div class="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3.5">
-				<div class="min-w-0 flex-1">
-					{#if title}
-						<h2 class="ds-section-title truncate text-ink">{title}</h2>
-					{/if}
-				</div>
-				<div class="flex items-center gap-2 shrink-0">
-					{@render headerActions?.()}
-					<button
-						type="button"
-						onclick={close}
-						aria-label={closeLabel}
-						class="grid size-8 place-items-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink"
+		<DialogPrimitive.Content forceMount bind:ref>
+			{#snippet child({ props, open: isOpen })}
+				{#if isOpen}
+					<div
+						{...props}
+						{...rest}
+						class={cn(
+							'fixed inset-y-0 z-[301] flex w-full max-w-md flex-col bg-card shadow-[var(--shadow-modal)]',
+							side === 'right' ? 'right-0 rounded-l-xl' : 'left-0 rounded-r-xl',
+							className
+						)}
 					>
-						<XIcon class="size-4" />
-					</button>
-				</div>
-			</div>
+						<div class="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3.5">
+							<div class="min-w-0 flex-1">
+								{#if title}
+									<DialogPrimitive.Title class="text-heading-lg truncate font-extrabold text-ink">{title}</DialogPrimitive.Title>
+								{/if}
+							</div>
+							<div class="flex shrink-0 items-center gap-2">
+								{@render headerActions?.()}
+								<DialogPrimitive.Close
+									aria-label={closeLabel}
+									class="grid size-8 place-items-center rounded-full text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+								>
+									<XIcon class="size-4" />
+								</DialogPrimitive.Close>
+							</div>
+						</div>
 
-			<div class="flex-1 overflow-y-auto px-5 py-4">{@render children?.()}</div>
+						<div class="flex-1 overflow-y-auto px-5 py-4">{@render children?.()}</div>
 
-			{#if footer}
-				<div class="border-t border-hairline px-5 py-4">{@render footer()}</div>
-			{/if}
-		</div>
-	</div>
-{/if}
+						{#if footer}
+							<div class="border-t border-hairline px-5 py-4">{@render footer()}</div>
+						{/if}
+					</div>
+				{/if}
+			{/snippet}
+		</DialogPrimitive.Content>
+	</Portal>
+</DialogPrimitive.Root>

@@ -93,7 +93,7 @@
 
   :global(.rich-text-content pre),
   :global(.rich-text-content code) {
-    border-radius: 0.5rem;
+    border-radius: var(--radius-sm);
     background: var(--color-canvas-sunken);
     font-family: monospace;
   }
@@ -126,7 +126,7 @@
     max-height: 28rem;
     object-fit: contain;
     height: auto;
-    border-radius: 0.75rem;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--color-hairline);
     background: var(--color-canvas-sunken);
   }

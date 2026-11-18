@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { RadioGroup as RadioGroupPrimitive } from 'bits-ui';
   import ShowcaseSection from '../ShowcaseSection.svelte';
   import ShowcaseSubnav from '../ShowcaseSubnav.svelte';
   import {
@@ -242,16 +243,16 @@
       </div>
       <div class="space-y-2">
         <Label>Radio group</Label>
-        <div class="flex gap-4">
+        <RadioGroupPrimitive.Root bind:value={radioValue} name="demo" orientation="horizontal" class="flex gap-4">
           <Label class="flex items-center gap-2">
-            <Radio name="demo" value="a" bind:group={radioValue} />
+            <Radio value="a" />
             Option A
           </Label>
           <Label class="flex items-center gap-2">
-            <Radio name="demo" value="b" bind:group={radioValue} />
+            <Radio value="b" />
             Option B
           </Label>
-        </div>
+        </RadioGroupPrimitive.Root>
       </div>
       <div class="space-y-2">
         <Label>Slider · {sliderValue}%</Label>

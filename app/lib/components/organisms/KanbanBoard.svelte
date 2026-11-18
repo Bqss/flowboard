@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { tick } from 'svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import { Badge, Button, Avatar } from '$lib/components/atoms/index.js';
 	import { DropdownMenu } from '$lib/components/molecules/index.js';
@@ -36,6 +37,7 @@
 		onloadmore?: (columnId: string) => void;
 		oncardclick?: (columnId: string, cardId: string) => void;
 		oncardmove?: (cardId: string, fromColumnId: string, toColumnId: string) => void | Promise<void>;
+		oncolumnrename?: (column: KanbanColumn, name: string) => void | Promise<void>;
 		oncolumnreorder?: (columnIds: string[]) => void | Promise<void>;
 		oncomplete?: (cardId: string, completed: boolean) => void | Promise<void>;
 		onadd?: (columnId: string) => void;
@@ -67,6 +69,7 @@
 		onloadmore,
 		oncardclick,
 		oncardmove,
+		oncolumnrename,
 		oncomplete,
 		oncolumnreorder,
 		onadd,
@@ -87,6 +90,10 @@
 	let dragSourceColumnId = $state<string | null>(null);
 	let dropTargetColumnId = $state<string | null>(null);
 	let suppressClick = $state(false);
+	let editingColumnId = $state<string | null>(null);
+	let editingColumnName = $state('');
+	let columnNameInput = $state<HTMLInputElement | null>(null);
+	let columnRenameSaving = $state(false);
 
 	let draggingColumnId = $state<string | null>(null);
 	let columnDropTargetIndex = $state<number | null>(null);
@@ -107,8 +114,8 @@
 	} as const;
 	const colorDots: Record<string, string> = {
 		indigo: 'bg-indigo-500',
-		sky: 'bg-sky-500',
-		amber: 'bg-amber-500',
+		sky: 'bg-kind-board',
+		amber: 'bg-status-progress',
 		emerald: 'bg-emerald-500',
 		rose: 'bg-rose-500'
 	};
@@ -138,6 +145,50 @@
 	function resetColumnDragState() {
 		draggingColumnId = null;
 		columnDropTargetIndex = null;
+	}
+
+	async function startColumnRename(event: MouseEvent, column: KanbanColumn) {
+		if (!oncolumnrename) return;
+		event.stopPropagation();
+		editingColumnId = column.id;
+		editingColumnName = column.title;
+		await tick();
+		columnNameInput?.focus();
+		columnNameInput?.select();
+	}
+
+	function cancelColumnRename() {
+		if (columnRenameSaving) return;
+		editingColumnId = null;
+		editingColumnName = '';
+	}
+
+	async function finishColumnRename(column: KanbanColumn) {
+		if (!oncolumnrename || columnRenameSaving || editingColumnId !== column.id) return;
+		const nextName = editingColumnName.trim();
+		if (!nextName || nextName === column.title) {
+			cancelColumnRename();
+			return;
+		}
+
+		columnRenameSaving = true;
+		try {
+			await oncolumnrename(column, nextName);
+			editingColumnId = null;
+			editingColumnName = '';
+		} finally {
+			columnRenameSaving = false;
+		}
+	}
+
+	function handleColumnNameKeydown(event: KeyboardEvent, column: KanbanColumn) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			void finishColumnRename(column);
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			cancelColumnRename();
+		}
 	}
 
 	function onDragStart(event: DragEvent, columnId: string, cardId: string) {
@@ -362,7 +413,29 @@
 						)}
 						aria-hidden="true"
 					></span>
-					<h3 class="text-sm font-bold text-ink truncate tracking-tight">{column.title}</h3>
+					{#if editingColumnId === column.id}
+						<input
+							bind:this={columnNameInput}
+							bind:value={editingColumnName}
+							type="text"
+							maxlength="80"
+							disabled={columnRenameSaving}
+							aria-label={`Edit ${columnLabel.toLowerCase()} ${column.title}`}
+							onclick={(event) => event.stopPropagation()}
+							onpointerdown={(event) => event.stopPropagation()}
+							onkeydown={(event) => handleColumnNameKeydown(event, column)}
+							onblur={() => void finishColumnRename(column)}
+							class="h-8 min-w-0 w-36 rounded-md border border-primary bg-card px-2 text-sm font-bold text-ink outline-none ring-2 ring-primary/15"
+						/>
+					{:else}
+						<h3
+							class={cn('truncate tracking-tight text-sm font-bold text-ink', oncolumnrename && 'cursor-text')}
+							ondblclick={(event) => void startColumnRename(event, column)}
+							title={oncolumnrename ? 'Klik dua kali untuk mengedit nama list' : undefined}
+						>
+							{column.title}
+						</h3>
+					{/if}
 				</div>
 				<div role="presentation" class="flex items-center gap-1.5 shrink-0" ondragstart={(e) => e.stopPropagation()}>
 					<span class="text-xs font-semibold text-mute px-0.5">
@@ -446,7 +519,7 @@
 			<div class="flex min-h-[180px] flex-none flex-col items-center justify-center rounded-xl border border-dashed border-hairline p-6 text-center space-y-1.5">
 					<p class="text-xs font-medium text-mute">{emptyTitle}</p>
 					{#if dragEnabled && oncardmove}
-						<p class="text-[11px] text-faint">{emptyDropHint}</p>
+						<p class="text-micro text-faint">{emptyDropHint}</p>
 					{/if}
 				</div>
 			{:else}
@@ -503,24 +576,24 @@
 							<div class="flex items-start justify-between gap-2 pt-0.5 min-h-[22px]">
 								<div class="flex flex-col gap-1 items-start min-w-0">
 									{#if card.waError}
-										<Badge tone="urgent" variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
+										<Badge tone="urgent" variant="soft" class="text-tiny font-semibold px-1.5 py-0.5">
 											{waErrorLabel}
 										</Badge>
 									{/if}
 									{#if card.dueBadge}
-										<Badge tone={card.dueBadge.tone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2 inline-flex items-center gap-1">
+										<Badge tone={card.dueBadge.tone} variant="soft" class="text-tiny font-semibold px-1.5 py-0.5 inline-flex items-center gap-1">
 											<HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={2} />
 											<span>{card.dueBadge.label}</span>
 										</Badge>
 									{/if}
 									{#if card.recurrence}
-										<Badge tone="info" variant="soft" class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold" title={`Recurring ${card.recurrence}`}>
+										<Badge tone="info" variant="soft" class="inline-flex items-center gap-1 px-1.5 py-0.5 text-tiny font-semibold" title={`Recurring ${card.recurrence}`}>
 											<HugeiconsIcon icon={RepeatIcon} size={11} strokeWidth={1.8} />
 											<span>{card.recurrence === 'daily' ? 'Daily' : 'Weekly'}</span>
 										</Badge>
 									{/if}
 									{#if card.badge}
-										<Badge tone={badgeTone} variant="soft" class="text-[10px] font-semibold px-1.5 py-0.2">
+										<Badge tone={badgeTone} variant="soft" class="text-tiny font-semibold px-1.5 py-0.5">
 											{card.badge}
 										</Badge>
 									{/if}
@@ -529,7 +602,7 @@
 								{#if card.assignee}
 									<div class="flex min-w-0 items-center gap-1.5 rounded-full bg-canvas-sunken px-2 py-0.5 shrink-0 ml-auto">
 										<Avatar name={card.assignee} src={card.assigneeAvatar} size={16} class="shrink-0" />
-										<span class="truncate text-[11px] font-semibold text-ink-soft max-w-[90px]">
+										<span class="truncate text-micro font-semibold text-ink-soft max-w-[90px]">
 											{card.assignee}
 										</span>
 									</div>
@@ -577,7 +650,7 @@
 								</p>
 							{/if}
 							{#if card.dueDateText}
-								<p class="text-[11px] text-mute mt-1 flex items-center gap-1 truncate">
+								<p class="text-micro text-mute mt-1 flex items-center gap-1 truncate">
 									<HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={1.8} class="shrink-0 text-mute" />
 									<span class="truncate">{card.dueDateText}</span>
 								</p>
@@ -585,7 +658,7 @@
 							{#if card.labels && card.labels.length > 0}
 								<div class="flex flex-wrap items-center gap-1 mt-1.5">
 									{#each card.labels as label (label)}
-										<span class={cn('inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold border border-hairline/80', card.labelColors?.[label] ?? 'bg-canvas-sunken text-ink')}>
+										<span class={cn('inline-flex items-center rounded-md px-1.5 py-0.5 text-tiny font-semibold border border-hairline/80', card.labelColors?.[label] ?? 'bg-canvas-sunken text-ink')}>
 											{label}
 										</span>
 									{/each}
@@ -606,7 +679,7 @@
 										/>
 										<span
 											class={cn(
-												'text-[11px] font-semibold',
+												'text-micro font-semibold',
 												card.progressDone ? 'text-status-done-ink' : 'text-mute'
 											)}
 										>
@@ -620,17 +693,17 @@
 									{#if attachmentCount > 0}
 										<span class="inline-flex items-center gap-1" aria-label={`${attachmentCount} attachment`}>
 											<HugeiconsIcon icon={Attachment01Icon} size={14} strokeWidth={1.8} />
-											<span class="text-[11px] font-semibold">{attachmentCount}</span>
+											<span class="text-micro font-semibold">{attachmentCount}</span>
 										</span>
 									{/if}
 									{#if commentCount > 0}
 										<span class="inline-flex items-center gap-1" aria-label={`${commentCount} comment`}>
 											<HugeiconsIcon icon={BubbleChatIcon} size={14} strokeWidth={1.8} />
-											<span class="text-[11px] font-semibold">{commentCount}</span>
+											<span class="text-micro font-semibold">{commentCount}</span>
 										</span>
 									{/if}
 									{#if card.progressDone}
-										<span class="inline-flex items-center gap-0.5 rounded-full border border-status-done/30 bg-status-done-soft px-1.5 py-0.2 text-[10px] font-semibold text-status-done-ink">
+										<span class="inline-flex items-center gap-0.5 rounded-full border border-status-done/30 bg-status-done-soft px-1.5 py-0.5 text-tiny font-semibold text-status-done-ink">
 											✓ Selesai
 										</span>
 									{/if}
@@ -698,11 +771,11 @@
 				<div class="flex h-11 w-11 items-center justify-center rounded-full bg-lane group-hover:bg-primary-soft group-hover:text-primary transition-colors text-mute mb-2.5 shadow-xs">
 					<HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2} />
 				</div>
-				<p class="text-[13px] font-bold text-ink group-hover:text-primary transition-colors">
+				<p class="text-meta font-bold text-ink group-hover:text-primary transition-colors">
 					{addColumnLabel}
 				</p>
 				{#if addColumnDescription}
-					<p class="text-[12px] text-mute mt-1 leading-relaxed max-w-[220px]">
+					<p class="text-badge text-mute mt-1 leading-relaxed max-w-[220px]">
 						{addColumnDescription}
 					</p>
 				{/if}

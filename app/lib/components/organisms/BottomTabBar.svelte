@@ -56,7 +56,7 @@
 
 				{#if item.badge !== undefined && item.badge !== '' && item.badge !== 0}
 					<span
-						class="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white shadow-xs"
+						class="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-tiny font-bold text-white shadow-xs"
 					>
 						{item.badge}
 					</span>

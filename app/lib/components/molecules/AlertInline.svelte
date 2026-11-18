@@ -57,7 +57,7 @@
 	bind:this={ref}
 	role="status"
 	class={cn(
-		'flex items-start gap-2.5 rounded-lg border px-3 py-2.5',
+		'flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm',
 		cfg.wrap,
 		className
 	)}
@@ -67,9 +67,9 @@
 
 	<div class="min-w-0 flex-1">
 		{#if title}
-			<p class="ds-body font-semibold">{title}</p>
+			<p class="text-sm font-semibold leading-5">{title}</p>
 		{/if}
-		<div class={cn('ds-body', title && 'mt-0.5 opacity-90')}>
+		<div class={cn('text-sm leading-5', title && 'mt-0.5 opacity-90')}>
 			{@render children?.()}
 		</div>
 	</div>

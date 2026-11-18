@@ -72,19 +72,18 @@
 	onkeydown={(e) => e.key === 'Enter' && inputEl?.focus()}
 	role="presentation"
 	class={cn(
-		'ds-body flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-full border bg-card px-4 py-1 text-ink transition-colors duration-150',
+		'text-sm flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-md border bg-card px-2 py-1.5 text-ink transition-colors duration-150 hover:border-primary-border focus-within:border-primary focus-within:ring-2 focus-within:ring-[var(--focus)]',
 		invalid
 			? 'border-status-urgent focus-within:border-status-urgent focus-within:ring-2 focus-within:ring-status-urgent/15'
 			: 'border-hairline hover:border-hairline-strong focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15',
 		disabled && 'pointer-events-none cursor-not-allowed bg-canvas-sunken opacity-60',
-		size === 'sm' ? 'min-h-9 px-3 py-0.5 text-[13px]' : 'min-h-10',
-		value.length > 2 && 'rounded-2xl',
+		size === 'sm' ? 'min-h-9 px-3 py-0.5 text-meta' : 'min-h-10',
 		className
 	)}
 >
 	{#each value as tag (tag)}
 		<span
-			class="inline-flex items-center gap-1 rounded-full border-0 bg-primary-soft text-primary text-xs font-semibold py-0.5 pl-2.5 pr-1.5 transition-colors select-none"
+			class="inline-flex h-6 items-center gap-1 rounded-sm border-0 bg-primary-soft px-2 text-badge font-semibold text-primary transition-colors select-none"
 		>
 			<span>{tag}</span>
 			{#if !disabled}
@@ -94,7 +93,7 @@
 						e.stopPropagation();
 						remove(tag);
 					}}
-					class="grid size-4 place-items-center rounded-full text-primary/70 hover:bg-primary/20 hover:text-primary focus-visible:outline-none transition-colors cursor-pointer"
+					class="grid size-4 place-items-center rounded-sm text-primary/70 hover:bg-primary/20 hover:text-primary focus-visible:outline-none transition-colors cursor-pointer"
 					aria-label={`Hapus ${tag}`}
 				>
 					<svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">

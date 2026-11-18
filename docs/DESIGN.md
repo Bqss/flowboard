@@ -10,8 +10,9 @@ description: |
   extra-bold and tight on every heading; body and metadata stay small, medium
   weight, and slate. Iconography is Hugeicons stroke-rounded at 1.8px — outline
   only, never filled, never colored except to match the status hue it labels.
-  Every interactive surface is either a full pill (buttons, chips, avatars) or a
-  16-20px rounded rectangle (cards, lanes) — the system has no sharp corners.
+  Controls (buttons, inputs, menus) and cards share one medium radius (10px);
+  chips, counts and avatars stay full pills; lanes are the only large rounded tray.
+  The system has no sharp corners.
 
 colors:
   # Brand & action
@@ -26,9 +27,9 @@ colors:
   focus-ring: "rgba(79,70,229,0.35)"
 
   # Surfaces
-  canvas: "#ffffff"
-  canvas-sunken: "#f8fafc"
-  lane: "#f1f5f9"
+  canvas: "#f6f8fb"
+  canvas-sunken: "#eef2f7"
+  lane: "#e8edf4"
   lane-dropzone: "#e0e7ff"
   card: "#ffffff"
   hairline: "#e2e8f0"
@@ -409,7 +410,7 @@ components:
 
 ## Overview
 
-Flowboard's system is a **bright kanban workspace**: white canvas, `{colors.lane}` (#f1f5f9) lane containers, and pure-white cards that float on soft shadows rather than sit inside borders. It is the tonal inverse of `DESIGN.landing.md` (the dark marketing system) — the two coexist, but nothing crosses over: the landing page stays dark, the app stays light.
+Flowboard's system is a **bright kanban workspace**: white canvas, `{colors.lane}` (#e8edf4) lane containers, and pure-white cards that float on soft shadows rather than sit inside borders. It is the tonal inverse of `DESIGN.landing.md` (the dark marketing system) — the two coexist, but nothing crosses over inside a single screen. The app is always light. The landing is light by default and has a dark mode the visitor can toggle; a given section never mixes light and dark tokens.
 
 **Implementation lives in code.** Every pattern below maps to a Svelte component in `app/lib/components/`. Before writing markup, open `/design-system` — **compose existing components; do not rebuild buttons, inputs, badges, or cards from raw HTML/CSS.** See [Component Library](#component-library-use-these--dont-rebuild) for the full map.
 
@@ -417,14 +418,14 @@ Structure is legible before you read a single word. The lane is a filled slate t
 
 Typography carries the personality. Every heading is **extra-bold (800) with negative tracking** — `{typography.display-md}` at -0.025em, `{typography.heading-md}` at -0.015em — which makes titles feel packed and confident, while body copy and metadata stay small (13-15px), medium weight, and slate. The contrast between a tight black 30px title and a 13px slate metadata row is the system's main typographic gesture; there is no mid-weight middle ground.
 
-Geometry is uniformly soft: nothing in the system has a sharp corner. Cards are `{rounded.xl}` (16px), lanes `{rounded.2xl}` (20px), badges `{rounded.sm}` (8px), and every button, chip, avatar, count, and input is `{rounded.full}` — a fully-rounded pill. The pill button is the signature shape; a rectangular primary button breaks the system instantly.
+Geometry is uniformly soft: nothing in the system has a sharp corner. Cards, buttons, text inputs and menus all use `{rounded.md}` (10px) so they read as one family. Lanes stay `{rounded.2xl}` (20px), badges `{rounded.sm}` (8px), and chips, counts and avatars are `{rounded.full}`. Do not reintroduce pill-shaped buttons or inputs.
 
 **Key characteristics:**
 - Two-surface elevation: filled `{colors.lane}` tray → white `{component.task-card}` floating on `{shadow.card}`, with **no border on the card**. Depth comes from shadow + surface contrast, never from an outline.
 - A single brand action color, `{colors.primary}` (#4f46e5). One solid indigo pill per lane, one per toolbar — never two competing primaries in the same fold.
 - Five-state status language: `{colors.status-queued}` indigo · `{colors.status-progress}` amber · `{colors.status-done}` green · `{colors.status-urgent}` rose · `{colors.status-idle}` slate. Each state ships as **solid** (fills), **soft** (tinted backgrounds), and **ink** (text on soft), with a **strong** fallback where a white label is required.
 - Extra-bold tight headings (800 weight, negative letter-spacing) against medium-weight 13-15px slate body and metadata.
-- Full-pill buttons, chips, counts, inputs, and avatars; 16-20px rounded rectangles for cards and lanes; zero sharp corners anywhere.
+- 10px radius for buttons, inputs, menus and cards; full pills only for chips, counts and avatars; 20px for lanes; zero sharp corners anywhere.
 - `{component.label-bar}` — 4px × 28px rounded color strips stacked along the top edge of a card as the tag indicator. The system's most recognizable card detail.
 - Hugeicons **stroke-rounded outline** icons at 1.8px, sized 16-20px, colored `{colors.faint}`/`{colors.mute}` by default. Icons are never filled and never carry brand color unless they are labeling a status.
 - Metadata inversion: the icon is muted (`{colors.faint}`) and the number beside it is bold and dark (`{colors.ink-soft}`) — counts read first, icons second.
@@ -442,9 +443,9 @@ Geometry is uniformly soft: nothing in the system has a sharp corner. Cards are 
 - **Focus Ring** (`{colors.focus-ring}` — `rgba(79,70,229,0.35)`): 3px outer ring at 2px offset on keyboard focus.
 
 ### Surfaces
-- **Canvas** (`{colors.canvas}` — `#ffffff`): the app background, the topbar, the left rail, and the card fill. White is the dominant surface — roughly 70% of any board viewport.
-- **Canvas Sunken** (`{colors.canvas-sunken}` — `#f8fafc`, `slate-50`): full-page background behind a centered content column, and the fill for read-only/disabled inputs.
-- **Lane** (`{colors.lane}` — `#f1f5f9`, `slate-100`): the kanban lane tray. Also the active segment fill in `{component.segmented-item-active}` and the hover fill for bare icon buttons. This one value does all the "recessed" work in the system.
+- **Canvas** (`{colors.canvas}` — `#f6f8fb`): the app background, the topbar, and the left rail. Cards (`{colors.card}` — `#ffffff`) are the dominant light surface — roughly 70% of any board viewport.
+- **Canvas Sunken** (`{colors.canvas-sunken}` — `#eef2f7`): full-page background behind a centered content column, and the fill for read-only/disabled inputs.
+- **Lane** (`{colors.lane}` — `#e8edf4`, `slate-100`): the kanban lane tray. Also the active segment fill in `{component.segmented-item-active}` and the hover fill for bare icon buttons. This one value does all the "recessed" work in the system.
 - **Lane Dropzone** (`{colors.lane-dropzone}` — `#e0e7ff`, `indigo-100`): the lane tray fill while a card is being dragged over it — the tray tints indigo to confirm the drop target.
 - **Hairline** (`{colors.hairline}` — `#e2e8f0`, `slate-200`): 1px border on controls that sit *on white* — `{component.icon-button}`, `{component.search-field}`, `{component.segmented-group}`, `{component.lane-count-pill}`, and the topbar's bottom rule. Cards inside a lane get **no** hairline.
 - **Hairline Strong** (`{colors.hairline-strong}` — `#cbd5e1`, `slate-300`): hover border on outlined controls.
@@ -505,7 +506,7 @@ There is no monospace or serif face in the system.
 | `{typography.card-title}` | 15px | 700 | 1.4 | -0.01em | Task card title — clamps to 2 lines |
 | `{typography.body-md}` | 15px | 500 | 1.55 | 0 | Default body, task description, modal copy |
 | `{typography.body-sm}` | 14px | 500 | 1.5 | 0 | Dense body, input value, table cell, helper text |
-| `{typography.label-md}` | 15px | 600 | 1.2 | -0.005em | Primary button label |
+| `{typography.label-md}` | 14px | 600 | 1.2 | 0 | Primary button label (control text is 14px across the app) |
 | `{typography.label-sm}` | 14px | 600 | 1.2 | 0 | Tab label, secondary button, segmented item, breadcrumb |
 | `{typography.meta-md}` | 13px | 600 | 1.3 | 0 | Card metadata (date, comment count), inline progress "0/7" |
 | `{typography.badge-sm}` | 12px | 600 | 1.2 | 0.005em | Badge, status pill, lane count pill |
@@ -678,14 +679,37 @@ Two rules make this hold together: **a card inside a lane never has a border** (
 |---|---|---|
 | `{rounded.xs}` | 6px | Micro chips, tiny inline tags |
 | `{rounded.sm}` | 8px | `{component.badge-soft}`, bare icon-button hover target |
-| `{rounded.md}` | 10px | Ghost button, menu item |
+| `{rounded.md}` | 10px | **Buttons, text inputs, select/date triggers, menus, task cards** (`--radius-card` and `--radius-md` share this value), ghost button, menu item |
 | `{rounded.lg}` | 12px | `{component.rail-item}`, logo tile, popover, in-card media thumbnail |
 | `{rounded.xl}` | 16px | **`{component.task-card}`** — the system's most-repeated shape |
 | `{rounded.2xl}` | 20px | `{component.lane}` tray, dashboard stat card |
 | `{rounded.3xl}` | 24px | Modal, drawer, large empty-state panel |
-| `{rounded.full}` | 9999px | **All buttons**, status pills, priority chips, count pills, inputs, search field, segmented group, avatars, label bars, presence dots |
+| `{rounded.full}` | 9999px | Status pills, priority chips, count pills, avatars, label bars, presence dots, tab-pill items |
 
-The rule of thumb: **anything you click that contains text is a pill; anything that contains other content is a 16-24px rounded rectangle.** There is no 0px radius and no 2-4px radius anywhere in the system.
+The rule of thumb: **controls and cards use the 10px medium radius; chips, counts and avatars are pills; lanes and modals are larger rounded rectangles.** There is no 0px radius and no 2-4px radius anywhere in the system.
+
+### Radius in practice (current app)
+
+The scale above describes the original spec. The app now follows this simpler split:
+
+| Element | Radius | Token |
+|---|---|---|
+| Buttons, text inputs, select and date triggers, menus, popovers | 10px | `rounded-md` |
+| Cards and bento tiles on the dashboard home | 16px | `rounded-xl` |
+| Chat bubbles, dialog panels | 12px | `rounded-lg` |
+| Icon-only buttons (any size) | 10px | `rounded-md` |
+| Filter chips, reaction chips, count pills, avatars | full pill | `rounded-full` |
+| Lane "Add" action (board and workflow columns) | full pill | `rounded-full` (lane action, sanctioned exception) |
+| Floating action button (mobile, chat) | full pill / circle | `rounded-full` (FAB convention) |
+
+Text inside controls is 14px (`text-sm`) for buttons and inputs. Table headers and stat labels use sentence case, not uppercase tracking.
+
+### Colour tokens added for data
+
+- `--color-chart-1` … `--color-chart-8`: ordered series palette for charts and stage colours (stats page).
+- `--color-kind-board`, `--color-kind-board-soft`, `--color-kind-workflow`, `--color-kind-workflow-soft`: conversation-kind chips in chat (board = sky, workflow = amber); dark values are defined under `.dark [data-theme='app']`.
+
+Do not use raw Tailwind palette classes (`bg-sky-100`, `text-amber-700`, `bg-[#…]`) in app pages. Use the tokens above or the status family.
 
 ### Photography Geometry
 - **Avatars:** 28px on cards, 32px in toolbars, 40px in mobile headers — always `{rounded.full}` with a 2px `{colors.canvas}` ring when stacked.
@@ -776,8 +800,8 @@ Landing uses **`app/lib/components/landing/`** + [`DESIGN.landing.md`](./DESIGN.
 
 ### Buttons
 
-**`button-primary`** — the universal action pill
-- `{colors.primary}` fill, `{colors.on-primary}` label in `{typography.label-md}`, height 40px, padding 0 20px, `{rounded.full}`. Leading icon at 18px, 8px gap.
+**`button-primary`** — the universal action button
+- `{colors.primary}` fill, `{colors.on-primary}` label in `{typography.label-md}`, height 40px, padding 0 20px, `{rounded.md}`. Leading icon at 18px, 8px gap.
 - Hover: fill → `{colors.primary-hover}`. Active: → `{colors.primary-pressed}`. Focus: 3px `{colors.focus-ring}` at 2px offset.
 - One per fold. "Export Data", "Share", "Save Changes".
 
@@ -787,7 +811,7 @@ Landing uses **`app/lib/components/landing/`** + [`DESIGN.landing.md`](./DESIGN.
 - Sits between the lane header and the first card. It is the loudest element in the lane by design.
 
 **`button-secondary`** — outlined pill
-- `{colors.card}` fill, 1px `{colors.hairline}`, `{colors.ink-soft}` label in `{typography.label-sm}`, height 40px, padding 0 16px, `{rounded.full}`.
+- `{colors.card}` fill, 1px `{colors.hairline}`, `{colors.ink-soft}` label in `{typography.label-sm}`, height 40px, padding 0 16px, `{rounded.md}`.
 - Hover: border → `{colors.hairline-strong}`, fill → `{colors.canvas-sunken}`.
 - "Invite", "Cancel", "Filter".
 
@@ -811,8 +835,8 @@ Landing uses **`app/lib/components/landing/`** + [`DESIGN.landing.md`](./DESIGN.
 ### Inputs
 
 **`text-input`** / **`search-field`**
-- `{colors.card}` fill, 1px `{colors.hairline}`, `{typography.body-sm}` in `{colors.ink}`, placeholder `{colors.mute}`, height 40px, padding 0 16px, `{rounded.full}`.
-- Focus: border → `{colors.primary}` + 3px `{colors.focus-ring}`.
+- `{colors.card}` fill, 1px `{colors.hairline}`, `{typography.body-sm}` in `{colors.ink}`, placeholder `{colors.mute}`, height 40px, padding 0 12px, `{rounded.md}`. Icons are Hugeicons at 16px, in `{colors.mute}`.
+- Hover: border → `{colors.primary-border}`. Focus: border → `{colors.primary}` + 2px `{colors.focus-ring}` ring (the global `:focus-visible` rule; rich text and other `contenteditable` surfaces draw the ring on their container instead).
 - Error: border → `{colors.status-urgent}`, helper text `{colors.status-urgent-ink}` in `{typography.meta-md}`.
 - The search variant carries an 18px `Search01Icon` in `{colors.faint}` — **trailing** in the reference, which is the specified position for search specifically.
 - Textareas are the one input that is not a pill: `{rounded.lg}`, min-height 96px.
@@ -1072,7 +1096,7 @@ Key utilities resolve automatically: `bg-primary`, `bg-lane`, `bg-status-queued`
 /* Excerpt — full block lives in app/ds.css */
 @theme {
   --color-primary: #4f46e5;
-  --color-lane: #f1f5f9;
+  --color-lane: #e8edf4;
   --color-status-queued: #4f46e5;
   --color-status-progress: #f59e0b;
   --color-status-done: #22c55e;

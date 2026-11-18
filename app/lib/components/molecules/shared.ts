@@ -1,35 +1,5 @@
 import type { Snippet } from 'svelte';
 
-/**
- * Closes a floating panel on outside pointerdown or Escape.
- * Capture phase so the panel closes before a trigger's own click re-opens it.
- */
-export function dismissable(node: HTMLElement, onDismiss: () => void) {
-	let dismiss = onDismiss;
-
-	function onPointerDown(event: PointerEvent) {
-		const target = event.target as Element | null;
-		if (target && !node.contains(target) && !target.closest?.('[data-floating]')) dismiss();
-	}
-
-	function onKeyDown(event: KeyboardEvent) {
-		if (event.key === 'Escape') dismiss();
-	}
-
-	document.addEventListener('pointerdown', onPointerDown, true);
-	document.addEventListener('keydown', onKeyDown);
-
-	return {
-		update(next: () => void) {
-			dismiss = next;
-		},
-		destroy() {
-			document.removeEventListener('pointerdown', onPointerDown, true);
-			document.removeEventListener('keydown', onKeyDown);
-		}
-	};
-}
-
 export type MenuItem = {
 	label: string;
 	value?: string;
@@ -72,48 +42,9 @@ export const panelClass =
 export const panelItemClass =
 	'text-[14px] flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-ink transition-colors duration-150 ease-out outline-none hover:bg-primary-soft focus-visible:bg-primary-soft data-[disabled=true]:pointer-events-none data-[disabled=true]:text-faint';
 
-/** Matches Input atom surface — use on div/button triggers with focus-within. */
-export const fieldTriggerClass =
-	'ds-body flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm border border-hairline bg-card px-3 py-2.5 text-ink transition-colors duration-150 hover:border-primary-border focus-within:border-primary focus-within:ring-2 focus-within:ring-[var(--focus)]';
+/** Single field surface — the one spec every input-like control uses (40px, 10px radius, hairline). */
+export const fieldClass =
+	'text-sm flex h-10 w-full min-w-0 items-center gap-2 rounded-md border border-hairline bg-card px-3 text-ink transition-colors duration-150 hover:border-primary-border focus-within:border-primary focus-within:ring-2 focus-within:ring-[var(--focus)]';
 
-/** Teleports node to document.body so floating panels escape modal overflow/transform. */
-export function portal(node: HTMLElement) {
-	if (!node.hasAttribute('data-theme')) {
-		node.setAttribute('data-theme', 'app');
-	}
-	document.body.appendChild(node);
-	return {
-		destroy() {
-			node.remove();
-		}
-	};
-}
-
-export type FloatingRect = {
-	top: number;
-	left: number;
-	width: number;
-	maxHeight: number;
-};
-
-/** Position a fixed panel anchored to a trigger (viewport coords). */
-export function computeFloatingRect(
-	anchor: HTMLElement,
-	preferredHeight = 240,
-	gap = 6
-): FloatingRect {
-	const rect = anchor.getBoundingClientRect();
-	const spaceBelow = window.innerHeight - rect.bottom - gap;
-	const spaceAbove = rect.top - gap;
-	const openUp = spaceBelow < preferredHeight && spaceAbove > spaceBelow;
-	const maxHeight = Math.min(280, openUp ? spaceAbove - gap : spaceBelow - gap);
-	const height = Math.max(120, maxHeight);
-	const top = openUp ? Math.max(gap, rect.top - gap - height) : rect.bottom + gap;
-
-	return {
-		top,
-		left: rect.left,
-		width: rect.width,
-		maxHeight: height
-	};
-}
+/** Field used as a div/button trigger (pointer cursor). */
+export const fieldTriggerClass = `${fieldClass} cursor-pointer`;

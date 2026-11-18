@@ -96,7 +96,7 @@
 
 {#if visible && deferredPrompt}
   <aside
-    class="fixed inset-x-4 bottom-4 z-[250] rounded-[20px] border border-hairline bg-card p-4 shadow-[0_14px_40px_rgba(15,23,42,0.16)] sm:left-auto sm:w-[360px]"
+    class="fixed inset-x-4 bottom-4 z-[250] rounded-card border border-hairline bg-card p-4 shadow-[0_14px_40px_rgba(15,23,42,0.16)] sm:left-auto sm:w-[360px]"
     aria-label={copy.title}
   >
     <div class="flex items-start gap-3">

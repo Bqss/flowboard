@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { Popover as PopoverPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { dismissable, panelClass } from '$lib/components/molecules/shared.js';
+	import { panelClass } from '$lib/components/molecules/shared.js';
 
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		open?: boolean;
@@ -24,34 +26,35 @@
 		content,
 		...rest
 	}: Props = $props();
-  function handleFocusout(event: FocusEvent) {
-    const nextTarget = event.relatedTarget as Node | null;
-    const root = event.currentTarget as HTMLElement;
-    if (nextTarget && !root.contains(nextTarget)) open = false;
-  }
+
+	// Bits toggles from the trigger wrapper (pointer + keyboard).
+	// The caller's `toggle` is a no-op so a click doesn't open and close it again.
+	const noopToggle = () => {};
 </script>
 
-<div
-  bind:this={ref}
-  class={cn('relative inline-flex', className)}
-  use:dismissable={() => (open = false)}
-  onfocusout={handleFocusout}
-  {...rest}
->
-	{@render trigger({ open, toggle: () => (open = !open) })}
+<PopoverPrimitive.Root bind:open>
+	<PopoverPrimitive.Trigger>
+		{#snippet child({ props })}
+			<span
+				bind:this={ref}
+				class={cn('relative inline-flex', className)}
+				{...props}
+				{...(rest as Record<string, unknown>)}
+			>
+				{@render trigger({ open, toggle: noopToggle })}
+			</span>
+		{/snippet}
+	</PopoverPrimitive.Trigger>
 
-	{#if open}
-		<div
-			role="dialog"
+	<Portal>
+		<PopoverPrimitive.Content
+			{side}
+			{align}
+			sideOffset={6}
 			aria-label={label}
-			class={cn(
-				panelClass,
-				'absolute min-w-[14rem] p-3',
-				side === 'bottom' ? 'top-[calc(100%+6px)]' : 'bottom-[calc(100%+6px)]',
-				align === 'end' ? 'right-0' : align === 'center' ? 'left-1/2 -translate-x-1/2' : 'left-0'
-			)}
+			class={cn(panelClass, 'z-[400] min-w-[14rem] p-3')}
 		>
 			{@render content()}
-		</div>
-	{/if}
-</div>
+		</PopoverPrimitive.Content>
+	</Portal>
+</PopoverPrimitive.Root>

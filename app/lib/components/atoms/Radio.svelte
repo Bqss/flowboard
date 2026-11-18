@@ -1,42 +1,42 @@
 <script lang="ts">
-	import type { HTMLInputAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { RadioGroup as RadioGroupPrimitive } from 'bits-ui';
+	import { cn } from '$lib/utils.js';
 
-	type Props = WithElementRef<Omit<HTMLInputAttributes, 'type' | 'size'>> & {
-		value: string | number;
-		group?: any;
+	/** Must be rendered inside a RadioGroup root (molecules/RadioGroup). */
+	type Props = {
+		ref?: HTMLButtonElement | null;
+		value: string;
 		size?: 'sm' | 'md';
+		disabled?: boolean;
+		id?: string;
+		name?: string;
+		class?: string;
 	};
 
-	let {
-		ref = $bindable(null),
-		value,
-		group = $bindable(),
-		size = 'md',
-		class: className,
-		name,
-		...rest
-	}: Props = $props();
+	let { ref = $bindable(null), value, size = 'md', disabled = false, id, name, class: className }: Props = $props();
 
 	const dim = $derived(size === 'sm' ? 'h-4 w-4' : 'h-[18px] w-[18px]');
 </script>
 
-<span class="relative inline-flex items-center justify-center">
-	<input
-		bind:this={ref}
-		type="radio"
-		{name}
-		bind:group
-		{value}
-		class={cn(
-			'peer appearance-none rounded-full border border-hairline bg-card transition-colors duration-150 hover:border-primary-border checked:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
-			dim,
-			className
-		)}
-		{...rest}
-	/>
-	<span
-		class="pointer-events-none absolute inset-0 m-auto h-2 w-2 scale-0 rounded-full bg-primary transition-transform duration-150 peer-checked:scale-100"
-		aria-hidden="true"
-	></span>
-</span>
+<RadioGroupPrimitive.Item
+	bind:ref
+	{value}
+	{disabled}
+	{id}
+	{name}
+	class={cn(
+		'relative inline-flex shrink-0 items-center justify-center rounded-full border border-hairline bg-card transition-colors duration-150 hover:border-primary-border data-[state=checked]:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
+		dim,
+		className
+	)}
+>
+	{#snippet children({ checked })}
+		<span
+			class={cn(
+				'pointer-events-none absolute inset-0 m-auto h-2 w-2 rounded-full bg-primary transition-transform duration-150',
+				checked ? 'scale-100' : 'scale-0'
+			)}
+			aria-hidden="true"
+		></span>
+	{/snippet}
+</RadioGroupPrimitive.Item>

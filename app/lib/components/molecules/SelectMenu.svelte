@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { HugeiconsIcon } from '@hugeicons/svelte';
+	import { ArrowDown01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { Select as SelectPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { dismissable, panelClass, panelItemClass, type Option } from './shared.js';
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import CheckIcon from '@lucide/svelte/icons/check';
+	import { panelClass, panelItemClass, type Option } from './shared.js';
 
 	type Props = WithElementRef<Omit<HTMLAttributes<HTMLDivElement>, 'onchange'>> & {
 		options: Option[];
@@ -37,141 +39,94 @@
 	}: Props = $props();
 
 	let open = $state(false);
-	let activeIndex = $state(-1);
-	let listEl = $state<HTMLElement | null>(null);
-
 	const selected = $derived(options.find((o) => o.value === value));
-
-	function choose(option: Option) {
-		if (option.disabled) return;
-		value = option.value;
-		onchange?.(option.value);
-		open = false;
-	}
-
-	function toggle() {
-		if (disabled) return;
-		open = !open;
-		if (open) activeIndex = options.findIndex((o) => o.value === value);
-	}
-
-	function move(delta: number) {
-		if (!options.length) return;
-		let next = activeIndex;
-		for (let i = 0; i < options.length; i++) {
-			next = (next + delta + options.length) % options.length;
-			if (!options[next].disabled) break;
-		}
-		activeIndex = next;
-		listEl?.querySelectorAll('[role="option"]')[next]?.scrollIntoView({ block: 'nearest' });
-	}
-
-	function onkeydown(event: KeyboardEvent) {
-		if (disabled) return;
-		if (!open && (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ')) {
-			event.preventDefault();
-			toggle();
-			return;
-		}
-		if (!open) return;
-		if (event.key === 'ArrowDown') {
-			event.preventDefault();
-			move(1);
-		} else if (event.key === 'ArrowUp') {
-			event.preventDefault();
-			move(-1);
-		} else if (event.key === 'Enter' || event.key === ' ') {
-			event.preventDefault();
-			if (activeIndex >= 0) choose(options[activeIndex]);
-		} else if (event.key === 'Tab') {
-			open = false;
-		}
-	}
+	const bitsItems = $derived(options.map((o) => ({ value: o.value, label: o.label, disabled: o.disabled })));
 </script>
 
 <div
 	bind:this={ref}
 	class={cn('relative', variant === 'input' && 'w-full', className)}
-	use:dismissable={() => (open = false)}
 	{...rest}
 >
-	<button
-		{id}
-		type="button"
+	<SelectPrimitive.Root
+		type="single"
+		bind:value
+		bind:open
+		items={bitsItems}
 		{disabled}
-		{onkeydown}
-		aria-describedby={ariaDescribedby}
-		onclick={toggle}
-		aria-haspopup="listbox"
-		aria-expanded={open}
-		class={cn(
-			'flex w-full items-center justify-between gap-2 transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed',
-			variant === 'input'
-				? cn(
-						'ds-body rounded-sm border bg-card text-left text-ink disabled:bg-lane disabled:text-mute',
-						size === 'sm' ? 'px-2.5 py-1.5 text-[13px]' : 'px-3 py-2.5',
-						invalid
-							? 'border-status-urgent'
-							: 'border-hairline hover:border-primary-border focus-visible:border-primary'
-					)
-				: variant === 'filter'
-					? 'ds-body h-10 rounded-full border border-hairline bg-card px-4 text-left text-ink hover:border-primary-border focus-visible:border-primary disabled:bg-lane disabled:text-mute'
-					: cn(
-							'ds-button-text w-auto rounded-md border border-hairline bg-card text-ink hover:border-primary-border hover:bg-lane disabled:bg-lane disabled:text-mute',
-							size === 'sm' ? 'h-8 px-3' : 'h-10 px-4'
-						)
-		)}
+		allowDeselect={false}
+		onValueChange={(next) => onchange?.(next)}
 	>
-		<span class={cn('truncate', !selected && 'text-faint')}>
-			{selected?.label ?? placeholder}
-		</span>
-		<ChevronDownIcon
+		<SelectPrimitive.Trigger
+			{id}
+			aria-describedby={ariaDescribedby}
+			aria-errormessage={ariaErrormessage}
+			aria-invalid={invalid || undefined}
 			class={cn(
-				'size-4 shrink-0 text-mute transition-transform duration-150',
-				open && 'rotate-180'
+				'flex w-full items-center justify-between gap-2 transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed',
+				variant === 'input'
+					? cn(
+							'ds-body rounded-md border bg-card text-left text-ink disabled:bg-lane disabled:text-mute',
+							size === 'sm' ? 'px-2.5 py-1.5 text-meta' : 'px-3 py-2.5',
+							invalid
+								? 'border-status-urgent'
+								: 'border-hairline hover:border-primary-border focus-visible:border-primary'
+						)
+					: variant === 'filter'
+						? 'text-sm h-10 rounded-md border border-hairline bg-card px-4 text-left text-ink hover:border-primary-border focus-visible:border-primary disabled:bg-lane disabled:text-mute'
+						: cn(
+								'ds-button-text w-auto rounded-md border border-hairline bg-card text-ink hover:border-primary-border hover:bg-lane disabled:bg-lane disabled:text-mute',
+								size === 'sm' ? 'h-8 px-3' : 'h-10 px-4'
+							)
 			)}
-		/>
-	</button>
-
-	{#if open}
-		<div
-			bind:this={listEl}
-			role="listbox"
-			tabindex="-1"
-			aria-label={placeholder}
-			class={cn(panelClass, 'absolute top-[calc(100%+6px)] left-0 max-h-64 w-full overflow-y-auto')}
 		>
-			{#each options as option, i (option.value)}
-				<div
-					role="option"
-					tabindex="-1"
-					aria-selected={option.value === value}
-					data-disabled={option.disabled ?? false}
-					onclick={() => choose(option)}
-					onmouseenter={() => (activeIndex = i)}
-					onkeydown={(e) => e.key === 'Enter' && choose(option)}
+			{#snippet children()}
+				<span class={cn('truncate', !selected && 'text-faint')}>
+					{selected?.label ?? placeholder}
+				</span>
+				<HugeiconsIcon icon={ArrowDown01Icon} size={16} strokeWidth={1.8}
 					class={cn(
-						panelItemClass,
-						'justify-between',
-						i === activeIndex && 'bg-primary-soft',
-						option.value === value && 'font-medium'
+						'size-4 shrink-0 text-mute transition-transform duration-150',
+						open && 'rotate-180'
 					)}
-				>
-					<span class="min-w-0">
-						<span class="block truncate">{option.label}</span>
-						{#if option.description}
-							<span class="ds-caption block text-mute">{option.description}</span>
-						{/if}
-					</span>
-					{#if option.value === value}
-						<CheckIcon class="size-4 shrink-0 text-primary" />
-					{/if}
-				</div>
-			{/each}
+				/>
+			{/snippet}
+		</SelectPrimitive.Trigger>
 
-			{#if !options.length}
-				<p class="ds-body px-2.5 py-3 text-center text-faint">Tidak ada pilihan</p>
-			{/if}
-		</div>
-	{/if}
+		<Portal>
+			<SelectPrimitive.Content
+				sideOffset={6}
+				class={cn(panelClass, 'z-[400] max-h-64 w-[var(--bits-select-anchor-width)] min-w-[var(--bits-select-anchor-width)] overflow-y-auto')}
+			>
+				<SelectPrimitive.Viewport>
+					{#each options as option (option.value)}
+						<SelectPrimitive.Item
+							value={option.value}
+							label={option.label}
+							disabled={option.disabled}
+							class={cn(
+								panelItemClass,
+								'justify-between data-[highlighted]:bg-primary-soft',
+								option.value === value && 'font-medium'
+							)}
+						>
+							{#snippet children({ selected: isSelected })}
+								<span class="min-w-0">
+									<span class="block truncate">{option.label}</span>
+									{#if option.description}
+										<span class="ds-caption block text-mute">{option.description}</span>
+									{/if}
+								</span>
+								{#if isSelected}
+									<HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={2} class="size-4 shrink-0 text-primary" />
+								{/if}
+							{/snippet}
+						</SelectPrimitive.Item>
+					{:else}
+						<p class="ds-body px-2.5 py-3 text-center text-faint">Tidak ada pilihan</p>
+					{/each}
+				</SelectPrimitive.Viewport>
+			</SelectPrimitive.Content>
+		</Portal>
+	</SelectPrimitive.Root>
 </div>

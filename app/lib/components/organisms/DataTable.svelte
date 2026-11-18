@@ -23,6 +23,7 @@
 		sortDir?: 'asc' | 'desc';
 		emptyTitle?: string;
 		emptyDescription?: string;
+		emptyIcon?: import('svelte').Snippet;
 		onselect?: (ids: string[]) => void;
 		onsort?: (key: string, dir: 'asc' | 'desc') => void;
 		onpagechange?: (page: number) => void;
@@ -47,6 +48,7 @@
 		sortDir = 'asc',
 		emptyTitle = 'Belum ada data',
 		emptyDescription = 'Data akan muncul setelah ada entri.',
+		emptyIcon,
 		onselect,
 		onsort,
 		onpagechange,
@@ -93,7 +95,7 @@
 			<span class="ds-body text-mute">Memuat data…</span>
 		</div>
 	{:else if rows.length === 0}
-		<EmptyStateBlock title={emptyTitle} description={emptyDescription} class="!shadow-none" />
+		<EmptyStateBlock title={emptyTitle} description={emptyDescription} icon={emptyIcon} class="!shadow-none" />
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="w-full min-w-[640px] border-collapse">
@@ -101,7 +103,7 @@
 					<tr class="border-b border-hairline">
 						{#if selectable}
 							<th class="w-10 px-4 py-3">
-								<Checkbox checked={allSelected} indeterminate={selected.length > 0 && !allSelected} onchange={toggleAll} />
+								<Checkbox checked={allSelected} indeterminate={selected.length > 0 && !allSelected} onCheckedChange={toggleAll} />
 							</th>
 						{/if}
 						{#each columns as col (col.key)}
@@ -133,14 +135,15 @@
 						>
 							{#if selectable}
 								<td class="px-4 py-3" onclick={(e) => e.stopPropagation()}>
-									<Checkbox checked={selected.includes(id)} onchange={() => toggleRow(id)} />
+									<Checkbox checked={selected.includes(id)} onCheckedChange={() => toggleRow(id)} />
 								</td>
 							{/if}
 							{#each columns as col (col.key)}
 								<td
 									class={cn(
 										'px-4 py-3 text-ink',
-										col.mono && 'ds-mono text-[13px]',
+										col.mono && 'ds-mono text-meta',
+										col.nowrap && 'whitespace-nowrap',
 										col.align === 'right' && 'text-right',
 										col.align === 'center' && 'text-center'
 									)}

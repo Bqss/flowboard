@@ -1,14 +1,9 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { Popover as PopoverPrimitive } from 'bits-ui';
 	import Portal from '$lib/components/atoms/Portal.svelte';
-	import {
-		computeFloatingRect,
-		fieldTriggerClass,
-		panelClass,
-		panelItemClass,
-		type FloatingRect
-	} from './shared.js';
+	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { fieldTriggerClass, panelClass, panelItemClass } from './shared.js';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import XIcon from '@lucide/svelte/icons/x';
@@ -25,7 +20,7 @@
 		created_at: string;
 	};
 
-	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+	type Props = WithElementRef<Omit<HTMLAttributes<HTMLDivElement>, 'onchange'>> & {
 		value?: string;
 		onchange?: (value: string) => void;
 		class?: string;
@@ -39,7 +34,6 @@
 		...rest
 	}: Props = $props();
 
-	let triggerEl = $state<HTMLDivElement | null>(null);
 	let open = $state(false);
 	let users = $state<PortalUser[]>([]);
 	let loading = $state(false);
@@ -47,14 +41,7 @@
 	let search = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	let selected = $state<PortalUser | null>(null);
-	let panelRect = $state<FloatingRect | null>(null);
 	let loadedOnce = $state(false);
-
-	const panelStyle = $derived(
-		panelRect
-			? `top:${panelRect.top}px;left:${panelRect.left}px;width:${panelRect.width}px;max-height:${panelRect.maxHeight}px;`
-			: ''
-	);
 
 	async function loadUsers(q: string) {
 		loading = true;
@@ -105,28 +92,11 @@
 		}
 	}
 
-	function updatePanelPosition() {
-		if (!triggerEl || !open) return;
-		panelRect = computeFloatingRect(triggerEl, 280);
-	}
-
-	function toggleOpen() {
-		open = !open;
-		if (open) {
-			if (!loadedOnce) void loadUsers('');
-			requestAnimationFrame(updatePanelPosition);
-		}
-	}
-
-	function close() {
-		open = false;
-	}
-
 	function pick(user: PortalUser) {
 		selected = user;
 		value = user.id;
 		onchange?.(user.id);
-		close();
+		open = false;
 	}
 
 	function clear() {
@@ -142,6 +112,11 @@
 		searchTimer = setTimeout(() => loadUsers(v), 300);
 	}
 
+	// Load the first page when the popover opens for the first time.
+	$effect(() => {
+		if (open && !loadedOnce) void loadUsers('');
+	});
+
 	$effect(() => {
 		if (value) {
 			void resolveSelected(value);
@@ -149,152 +124,139 @@
 			selected = null;
 		}
 	});
-
-	$effect(() => {
-		if (!open) return;
-		updatePanelPosition();
-		const onReflow = () => updatePanelPosition();
-		window.addEventListener('scroll', onReflow, true);
-		window.addEventListener('resize', onReflow);
-		return () => {
-			window.removeEventListener('scroll', onReflow, true);
-			window.removeEventListener('resize', onReflow);
-		};
-	});
 </script>
 
 <div bind:this={ref} class={cn('relative', className)} data-testid="client-form-external-id" {...rest}>
-	<div
-		bind:this={triggerEl}
-		class={fieldTriggerClass}
-		onclick={toggleOpen}
-		role="combobox"
-		aria-expanded={open}
-		aria-controls="portal-user-list"
-		tabindex="0"
-		onkeydown={(e) => e.key === 'Enter' && toggleOpen()}
+	<PopoverPrimitive.Root
+		bind:open
+		onOpenChange={(next) => {
+			if (!next) search = '';
+		}}
 	>
-		{#if selected}
-			<div class="flex min-w-0 flex-1 items-center gap-2">
-				<UserIcon class="size-4 shrink-0 text-primary" />
-				<div class="min-w-0 flex-1">
-					<p class="truncate text-sm font-semibold text-ink">{selected.name}</p>
-					<p class="truncate text-[11px] text-mute">{selected.email ?? '—'}</p>
-					<p class="truncate text-[10px] text-faint">
-						{selected.plan ? `Plan ${selected.plan}` : 'Tanpa plan'} · ID {selected.id.slice(0, 8)}…
-					</p>
-				</div>
-			</div>
-			<button
-				type="button"
-				class="grid size-6 place-items-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink"
-				title="Hapus pilihan"
-				onclick={(e) => {
-					e.stopPropagation();
-					clear();
-				}}
-			>
-				<XIcon class="size-3.5" />
-			</button>
-		{:else if value}
-			<div class="flex min-w-0 flex-1 items-center gap-2">
-				<AlertCircleIcon class="size-4 shrink-0 text-status-progress-ink" />
-				<div class="min-w-0 flex-1">
-					<p class="truncate text-sm font-semibold text-ink">User tidak ditemukan di portal</p>
-					<p class="truncate font-mono text-[11px] text-mute">{value}</p>
-				</div>
-			</div>
-			<button
-				type="button"
-				class="grid size-6 place-items-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink"
-				title="Hapus pilihan"
-				onclick={(e) => {
-					e.stopPropagation();
-					clear();
-				}}
-			>
-				<XIcon class="size-3.5" />
-			</button>
-		{:else}
-			<span class="flex-1 text-sm text-faint">Cari & pilih user DripSender…</span>
-		{/if}
-		<ChevronDownIcon class="size-4 shrink-0 text-mute" />
-	</div>
-
-	{#if open}
-		<Portal>
-		<div
-			data-floating
-			class="fixed inset-0 z-[105]"
-			onclick={close}
-			role="button"
-			tabindex="-1"
-			onkeydown={() => close()}
-		></div>
-			<div
-				data-floating
-				id="portal-user-list"
-				class={cn(panelClass, 'fixed z-[110] overflow-y-auto p-2 space-y-1')}
-				style={panelStyle}
-			>
-				<div class="relative px-1 pb-1">
-					<SearchIcon class="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-mute" />
-					<input
-						type="text"
-						placeholder="Cari nama atau email user…"
-						class="ds-body h-8 w-full rounded-sm border border-hairline bg-card pl-8 pr-3 text-[13px] text-ink placeholder:text-faint focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-						value={search}
-						oninput={(e) => onSearchInput(e.currentTarget.value)}
-						onclick={(e) => e.stopPropagation()}
-					/>
-				</div>
-				<div class="max-h-56 space-y-0.5 overflow-y-auto pr-0.5">
-					{#if loading}
-						<div class="flex items-center justify-center gap-2 py-4 text-xs text-mute">
-							<Loader2Icon class="size-3.5 animate-spin" />
-							Memuat user…
-						</div>
-					{:else if error}
-						<p class="px-2 py-3 text-center text-xs font-medium text-status-urgent" role="alert">{error}</p>
-					{:else if users.length === 0}
-						<p class="py-3 text-center text-xs text-mute">
-							{search ? 'User tidak ditemukan.' : 'Belum ada user di portal.'}
-						</p>
-					{:else}
-						{#each users as u (u.id)}
-							{@const isSelected = value === u.id}
-							<div
-								class={cn(
-									panelItemClass,
-									'justify-between text-xs font-medium',
-									isSelected && 'bg-primary-soft text-primary'
-								)}
-								onclick={(e) => {
-									e.stopPropagation();
-									pick(u);
-								}}
-								role="option"
-								aria-selected={isSelected}
-								tabindex="0"
-								onkeydown={(e) => e.key === 'Enter' && pick(u)}
-							>
-								<div class="min-w-0 flex-1">
-									<p class="truncate font-semibold">{u.name}</p>
-									<p class="truncate text-[11px] text-mute">{u.email ?? '—'}</p>
-									<p class="truncate text-[10px] text-faint">
-										{u.plan ?? 'Tanpa plan'} · {u.id.slice(0, 8)}…
-									</p>
-								</div>
-								{#if isSelected}
-									<CheckIcon class="size-3.5 shrink-0 stroke-[3]" />
-								{/if}
+		<PopoverPrimitive.Trigger>
+			{#snippet child({ props })}
+				<div
+					{...props}
+					class={fieldTriggerClass}
+					role="combobox"
+					aria-expanded={open}
+					aria-controls="portal-user-list"
+					tabindex="0"
+				>
+					{#if selected}
+						<div class="flex min-w-0 flex-1 items-center gap-2">
+							<UserIcon class="size-4 shrink-0 text-primary" />
+							<div class="min-w-0 flex-1">
+								<p class="truncate text-sm font-semibold text-ink">{selected.name}</p>
+								<p class="truncate text-micro text-mute">{selected.email ?? '—'}</p>
+								<p class="truncate text-tiny text-faint">
+									{selected.plan ? `Plan ${selected.plan}` : 'Tanpa plan'} · ID {selected.id.slice(0, 8)}…
+								</p>
 							</div>
-						{/each}
+						</div>
+						<button
+							type="button"
+							class="grid size-6 place-items-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink"
+							title="Hapus pilihan"
+							aria-label="Hapus pilihan"
+							onclick={(e) => {
+								e.stopPropagation();
+								clear();
+							}}
+						>
+							<XIcon class="size-3.5" />
+						</button>
+					{:else if value}
+						<div class="flex min-w-0 flex-1 items-center gap-2">
+							<AlertCircleIcon class="size-4 shrink-0 text-status-progress-ink" />
+							<div class="min-w-0 flex-1">
+								<p class="truncate text-sm font-semibold text-ink">User tidak ditemukan di portal</p>
+								<p class="truncate font-mono text-micro text-mute">{value}</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							class="grid size-6 place-items-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink"
+							title="Hapus pilihan"
+							aria-label="Hapus pilihan"
+							onclick={(e) => {
+								e.stopPropagation();
+								clear();
+							}}
+						>
+							<XIcon class="size-3.5" />
+						</button>
+					{:else}
+						<span class="flex-1 text-sm text-faint">Cari & pilih user DripSender…</span>
 					{/if}
+					<ChevronDownIcon class="size-4 shrink-0 text-mute" />
 				</div>
-			</div>
+			{/snippet}
+		</PopoverPrimitive.Trigger>
+
+		<Portal>
+			<PopoverPrimitive.Content
+				side="bottom"
+				align="start"
+				sideOffset={6}
+				class={cn(panelClass, 'z-[410] w-[max(280px,var(--bits-popover-anchor-width,0px))] space-y-1 overflow-y-auto p-2')}
+			>
+				<div id="portal-user-list" class="contents">
+					<div class="relative px-1 pb-1">
+						<SearchIcon class="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-mute" />
+						<input
+							type="text"
+							placeholder="Cari nama atau email user…"
+							aria-label="Cari user"
+							class="ds-body h-8 w-full rounded-sm border border-hairline bg-card pr-3 pl-8 text-meta text-ink placeholder:text-faint focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+							value={search}
+							oninput={(e) => onSearchInput(e.currentTarget.value)}
+						/>
+					</div>
+					<div role="listbox" aria-label="User portal" class="max-h-56 space-y-0.5 overflow-y-auto pr-0.5">
+						{#if loading}
+							<div class="flex items-center justify-center gap-2 py-4 text-xs text-mute">
+								<Loader2Icon class="size-3.5 animate-spin" />
+								Memuat user…
+							</div>
+						{:else if error}
+							<p class="px-2 py-3 text-center text-xs font-medium text-status-urgent" role="alert">{error}</p>
+						{:else if users.length === 0}
+							<p class="py-3 text-center text-xs text-mute">
+								{search ? 'User tidak ditemukan.' : 'Belum ada user di portal.'}
+							</p>
+						{:else}
+							{#each users as u (u.id)}
+								{@const isSelected = value === u.id}
+								<button
+									type="button"
+									role="option"
+									aria-selected={isSelected}
+									onclick={() => pick(u)}
+									class={cn(
+										panelItemClass,
+										'w-full justify-between text-left text-xs font-medium',
+										isSelected && 'bg-primary-soft text-primary'
+									)}
+								>
+									<div class="min-w-0 flex-1">
+										<p class="truncate font-semibold">{u.name}</p>
+										<p class="truncate text-micro text-mute">{u.email ?? '—'}</p>
+										<p class="truncate text-tiny text-faint">
+											{u.plan ?? 'Tanpa plan'} · {u.id.slice(0, 8)}…
+										</p>
+									</div>
+									{#if isSelected}
+										<CheckIcon class="size-3.5 shrink-0 stroke-[3]" />
+									{/if}
+								</button>
+							{/each}
+						{/if}
+					</div>
+				</div>
+			</PopoverPrimitive.Content>
 		</Portal>
-	{/if}
+	</PopoverPrimitive.Root>
 
 	<input type="hidden" name="externalId" value={value} />
 </div>

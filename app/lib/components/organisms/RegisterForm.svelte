@@ -102,11 +102,11 @@ type Props = WithElementRef<Omit<HTMLFormAttributes, 'onsubmit'>, HTMLFormElemen
 
 	<div class="mb-7">
 		<div class="mb-5 flex justify-end">
-			<span class="rounded-full border border-primary-border bg-primary-soft px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-primary-ink">
+			<span class="rounded-full border border-primary-border bg-primary-soft px-3 py-1.5 text-micro font-bold uppercase tracking-[0.06em] text-primary-ink">
 				{copy.signal}
 			</span>
 		</div>
-		<p class="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">{copy.eyebrow}</p>
+		<p class="text-micro font-bold uppercase tracking-[0.08em] text-faint">{copy.eyebrow}</p>
 		<h1 class="font-display mt-2 text-3xl font-extrabold leading-tight tracking-[-0.035em] text-ink">
 			{title ?? copy.title}
 		</h1>

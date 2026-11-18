@@ -40,6 +40,8 @@ export type TableColumn<T = Record<string, unknown>> = {
 	label: string;
 	sortable?: boolean;
 	mono?: boolean;
+	/** Keep the cell on one line (dates, counts). */
+	nowrap?: boolean;
 	align?: 'left' | 'right' | 'center';
 	width?: string;
 	render?: (row: T) => string;
@@ -144,6 +146,6 @@ export const modalScrimClass =
 	'fixed inset-0 z-[300] flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-[2px]';
 
 export const modalPanelClass =
-	'w-full max-w-lg rounded-xl bg-card p-6 shadow-[var(--shadow-modal)] origin-center will-change-[transform,opacity]';
+	'w-full max-w-lg rounded-xl border border-hairline bg-card p-6 shadow-[var(--shadow-modal)] origin-center will-change-[transform,opacity]';
 
 export const cardShellClass = 'rounded-card bg-card shadow-card border border-hairline';

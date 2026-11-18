@@ -52,8 +52,8 @@
 			type={visible ? 'text' : 'password'}
 			aria-invalid={invalid || undefined}
 			class={cn(
-				'ds-body block w-full min-w-0 rounded-full border bg-card pr-10 text-ink transition-colors duration-150 placeholder:text-mute focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:bg-canvas-sunken disabled:text-mute',
-				size === 'sm' ? 'h-9 px-3 text-[13px]' : 'h-10 px-4',
+				'text-sm block w-full min-w-0 rounded-md border bg-card pr-10 text-ink transition-colors duration-150 placeholder:text-mute focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:bg-canvas-sunken disabled:text-mute',
+				size === 'sm' ? 'h-9 px-3 text-meta' : 'h-10 px-4',
 				invalid
 					? 'border-status-urgent focus-visible:border-status-urgent focus-visible:ring-status-urgent/15'
 					: 'border-hairline hover:border-hairline-strong focus-visible:border-primary'

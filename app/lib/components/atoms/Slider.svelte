@@ -1,9 +1,19 @@
 <script lang="ts">
-	import type { HTMLInputAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { Slider as SliderPrimitive } from 'bits-ui';
+	import { cn } from '$lib/utils.js';
 
-	type Props = WithElementRef<Omit<HTMLInputAttributes, 'type' | 'size'>> & {
+	type Props = {
+		ref?: HTMLSpanElement | null;
+		value?: number;
+		min?: number;
+		max?: number;
+		step?: number;
 		size?: 'sm' | 'md';
+		disabled?: boolean;
+		id?: string;
+		'aria-label'?: string;
+		class?: string;
+		onValueChange?: (value: number) => void;
 	};
 
 	let {
@@ -13,30 +23,36 @@
 		max = 100,
 		step = 1,
 		size = 'md',
+		disabled = false,
 		class: className,
+		onValueChange,
 		...rest
 	}: Props = $props();
 
 	const trackH = $derived(size === 'sm' ? 'h-1.5' : 'h-2');
-	const minN = $derived(Number(min));
-	const maxN = $derived(Number(max));
-	const pct = $derived(maxN > minN ? ((Number(value) - minN) / (maxN - minN)) * 100 : 0);
+	const thumb = $derived(size === 'sm' ? 'size-3.5' : 'size-4');
 </script>
 
-<input
-	bind:this={ref}
-	type="range"
+<SliderPrimitive.Root
+	type="single"
 	bind:value
+	bind:ref
 	{min}
 	{max}
 	{step}
-	class={cn(
-		'block w-full cursor-pointer appearance-none rounded-full focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
-		trackH,
-		'[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:shadow-[var(--shadow-card)] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110',
-		'[&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0',
-		className
-	)}
-	style={`background: linear-gradient(to right, var(--color-primary) ${pct}%, var(--color-primary-soft) ${pct}%);`}
-	{...rest}
-/>
+	{disabled}
+	onValueChange={(next) => onValueChange?.(next)}
+	class={cn('relative flex w-full touch-none select-none items-center disabled:cursor-not-allowed disabled:opacity-50', className)}
+	{...(rest as Record<string, unknown>)}
+>
+	<span class={cn('relative w-full grow overflow-hidden rounded-full bg-primary-soft', trackH)}>
+		<SliderPrimitive.Range class="absolute h-full bg-primary" />
+	</span>
+	<SliderPrimitive.Thumb
+		index={0}
+		class={cn(
+			'block rounded-full border-0 bg-primary shadow-[var(--shadow-card)] transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:pointer-events-none',
+			thumb
+		)}
+	/>
+</SliderPrimitive.Root>

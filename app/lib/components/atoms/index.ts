@@ -37,6 +37,7 @@ import Tooltip from './Tooltip.svelte';
 import Chip from './Chip.svelte';
 import Image from './Image.svelte';
 import Logo from './Logo.svelte';
+import Flag from './Flag.svelte';
 import Portal from './Portal.svelte';
 import GoogleButton from './GoogleButton.svelte';
 import MessageTicks from './MessageTicks.svelte';
@@ -80,6 +81,7 @@ export {
 	Chip,
 	Image,
 	Logo,
+	Flag,
 	Portal,
 	GoogleButton,
 	MessageTicks,

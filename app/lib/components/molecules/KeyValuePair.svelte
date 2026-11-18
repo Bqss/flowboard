@@ -31,7 +31,7 @@
 	{...rest}
 >
 	<dt class="ds-label shrink-0 text-mute">{label}</dt>
-	<dd class={cn('min-w-0 text-right text-ink', mono ? 'ds-mono text-[13px]' : 'ds-body')}>
+	<dd class={cn('min-w-0 truncate text-right whitespace-nowrap text-ink', mono ? 'ds-mono text-meta' : 'ds-body')} title={value}>
 		{value ?? '—'}
 	</dd>
 </div>

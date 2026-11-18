@@ -36,7 +36,16 @@
 	}
 </script>
 
-<Dialog bind:open {title} {description} size="sm" class="z-[500]" onclose={cancel} data-testid={testId}>
+<Dialog
+	bind:open
+	{title}
+	{description}
+	size="sm"
+	titleClass="!text-lg !font-semibold"
+	class="z-[500]"
+	onclose={cancel}
+	data-testid={testId}
+>
 	{#snippet footer()}
 		<Button variant="secondary" onclick={cancel} disabled={loading}>{cancelLabel}</Button>
 		<Button

@@ -13,7 +13,7 @@
 <kbd
 	bind:this={ref}
 	class={cn(
-		'ds-mono inline-flex h-5 min-w-5 items-center justify-center rounded-xs border border-hairline bg-card px-1.5 text-[11px] font-medium text-mute shadow-[var(--shadow-card)]',
+		'ds-mono inline-flex h-5 min-w-5 items-center justify-center rounded-xs border border-hairline bg-card px-1.5 text-micro font-medium text-mute shadow-[var(--shadow-card)]',
 		className
 	)}
 	{...rest}

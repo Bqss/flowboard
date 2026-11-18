@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { Popover as PopoverPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { dismissable } from '$lib/components/molecules/shared.js';
 	import { IconButton } from '$lib/components/atoms/index.js';
 	import BellIcon from '@lucide/svelte/icons/bell';
 	import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -49,54 +50,54 @@
 	}
 </script>
 
-<div
-	bind:this={ref}
-	class={cn('relative inline-flex', className)}
-	use:dismissable={() => setOpen(false)}
-	{...rest}
->
-	<div class="relative">
-		<IconButton
-			variant="card"
-			label={title}
-			onclick={() => setOpen(!open)}
-			aria-expanded={open}
-		>
-			<BellIcon />
-		</IconButton>
-		{#if unread > 0}
+<PopoverPrimitive.Root bind:open onOpenChange={(next) => onOpenChange?.(next)}>
+	<PopoverPrimitive.Trigger>
+		{#snippet child({ props })}
 			<span
-				class="pointer-events-none absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-status-urgent px-1 text-[10px] font-bold text-white tabular-nums ring-2 ring-card"
-				data-testid={countTestId}
+				bind:this={ref}
+				class={cn('relative inline-flex', className)}
+				{...props}
+				{...(rest as Record<string, unknown>)}
 			>
-				{unread > 99 ? '99+' : unread}
+				<span class="relative">
+					<IconButton variant="card" label={title} aria-expanded={open} class="rounded-md">
+						<BellIcon />
+					</IconButton>
+					{#if unread > 0}
+						<span
+							class="pointer-events-none absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-status-urgent px-1 text-tiny font-bold text-white tabular-nums ring-2 ring-card"
+							data-testid={countTestId}
+						>
+							{unread > 99 ? '99+' : unread}
+						</span>
+					{/if}
+				</span>
 			</span>
-		{/if}
-	</div>
+		{/snippet}
+	</PopoverPrimitive.Trigger>
 
-	{#if open}
-		<div
-			class={cn(
-				'z-50 overflow-hidden rounded-xl border border-hairline bg-card shadow-[var(--shadow-raised)]',
-				'fixed inset-x-3 top-[calc(4rem+6px)] mx-auto max-w-sm sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-80 sm:max-w-none sm:mx-0'
-			)}
-			role="region"
+	<Portal>
+		<PopoverPrimitive.Content
+			side="bottom"
+			align="end"
+			sideOffset={8}
 			aria-label={title}
+			class="z-[400] w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-hairline bg-card shadow-[var(--shadow-raised)]"
 		>
-		<div class="flex items-center justify-between gap-2 border-b border-hairline px-4 py-3">
-			<span class="ds-label truncate text-ink">{title}</span>
-			{#if unread > 0}
-				<button
-					type="button"
-					onclick={onmarkAllRead}
-					class="ds-caption shrink-0 font-medium text-primary transition-colors hover:text-primary"
-				>
-					{markAllReadText}
-				</button>
-			{:else}
-				<span class="ds-caption shrink-0 text-mute">{allReadText}</span>
-			{/if}
-		</div>
+			<div class="flex items-center justify-between gap-2 border-b border-hairline px-4 py-3">
+				<span class="ds-label truncate text-ink">{title}</span>
+				{#if unread > 0}
+					<button
+						type="button"
+						onclick={onmarkAllRead}
+						class="ds-caption shrink-0 font-medium text-primary transition-colors hover:text-primary"
+					>
+						{markAllReadText}
+					</button>
+				{:else}
+					<span class="ds-caption shrink-0 text-mute">{allReadText}</span>
+				{/if}
+			</div>
 			<div class="max-h-[min(20rem,calc(100dvh-8rem))] overflow-y-auto" data-testid={listTestId}>
 				{#if items.length === 0}
 					<div class="flex flex-col items-center gap-3 px-4 py-10 text-center">
@@ -132,6 +133,6 @@
 					{/each}
 				{/if}
 			</div>
-		</div>
-	{/if}
-</div>
+		</PopoverPrimitive.Content>
+	</Portal>
+</PopoverPrimitive.Root>

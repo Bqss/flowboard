@@ -1,5 +1,6 @@
 <script lang="ts" module>
-	import { type VariantProps, tv } from 'tailwind-variants';
+	import type { VariantProps } from 'tailwind-variants';
+	import { tv } from '$lib/utils.js';
 
 	export const iconButtonVariants = tv({
 		base: 'inline-flex shrink-0 items-center justify-center transition-all duration-150 ease-out select-none outline-none active:scale-[.97] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0',

@@ -1,5 +1,6 @@
 <script lang="ts" module>
-	import { type VariantProps, tv } from 'tailwind-variants';
+	import type { VariantProps } from 'tailwind-variants';
+	import { tv } from '$lib/utils.js';
 
 	export const badgeVariants = tv({
 		base: 'ds-caption inline-flex w-fit shrink-0 items-center gap-1 px-2.5 py-1 transition-colors [&_svg]:pointer-events-none [&_svg]:size-3',

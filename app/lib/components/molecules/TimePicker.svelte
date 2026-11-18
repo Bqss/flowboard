@@ -1,11 +1,13 @@
 <script lang="ts">
+	import { HugeiconsIcon } from '@hugeicons/svelte';
+	import { Clock01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { Select as SelectPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { dismissable, panelClass, panelItemClass } from './shared.js';
-	import ClockIcon from '@lucide/svelte/icons/clock';
-	import CheckIcon from '@lucide/svelte/icons/check';
+	import { panelClass, panelItemClass } from './shared.js';
 
-	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+	type Props = WithElementRef<Omit<HTMLAttributes<HTMLDivElement>, 'onchange'>> & {
 		/** 24h time, `HH:mm`. */
 		value?: string;
 		/** Minutes between generated slots. */
@@ -38,7 +40,6 @@
 	}: Props = $props();
 
 	let open = $state(false);
-	let listEl = $state<HTMLElement | null>(null);
 
 	const slots = $derived.by(() => {
 		const out: string[] = [];
@@ -49,70 +50,64 @@
 		return out;
 	});
 
-	function pick(slot: string) {
-		value = slot;
-		onchange?.(slot);
-		open = false;
-	}
-
-	$effect(() => {
-		if (!open || !listEl) return;
-		listEl.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'center' });
-	});
+	const bitsItems = $derived(slots.map((t) => ({ value: t, label: t })));
 </script>
 
-<div
-	bind:this={ref}
-	class={cn('relative w-full', className)}
-	use:dismissable={() => (open = false)}
-	{...rest}
->
-	<button
-		{id}
-		type="button"
+<div bind:this={ref} class={cn('relative w-full', className)} {...rest}>
+	<SelectPrimitive.Root
+		type="single"
+		bind:value
+		bind:open
+		items={bitsItems}
 		{disabled}
-		aria-describedby={ariaDescribedby}
-		onclick={() => (open = !open)}
-		aria-haspopup="listbox"
-		aria-expanded={open}
-		class={cn(
-			'ds-body flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
-			value ? 'text-ink' : 'text-faint',
-			invalid
-				? 'border-status-urgent'
-				: 'border-hairline hover:border-primary-border focus-visible:border-primary'
-		)}
+		allowDeselect={false}
+		onValueChange={(next) => onchange?.(next)}
 	>
-		<span class={cn('truncate', value && 'ds-mono')}>{value || placeholder}</span>
-		<ClockIcon class="size-4 shrink-0 text-mute" />
-	</button>
-
-	{#if open}
-		<div
-			bind:this={listEl}
-			role="listbox"
-			aria-label="Pilih jam"
-			class={cn(panelClass, 'absolute top-[calc(100%+6px)] left-0 max-h-60 w-full overflow-y-auto')}
+		<SelectPrimitive.Trigger
+			{id}
+			aria-describedby={ariaDescribedby}
+			aria-errormessage={ariaErrormessage}
+			aria-invalid={invalid || undefined}
+			class={cn(
+				'text-sm flex w-full items-center justify-between gap-2 rounded-md border bg-card px-3 h-10 py-0 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
+				value ? 'text-ink' : 'text-faint',
+				invalid
+					? 'border-status-urgent'
+					: 'border-hairline hover:border-primary-border focus-visible:border-primary'
+			)}
 		>
-			{#each slots as slot (slot)}
-				<div
-					role="option"
-					tabindex="-1"
-					aria-selected={slot === value}
-					onclick={() => pick(slot)}
-					onkeydown={(e) => e.key === 'Enter' && pick(slot)}
-					class={cn(
-						panelItemClass,
-						'ds-mono justify-between text-[13px]',
-						slot === value && 'bg-primary-soft font-medium'
-					)}
-				>
-					{slot}
-					{#if slot === value}
-						<CheckIcon class="size-4 text-primary" />
-					{/if}
-				</div>
-			{/each}
-		</div>
-	{/if}
+			{#snippet children()}
+				<span class={cn('truncate', value && 'ds-mono')}>{value || placeholder}</span>
+				<HugeiconsIcon icon={Clock01Icon} size={16} strokeWidth={1.8} class="size-4 shrink-0 text-mute" />
+			{/snippet}
+		</SelectPrimitive.Trigger>
+
+		<Portal>
+			<SelectPrimitive.Content
+				sideOffset={6}
+				class={cn(panelClass, 'z-[400] max-h-60 w-[var(--bits-select-anchor-width)] min-w-[var(--bits-select-anchor-width)] overflow-y-auto')}
+			>
+				<SelectPrimitive.Viewport>
+					{#each slots as slot (slot)}
+						<SelectPrimitive.Item
+							value={slot}
+							label={slot}
+							class={cn(
+								panelItemClass,
+								'ds-mono justify-between text-meta data-[highlighted]:bg-primary-soft',
+								slot === value && 'bg-primary-soft font-medium'
+							)}
+						>
+							{#snippet children({ selected })}
+								{slot}
+								{#if selected}
+									<HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={2} class="size-4 text-primary" />
+								{/if}
+							{/snippet}
+						</SelectPrimitive.Item>
+					{/each}
+				</SelectPrimitive.Viewport>
+			</SelectPrimitive.Content>
+		</Portal>
+	</SelectPrimitive.Root>
 </div>

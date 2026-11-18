@@ -73,7 +73,7 @@
 		onchange={(e) => set(parseInt(e.currentTarget.value, 10))}
 		class={cn(
 			'ds-mono w-10 bg-transparent text-center text-ink outline-none disabled:cursor-not-allowed',
-			size === 'sm' ? 'text-[13px]' : 'text-sm font-medium'
+			size === 'sm' ? 'text-meta' : 'text-sm font-medium'
 		)}
 	/>
 

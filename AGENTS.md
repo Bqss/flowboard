@@ -121,6 +121,10 @@ Never mix landing dark tokens with app light tokens on the same screen.
 | Text field | `Input` inside `FormField` |
 | Password | `PasswordInput` inside `FormField` |
 | Search bar | `SearchInput` |
+| Date (single) | `DatePicker` — never a native `<input type="date">` |
+| Date range | `DateRangePicker` |
+| Time | `TimePicker` — never a native `<input type="time">` |
+| Language switch | `LanguageSwitcher` (flags via `atoms/Flag`, not emoji) |
 | Status tag | `Badge` (`tone="queued|progress|done|urgent|idle"`) |
 | Kanban board | `KanbanBoard` |
 | Modal / drawer | `Dialog` / `Sheet` |

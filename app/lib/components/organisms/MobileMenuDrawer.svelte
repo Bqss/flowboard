@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { Dialog as DialogPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn } from '$lib/utils.js';
 	import { Logo, Avatar, Badge, Button } from '$lib/components/atoms/index.js';
 	import { locale, locales, setLocale, type Locale } from '$lib/i18n/index.js';
@@ -137,11 +139,14 @@
 	const isAdminVouchersActive = $derived(currentPath.startsWith('/dashboard/admin/vouchers'));
 </script>
 
-{#if open}
+<DialogPrimitive.Root bind:open>
+	<Portal>
+		<DialogPrimitive.Content forceMount>
+			{#snippet child({ props, open: isOpen })}
+	{#if isOpen}
 	<div
+		{...props}
 		class="fixed inset-0 z-50 flex flex-col bg-card text-ink md:hidden animate-in fade-in duration-200"
-		role="dialog"
-		aria-modal="true"
 		aria-label={labels.menuTitle ?? 'Menu'}
 	>
 		<!-- Header -->
@@ -152,7 +157,7 @@
 				</div>
 				<div class="min-w-0">
 					<h2 class="truncate text-[15px] font-bold text-ink leading-tight">{workspaceName}</h2>
-					<p class="truncate text-[12px] text-mute leading-tight">
+					<p class="truncate text-badge text-mute leading-tight">
 						{workspaceRole ? (workspaceRole === 'owner' ? 'Pemilik Ruang Kerja' : 'Ahli Ruang Kerja') : 'Ruang Kerja'}
 					</p>
 				</div>
@@ -172,7 +177,7 @@
 		<div class="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-6">
 			<!-- Section 1: Menu Tambahan (Vertical Menu Cards) -->
 			<div>
-				<p class="px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-faint">
+				<p class="px-1 pb-2 text-micro font-bold uppercase tracking-wider text-faint">
 					{labels.menuTitle ?? 'Menu Utama'}
 				</p>
 				<div class="space-y-2">
@@ -192,7 +197,7 @@
 						</div>
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center justify-between">
-								<span class="text-[14.5px] font-bold {isMembersActive ? 'text-primary' : 'text-ink'}">
+								<span class="text-sm font-bold {isMembersActive ? 'text-primary' : 'text-ink'}">
 									{labels.members ?? 'Ahli'}
 								</span>
 								<HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} class="text-mute" />
@@ -210,16 +215,16 @@
 						class={cn(
 							'flex w-full items-center gap-3.5 rounded-2xl border p-3.5 text-left transition-all duration-150',
 							isIntegrationsActive
-								? 'border-emerald-500/40 bg-emerald-50/70 dark:bg-emerald-950/40 ring-1 ring-emerald-500/20 shadow-xs'
+								? 'border-primary/40 bg-primary-soft/50 ring-1 ring-primary/20 shadow-xs'
 								: 'border-hairline bg-card hover:border-hairline-strong hover:bg-canvas-sunken/60'
 						)}
 					>
-						<div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">
+						<div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary shadow-xs">
 							<HugeiconsIcon icon={Plug02Icon} size={22} strokeWidth={1.8} />
 						</div>
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center justify-between">
-								<span class="text-[14.5px] font-bold {isIntegrationsActive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}">
+								<span class="text-sm font-bold {isIntegrationsActive ? 'text-primary' : 'text-ink'}">
 									{labels.integrations ?? 'Integrasi'}
 								</span>
 								<HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} class="text-mute" />
@@ -237,16 +242,16 @@
 						class={cn(
 							'flex w-full items-center gap-3.5 rounded-2xl border p-3.5 text-left transition-all duration-150',
 							isSettingsActive
-								? 'border-sky-500/40 bg-sky-50/70 dark:bg-sky-950/40 ring-1 ring-sky-500/20 shadow-xs'
+								? 'border-primary/40 bg-primary-soft ring-1 ring-primary/20 shadow-xs'
 								: 'border-hairline bg-card hover:border-hairline-strong hover:bg-canvas-sunken/60'
 						)}
 					>
-						<div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 shadow-xs">
+						<div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary shadow-xs">
 							<HugeiconsIcon icon={Settings01Icon} size={22} strokeWidth={1.8} />
 						</div>
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center justify-between">
-								<span class="text-[14.5px] font-bold {isSettingsActive ? 'text-sky-700 dark:text-sky-300' : 'text-ink'}">
+								<span class="text-sm font-bold {isSettingsActive ? 'text-primary' : 'text-ink'}">
 									{labels.settings ?? 'Tetapan'}
 								</span>
 								<HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} class="text-mute" />
@@ -262,4 +267,8 @@
 		<!-- Footer Safe Area -->
 		<div class="shrink-0 pb-[env(safe-area-inset-bottom)]"></div>
 	</div>
-{/if}
+	{/if}
+			{/snippet}
+		</DialogPrimitive.Content>
+	</Portal>
+</DialogPrimitive.Root>

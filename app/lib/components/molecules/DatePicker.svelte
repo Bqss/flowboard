@@ -1,12 +1,14 @@
 <script lang="ts">
+	import { HugeiconsIcon } from '@hugeicons/svelte';
+	import { Calendar03Icon, ArrowLeft01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { Calendar as CalendarPrimitive, Popover as PopoverPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
+	import { parseDate, today as todayDate, getLocalTimeZone, type DateValue } from '@internationalized/date';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { dismissable, panelClass } from './shared.js';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import { panelClass } from './shared.js';
 
-	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+	type Props = WithElementRef<Omit<HTMLAttributes<HTMLDivElement>, 'onchange'>> & {
 		/** ISO date, `YYYY-MM-DD`. */
 		value?: string;
 		min?: string;
@@ -21,6 +23,7 @@
 		rangeEnd?: string;
 		showQuickActions?: boolean;
 		onchange?: (value: string) => void;
+		class?: string;
 	};
 
 	let {
@@ -44,61 +47,25 @@
 		...rest
 	}: Props = $props();
 
-	const WEEKDAYS = ['Sn', 'Sl', 'Rb', 'Km', 'Jm', 'Sb', 'Mg'];
-
-	function toISO(date: Date) {
-		const m = `${date.getMonth() + 1}`.padStart(2, '0');
-		const d = `${date.getDate()}`.padStart(2, '0');
-		return `${date.getFullYear()}-${m}-${d}`;
-	}
-
-	function parse(iso: string) {
-		const [y, m, d] = iso.split('-').map(Number);
-		return y && m && d ? new Date(y, m - 1, d) : null;
-	}
-
-	const today = new Date();
-	const selectedDate = $derived(value ? parse(value) : null);
-
-	let cursor = $state(new Date(today.getFullYear(), today.getMonth(), 1));
 	let open = $state(false);
 
-	$effect(() => {
-		const d = value ? parse(value) : null;
-		if (d) cursor = new Date(d.getFullYear(), d.getMonth(), 1);
-	});
+	/** Parses an ISO string, ignoring malformed input so the calendar never throws. */
+	function toDateValue(iso: string | undefined): DateValue | undefined {
+		if (!iso) return undefined;
+		try {
+			return parseDate(iso);
+		} catch {
+			return undefined;
+		}
+	}
 
-	const monthLabel = $derived(
-		cursor.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
-	);
-
-	/** Monday-first grid, padded to whole weeks. */
-	const days = $derived.by(() => {
-		const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-		const offset = (first.getDay() + 6) % 7;
-		const start = new Date(first);
-		start.setDate(first.getDate() - offset);
-
-		return Array.from({ length: 42 }, (_, i) => {
-			const date = new Date(start);
-			date.setDate(start.getDate() + i);
-			const iso = toISO(date);
-			return {
-				iso,
-				day: date.getDate(),
-				outside: date.getMonth() !== cursor.getMonth(),
-				isToday: iso === toISO(today),
-				inRange: Boolean(rangeStart && rangeEnd && iso > rangeStart && iso < rangeEnd),
-				isRangeStart: Boolean(rangeStart && iso === rangeStart),
-				isRangeEnd: Boolean(rangeEnd && iso === rangeEnd),
-				disabled: (min && iso < min) || (max && iso > max) || false
-			};
-		});
-	});
+	const selected = $derived(toDateValue(value));
+	const minValue = $derived(toDateValue(min));
+	const maxValue = $derived(toDateValue(max));
 
 	const label = $derived(
-		selectedDate
-			? selectedDate.toLocaleDateString(locale, {
+		selected
+			? selected.toDate(getLocalTimeZone()).toLocaleDateString(locale, {
 					day: 'numeric',
 					month: 'short',
 					year: 'numeric'
@@ -106,118 +73,150 @@
 			: placeholder
 	);
 
-	function shiftMonth(delta: number) {
-		cursor = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
-	}
-
-	function pick(iso: string) {
-		value = iso;
-		onchange?.(iso);
+	function commit(next: DateValue | undefined) {
+		value = next ? next.toString() : '';
+		onchange?.(value);
 		if (!inline) open = false;
 	}
+
+	function inRange(date: DateValue) {
+		const iso = date.toString();
+		return Boolean(rangeStart && rangeEnd && iso > rangeStart && iso < rangeEnd);
+	}
+	function isRangeEdge(date: DateValue) {
+		const iso = date.toString();
+		return Boolean((rangeStart && iso === rangeStart) || (rangeEnd && iso === rangeEnd));
+	}
+
+	const navButtonClass =
+		'grid size-7 place-items-center rounded-full text-mute transition-colors hover:bg-primary-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]';
 </script>
 
-<div
-	bind:this={ref}
-	class={cn('relative w-full', className)}
-	use:dismissable={() => (open = false)}
-	{...rest}
->
-	{#if !inline}
-		<button
-			{id}
-			type="button"
-			{disabled}
-			aria-describedby={ariaDescribedby}
-			onclick={() => (open = !open)}
-			aria-haspopup="dialog"
-			aria-expanded={open}
-			class={cn(
-				'ds-body flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
-				selectedDate ? 'text-ink' : 'text-faint',
-				invalid
-					? 'border-status-urgent'
-					: 'border-hairline hover:border-primary-border focus-visible:border-primary'
-			)}
-		>
-			<span class="truncate">{label}</span>
-			<CalendarIcon class="size-4 shrink-0 text-mute" />
-		</button>
-	{/if}
+{#snippet calendarPanel()}
+	<CalendarPrimitive.Root
+		type="single"
+		calendarLabel="Pilih tanggal"
+		value={selected}
+		onValueChange={(next) => commit(next)}
+		{minValue}
+		{maxValue}
+		weekStartsOn={1}
+		weekdayFormat="short"
+		{locale}
+		class="w-full"
+	>
+		{#snippet children({ months, weekdays })}
+			<CalendarPrimitive.Header class="mb-2 flex items-center justify-between">
+				<CalendarPrimitive.PrevButton>
+					{#snippet child({ props })}
+						<button {...props} type="button" aria-label="Bulan sebelumnya" class={navButtonClass}>
+							<HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={1.8} class="size-4" />
+						</button>
+					{/snippet}
+				</CalendarPrimitive.PrevButton>
+				<CalendarPrimitive.Heading class="text-sm font-semibold text-ink capitalize" />
+				<CalendarPrimitive.NextButton>
+					{#snippet child({ props })}
+						<button {...props} type="button" aria-label="Bulan berikutnya" class={navButtonClass}>
+							<HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} class="size-4" />
+						</button>
+					{/snippet}
+				</CalendarPrimitive.NextButton>
+			</CalendarPrimitive.Header>
 
-	{#if inline || open}
-		<div
-			role="dialog"
-			aria-label="Pilih tanggal"
-			class={cn(panelClass, inline ? 'w-full p-3' : 'absolute top-[calc(100%+6px)] left-0 w-[17.5rem] p-3')}
-		>
+			{#each months as month (month.value)}
+				<CalendarPrimitive.Grid class="w-full border-collapse">
+					<CalendarPrimitive.GridHead>
+						<CalendarPrimitive.GridRow class="grid grid-cols-7 gap-1">
+							{#each weekdays as weekday (weekday)}
+								<CalendarPrimitive.HeadCell class="grid h-8 place-items-center text-badge font-semibold text-mute">
+									{weekday}
+								</CalendarPrimitive.HeadCell>
+							{/each}
+						</CalendarPrimitive.GridRow>
+					</CalendarPrimitive.GridHead>
+					<CalendarPrimitive.GridBody>
+						{#each month.weeks as weekDates (weekDates[0]?.toString())}
+							<CalendarPrimitive.GridRow class="grid grid-cols-7 gap-1">
+								{#each weekDates as date (date.toString())}
+									<CalendarPrimitive.Cell {date} month={month.value} class="flex justify-center p-0">
+										<CalendarPrimitive.Day
+											class={cn(
+												'grid size-9 place-items-center rounded-md text-sm transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] data-[outside-month]:text-faint data-[disabled]:pointer-events-none data-[disabled]:text-faint/50 data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-on-primary hover:bg-primary-soft data-[selected]:hover:bg-primary',
+												inRange(date) && 'bg-primary-soft',
+												isRangeEdge(date) && 'bg-primary-soft font-semibold text-primary'
+											)}
+										>
+											{date.day}
+										</CalendarPrimitive.Day>
+									</CalendarPrimitive.Cell>
+								{/each}
+							</CalendarPrimitive.GridRow>
+						{/each}
+					</CalendarPrimitive.GridBody>
+				</CalendarPrimitive.Grid>
+			{/each}
+		{/snippet}
+	</CalendarPrimitive.Root>
 
-			<div class="mb-2 flex items-center justify-between">
-				<button
-					type="button"
-					onclick={() => shiftMonth(-1)}
-					aria-label="Bulan sebelumnya"
-					class="grid size-7 place-items-center rounded-full text-mute transition-colors hover:bg-primary-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-				>
-					<ChevronLeftIcon class="size-4" />
-				</button>
-				<span class="ds-section-title text-ink capitalize">{monthLabel}</span>
-				<button
-					type="button"
-					onclick={() => shiftMonth(1)}
-					aria-label="Bulan berikutnya"
-					class="grid size-7 place-items-center rounded-full text-mute transition-colors hover:bg-primary-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-				>
-					<ChevronRightIcon class="size-4" />
-				</button>
-			</div>
-
-			<div class="grid grid-cols-7 gap-0.5">
-				{#each WEEKDAYS as weekday (weekday)}
-					<span class="ds-caption grid h-7 place-items-center text-faint">{weekday}</span>
-				{/each}
-
-				{#each days as day (day.iso)}
-					<button
-						type="button"
-						disabled={day.disabled}
-						onclick={() => pick(day.iso)}
-						aria-current={day.isToday ? 'date' : undefined}
-						aria-pressed={day.iso === value}
-						class={cn(
-							'grid h-8 place-items-center rounded-sm text-[13px] transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:pointer-events-none disabled:text-faint/50',
-							day.outside ? 'text-faint' : 'text-ink',
-							day.inRange && 'bg-primary-soft',
-							(day.isRangeStart || day.isRangeEnd) && day.iso !== value && 'bg-primary-soft font-semibold text-primary',
-							day.iso === value
-								? 'bg-primary font-semibold text-on-primary hover:bg-primary'
-								: 'hover:bg-primary-soft',
-							day.isToday && day.iso !== value && 'font-semibold text-primary'
-						)}
-					>
-						{day.day}
-					</button>
-				{/each}
-			</div>
-
-			{#if showQuickActions}
-			<div class="mt-2 flex items-center justify-between border-t border-hairline pt-2">
-				<button
-					type="button"
-					onclick={() => pick(toISO(new Date()))}
-					class="ds-caption rounded-md px-2 py-1 text-primary transition-colors hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-				>
-					Hari ini
-				</button>
-				<button
-					type="button"
-					onclick={() => pick('')}
-					class="ds-caption rounded-md px-2 py-1 text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-				>
-					Kosongkan
-				</button>
-			</div>
-			{/if}
+	{#if showQuickActions}
+		<div class="mt-2 flex items-center justify-between border-t border-hairline pt-2">
+			<button
+				type="button"
+				onclick={() => commit(todayDate(getLocalTimeZone()))}
+				class="ds-caption rounded-md px-2 py-1 text-primary transition-colors hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+			>
+				Hari ini
+			</button>
+			<button
+				type="button"
+				onclick={() => commit(undefined)}
+				class="ds-caption rounded-md px-2 py-1 text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+			>
+				Kosongkan
+			</button>
 		</div>
 	{/if}
-</div>
+{/snippet}
+
+{#if inline}
+	<div bind:this={ref} class={cn('relative w-full', className)} {...rest}>
+		<div role="dialog" aria-label="Pilih tanggal" class={cn(panelClass, 'w-full p-3')}>
+			{@render calendarPanel()}
+		</div>
+	</div>
+{:else}
+	<div bind:this={ref} class={cn('relative w-full', className)} {...rest}>
+		<PopoverPrimitive.Root bind:open>
+			<PopoverPrimitive.Trigger
+				{id}
+				{disabled}
+				aria-describedby={ariaDescribedby}
+				aria-errormessage={ariaErrormessage}
+				aria-invalid={invalid || undefined}
+				class={cn(
+					'text-sm flex w-full items-center justify-between gap-2 rounded-md border bg-card px-3 h-10 py-0 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-lane',
+					selected ? 'text-ink' : 'text-faint',
+					invalid
+						? 'border-status-urgent'
+						: 'border-hairline hover:border-primary-border focus-visible:border-primary'
+				)}
+			>
+				<span class="truncate">{label}</span>
+				<HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={1.8} class="size-4 shrink-0 text-mute" />
+			</PopoverPrimitive.Trigger>
+
+			<Portal>
+				<PopoverPrimitive.Content
+					side="bottom"
+					align="start"
+					sideOffset={6}
+					aria-label="Pilih tanggal"
+					class={cn(panelClass, 'z-[400] w-[17.5rem] p-3')}
+				>
+					{@render calendarPanel()}
+				</PopoverPrimitive.Content>
+			</Portal>
+		</PopoverPrimitive.Root>
+	</div>
+{/if}

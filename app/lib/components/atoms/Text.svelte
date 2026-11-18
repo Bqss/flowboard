@@ -23,7 +23,7 @@
 	}: Props = $props();
 
 	const sizeMap = {
-		sm: 'text-[13px] leading-snug',
+		sm: 'text-meta leading-snug',
 		base: 'ds-body',
 		lg: 'text-[15px] leading-relaxed'
 	} as const;

@@ -13,6 +13,7 @@
     TreeView,
     DataTable,
     TableCard,
+    ChecklistTree,
     FileUploader,
     FilterBar,
     FormSection,
@@ -45,9 +46,30 @@
   } from '$lib/components/organisms/index.js';
   import { toast } from '$lib/components/molecules/index.js';
 
+  const demoChecklistGroups = [
+    { id: 'g-day1', parentId: null, templateGroupId: 'tg-day1', name: 'Day 1', requiresCompletion: true, position: 0 },
+    { id: 'g-mindset', parentId: 'g-day1', templateGroupId: 'tg-mindset', name: 'Mindset', requiresCompletion: false, position: 0 },
+    { id: 'g-day2', parentId: null, templateGroupId: 'tg-day2', name: 'Hari Kedua', requiresCompletion: false, position: 1 }
+  ];
+
+  let demoChecklistItems = $state([
+    { id: 'i1', label: 'Masuk group WhatsApp VIP', required: true, done: true, groupId: 'g-day1' },
+    { id: 'i2', label: 'Pin 3 group di atas', required: true, done: false, groupId: 'g-day1' },
+    { id: 'i3', label: 'Baca modul mindset', required: false, done: false, groupId: 'g-mindset' },
+    { id: 'i4', label: 'Install Apps F2U di phone', required: true, done: false, groupId: 'g-day2' },
+    { id: 'i5', label: 'Poster New VIP', required: false, done: false, groupId: null }
+  ]);
+
+  function toggleDemoChecklistItem(item: { id: string; done: boolean }) {
+    demoChecklistItems = demoChecklistItems.map((row) =>
+      row.id === item.id ? { ...row, done: !row.done } : row
+    );
+  }
+
   const subnav = [
     { href: '#board', label: 'Board' },
     { href: '#data', label: 'Data' },
+    { href: '#checklist', label: 'Checklist' },
     { href: '#forms', label: 'Forms' },
     { href: '#chrome', label: 'Chrome' },
     { href: '#overlays', label: 'Overlays' },
@@ -277,6 +299,22 @@
         rows={tableRows}
         total={24}
         perPage={10}
+      />
+    </div>
+  </ShowcaseSection>
+
+  <ShowcaseSection id="checklist" title="ChecklistTree" description="Nested checklist groups (max 3 levels) with per-group progress. Read-only here: structure edits call the API and need a live workflow.">
+    <div class="max-w-2xl">
+      <ChecklistTree
+        workspaceId="demo"
+        workflowId="demo"
+        stageId="demo"
+        cardId="demo"
+        groups={demoChecklistGroups}
+        items={demoChecklistItems}
+        canManage={false}
+        canToggle={true}
+        ontoggle={toggleDemoChecklistItem}
       />
     </div>
   </ShowcaseSection>

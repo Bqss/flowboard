@@ -54,10 +54,10 @@
 					class="mt-0.5"
 					checked={value.includes(option.value)}
 					disabled={option.disabled || disabled}
-					onchange={() => toggle(option)}
+					onCheckedChange={() => toggle(option)}
 				/>
 				<span class="min-w-0">
-					<span class={cn('block text-ink', size === 'sm' ? 'text-[13px]' : 'ds-body')}>
+					<span class={cn('block text-ink', size === 'sm' ? 'text-meta' : 'ds-body')}>
 						{option.label}
 					</span>
 					{#if option.description}

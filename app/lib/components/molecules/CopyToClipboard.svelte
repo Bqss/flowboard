@@ -55,7 +55,7 @@
 		<code
 			class={cn(
 				'ds-mono min-w-0 truncate rounded-sm bg-lane px-2 py-1 text-ink',
-				size === 'sm' ? 'text-[12px]' : 'text-[13px]'
+				size === 'sm' ? 'text-badge' : 'text-meta'
 			)}
 		>
 			{value}
@@ -69,7 +69,7 @@
 		title={copied ? copiedLabel : copyLabel}
 		class={cn(
 			'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-hairline bg-card text-mute transition-colors duration-150 ease-out hover:border-primary-border hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]',
-			size === 'sm' ? 'h-7 px-2 text-[12px]' : 'h-8 px-2.5 text-[13px]'
+			size === 'sm' ? 'h-7 px-2 text-badge' : 'h-8 px-2.5 text-meta'
 		)}
 	>
 		{#if copied}

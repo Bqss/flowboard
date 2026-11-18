@@ -210,7 +210,7 @@
 		{#if items.length > 0}
 			<div>
 				{#if !isRail}
-					<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
+					<p class="px-2 pb-1.5 text-micro font-bold uppercase tracking-wider text-mute select-none">
 						{workspaceLabel}
 					</p>
 				{/if}
@@ -258,7 +258,7 @@
 		{#if settingsItems.length > 0}
 			<div>
 				{#if !isRail}
-					<p class="px-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-wider text-faint select-none">
+					<p class="px-2 pb-1.5 text-micro font-bold uppercase tracking-wider text-mute select-none">
 						{settingsLabel}
 					</p>
 				{:else if items.length > 0}
@@ -309,10 +309,10 @@
 			<div>
 				{#if !isRail}
 					<div class="flex items-center justify-between px-2 pb-1.5">
-						<p class="text-[11.5px] font-bold uppercase tracking-wider text-primary select-none">
+						<p class="text-micro font-bold uppercase tracking-wider text-primary select-none">
 							{adminLabel}
 						</p>
-						<span class="rounded bg-primary/10 px-1 py-0.2 text-[10px] font-semibold tracking-wide text-primary">ADMIN</span>
+						<span class="rounded-sm bg-primary/10 px-1 py-0.5 text-tiny font-semibold tracking-wide text-primary">ADMIN</span>
 					</div>
 				{:else if items.length > 0 || settingsItems.length > 0}
 					<div class="my-1.5 h-px w-6 bg-primary/20" aria-hidden="true"></div>
@@ -380,7 +380,7 @@
 				<button
 					type="button"
 					onclick={handleToggle}
-					class="group relative flex size-10 items-center justify-center rounded-xl text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
+					class="group relative flex size-10 items-center justify-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
 					aria-label={expandLabel}
 				>
 					<span class="transition-transform group-hover:scale-95 group-hover:opacity-0">
@@ -401,28 +401,28 @@
 						<button
 							type="button"
 							onclick={toggle}
-							class="group flex min-w-0 max-w-[168px] items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-lane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+							class="group flex min-w-0 max-w-[168px] items-center gap-2.5 rounded-md p-1.5 text-left transition-colors hover:bg-lane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 							aria-expanded={open}
 						>
-							<div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary font-bold shadow-xs">
+							<div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary font-bold shadow-xs">
 								<Logo size={22} />
 							</div>
 							<div class="min-w-0 flex-1">
-							<p class="truncate text-[13px] font-semibold text-ink leading-tight">{workspaceName}</p>
-							<p class="truncate text-[11px] text-mute">{workspaceRole ?? subtitle}</p>
+							<p class="truncate text-meta font-semibold text-ink leading-tight">{workspaceName}</p>
+							<p class="truncate text-micro text-mute">{workspaceRole ?? subtitle}</p>
 							</div>
 							<HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={2} class="shrink-0 text-mute transition-transform group-hover:text-ink" />
 						</button>
 					{/snippet}
 				</DropdownMenu>
 			{:else}
-				<a href="/dashboard" class="flex min-w-0 items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-lane">
-					<div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary font-bold shadow-xs">
+				<a href="/dashboard" class="flex min-w-0 items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-lane">
+					<div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary font-bold shadow-xs">
 						<Logo size={22} />
 					</div>
 					<div class="min-w-0">
-					<p class="truncate text-[13px] font-semibold text-ink leading-tight">{workspaceName}</p>
-					<p class="truncate text-[11px] text-mute">{subtitle}</p>
+					<p class="truncate text-meta font-semibold text-ink leading-tight">{workspaceName}</p>
+					<p class="truncate text-micro text-mute">{subtitle}</p>
 					</div>
 				</a>
 			{/if}
@@ -432,7 +432,7 @@
 				<button
 					type="button"
 					onclick={handleToggle}
-					class="flex size-8 items-center justify-center rounded-lg text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+					class="flex size-8 items-center justify-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 					aria-label={collapseLabel}
 				>
 					<HugeiconsIcon icon={PanelLeftCloseIcon} size={18} strokeWidth={1.8} />
@@ -448,7 +448,7 @@
 				type="button"
 				onclick={onToggleAdminMode}
 				class={cn(
-					'flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-[13px] font-semibold transition-all',
+					'flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-meta font-semibold transition-all',
 					adminMode
 						? 'border-primary/30 bg-primary-soft text-primary shadow-xs'
 						: 'border-hairline bg-canvas-sunken text-mute hover:border-hairline-strong hover:text-ink'
@@ -484,7 +484,7 @@
 							<button
 								type="button"
 								onclick={toggle}
-								class="relative flex size-10 items-center justify-center rounded-xl transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+								class="relative flex size-10 items-center justify-center rounded-md transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 								aria-expanded={open}
 								aria-label={userName}
 							>
@@ -499,7 +499,7 @@
 					<button
 						type="button"
 						onclick={handleToggle}
-						class="flex size-9 items-center justify-center rounded-lg text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+						class="flex size-9 items-center justify-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
 						aria-label={expandLabel}
 					>
 						<HugeiconsIcon icon={PanelLeftOpenIcon} size={18} strokeWidth={1.8} />
@@ -508,7 +508,7 @@
 			</div>
 		{:else}
 			<!-- Expanded user card -->
-			<div class="flex items-center justify-between gap-1 rounded-xl p-1.5 transition-colors hover:bg-lane/70">
+			<div class="flex items-center justify-between gap-1 rounded-md p-1.5 transition-colors hover:bg-lane/70">
 				<DropdownMenu items={defaultUserMenuItems} align="start" class="min-w-0 flex-1">
 					{#snippet trigger({ open, toggle })}
 						<button
@@ -522,8 +522,8 @@
 								<span class="absolute bottom-0 right-0 size-2 rounded-full border border-card bg-presence-online"></span>
 							</div>
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-[14px] font-semibold text-ink leading-tight">{userName}</p>
-								<p class="truncate text-[12px] text-mute">{userRole ?? userEmail ?? 'actjom Member'}</p>
+								<p class="truncate text-sm font-semibold text-ink leading-tight">{userName}</p>
+								<p class="truncate text-badge text-mute">{userRole ?? userEmail ?? 'actjom Member'}</p>
 							</div>
 						</button>
 					{/snippet}
@@ -565,12 +565,12 @@
 		<!-- Header -->
 		<div class="flex h-16 shrink-0 items-center justify-between border-b border-hairline px-4">
 			<a href="/dashboard" class="flex items-center gap-2.5" onclick={() => (mobileOpen = false)}>
-				<div class="flex size-8 items-center justify-center rounded-lg bg-primary-soft text-primary font-bold shadow-xs">
+				<div class="flex size-8 items-center justify-center rounded-md bg-primary-soft text-primary font-bold shadow-xs">
 					<Logo size={22} />
 				</div>
 				<div>
-					<p class="text-[15px] font-bold text-ink leading-tight">{workspaceName}</p>
-					<p class="text-[12px] text-mute">{subtitle}</p>
+					<p class="text-sm font-semibold text-ink leading-tight">{workspaceName}</p>
+					<p class="text-badge text-mute">{subtitle}</p>
 				</div>
 			</a>
 			<button
@@ -579,7 +579,7 @@
 					mobileOpen = false;
 					onCloseMobile?.();
 				}}
-				class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-lane hover:text-ink"
+				class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-lane hover:text-ink"
 				aria-label="Close menu"
 			>
 				<HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={2} />
@@ -593,7 +593,7 @@
 					type="button"
 					onclick={onToggleAdminMode}
 					class={cn(
-						'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-[13px] font-semibold transition-all',
+						'flex w-full items-center justify-between rounded-md border px-3 py-2 text-meta font-semibold transition-all',
 						adminMode
 							? 'border-primary/30 bg-primary-soft text-primary'
 							: 'border-hairline bg-canvas-sunken text-mute hover:border-hairline-strong hover:text-ink'
@@ -617,15 +617,15 @@
 				<div class="flex min-w-0 items-center gap-2.5">
 					<Avatar name={userName} src={userSrc} size={34} />
 					<div class="min-w-0">
-						<p class="truncate text-[14px] font-semibold text-ink">{userName}</p>
-						<p class="truncate text-[12px] text-mute">{userEmail ?? userRole ?? 'Member'}</p>
+						<p class="truncate text-sm font-semibold text-ink">{userName}</p>
+						<p class="truncate text-badge text-mute">{userEmail ?? userRole ?? 'Member'}</p>
 					</div>
 				</div>
 				{#if onLogout}
 					<button
 						type="button"
 						onclick={onLogout}
-						class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-status-urgent/10 hover:text-status-urgent"
+						class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-status-urgent/10 hover:text-status-urgent"
 						aria-label={labels.signOut ?? 'Sign out'}
 					>
 						<HugeiconsIcon icon={Logout03Icon} size={18} strokeWidth={1.8} />

@@ -1,10 +1,13 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+	import { DropdownMenu as MenuPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import { Avatar } from '$lib/components/atoms/index.js';
 	import { HugeiconsIcon } from '@hugeicons/svelte';
 	import { ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
-	import { dismissable, panelClass, panelItemClass, type MenuItem } from './shared.js';
+	import { panelClass, panelItemClass, type MenuItem } from './shared.js';
+
 	type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		items: MenuItem[];
 		open?: boolean;
@@ -27,28 +30,16 @@
 		...rest
 	}: Props = $props();
 
-	function run(item: MenuItem) {
-		if (item.submenu) {
-			activeSubmenu = activeSubmenu === item.label ? null : item.label;
-			return;
-		}
+	// Bits opens the menu from the trigger wrapper (pointer + keyboard).
+	// The caller's `toggle` is a no-op so a click doesn't open and close it again.
+	const noopToggle = () => {};
+
+	function selectItem(item: MenuItem) {
 		if (item.disabled) return;
 		item.onselect?.();
-		open = false;
-		activeSubmenu = null;
 	}
-
-  function handleFocusout(event: FocusEvent) {
-    const nextTarget = event.relatedTarget as Node | null;
-    const root = event.currentTarget as HTMLElement;
-    if (!nextTarget || !root.contains(nextTarget)) open = false;
-  }
-
-  let activeSubmenu = $state<string | null>(null);
-	$effect(() => {
-		if (!open) activeSubmenu = null;
-	});
 </script>
+
 {#snippet menuItemContent(item: MenuItem)}
 	<span class="flex min-w-0 items-center gap-2.5">
 		{#if item.avatar}
@@ -67,108 +58,67 @@
 	</span>
 {/snippet}
 
-<div
-  bind:this={ref}
-  class={cn('relative inline-flex', className)}
-  use:dismissable={() => (open = false)}
-  onfocusout={handleFocusout}
-  {...rest}
->
-	{@render trigger({ open, toggle: () => (open = !open) })}
+<MenuPrimitive.Root bind:open>
+	<MenuPrimitive.Trigger>
+		{#snippet child({ props })}
+			<span bind:this={ref} class={cn('relative inline-flex', className)} {...props} {...(rest as Record<string, unknown>)}>
+				{@render trigger({ open, toggle: noopToggle })}
+			</span>
+		{/snippet}
+	</MenuPrimitive.Trigger>
 
-	{#if open}
-		<div
-			role="menu"
+	<Portal>
+		<MenuPrimitive.Content
+			{side}
+			align={align === 'end' ? 'end' : 'start'}
+			sideOffset={6}
 			aria-label={label}
-			class={cn(
-				panelClass,
-				'absolute overflow-visible',
-				side === 'bottom' ? 'top-[calc(100%+6px)]' : 'bottom-[calc(100%+6px)]',
-				align === 'end' ? 'right-0' : 'left-0'
-			)}
+			class={cn(panelClass, 'z-[400] overflow-visible')}
 		>
 			{#each items as item, i (item.label + i)}
 				{#if item.separatorBefore && i > 0}
-					<div class="my-1 h-px bg-hairline" role="separator"></div>
+					<MenuPrimitive.Separator class="my-1 h-px bg-hairline" />
 				{/if}
+
 				{#if item.submenu}
-					<div
-						role="presentation"
-						class="group/submenu relative"
-						onmouseenter={() => {
-							if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-								activeSubmenu = item.label;
-							}
-						}}
-						onmouseleave={() => {
-							if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-								activeSubmenu = null;
-							}
-						}}
-					>
-						<button
-							type="button"
-							role="menuitem"
-							aria-haspopup="menu"
-							aria-expanded={activeSubmenu === item.label}
-							onclick={(e) => {
-								e.stopPropagation();
-								activeSubmenu = activeSubmenu === item.label ? null : item.label;
-							}}
+					<MenuPrimitive.Sub>
+						<MenuPrimitive.SubTrigger
 							class={cn(panelItemClass, 'justify-between whitespace-nowrap')}
 						>
 							{@render menuItemContent(item)}
-							<HugeiconsIcon icon={ArrowRight01Icon} size={15} strokeWidth={1.8} class="shrink-0 text-mute transition-transform duration-150 {activeSubmenu === item.label ? 'rotate-90 sm:rotate-0' : ''}" />
-						</button>
-						{#if activeSubmenu === item.label}
-							<div
-								aria-label={item.label}
-								class={cn(
-									panelClass,
-									'z-[60] min-w-[15rem]',
-									'my-1 rounded-xl border border-hairline/80 bg-canvas-sunken/60 p-1 sm:my-0 sm:bg-card sm:border-hairline sm:shadow-popover sm:absolute sm:top-0',
-									align === 'end'
-										? 'sm:right-[calc(100%+6px)]'
-										: 'sm:left-[calc(100%+6px)]'
-								)}
-							>
-								{#each item.submenu as submenuItem, submenuIndex (submenuItem.label + submenuIndex)}
-									{#if submenuItem.separatorBefore && submenuIndex > 0}
-										<div class="my-1 h-px bg-hairline" role="separator"></div>
+							<HugeiconsIcon icon={ArrowRight01Icon} size={15} strokeWidth={1.8} class="shrink-0 text-mute" />
+						</MenuPrimitive.SubTrigger>
+						<MenuPrimitive.SubContent class={cn(panelClass, 'z-[410] min-w-[15rem] p-1')}>
+							{#each item.submenu as submenuItem, submenuIndex (submenuItem.label + submenuIndex)}
+								{#if submenuItem.separatorBefore && submenuIndex > 0}
+									<MenuPrimitive.Separator class="my-1 h-px bg-hairline" />
+								{/if}
+								<MenuPrimitive.Item
+									disabled={submenuItem.disabled}
+									onSelect={() => selectItem(submenuItem)}
+									class={cn(
+										panelItemClass,
+										'justify-between whitespace-nowrap',
+										submenuItem.active && 'bg-primary-soft',
+										submenuItem.destructive && 'text-status-urgent hover:bg-status-urgent-soft',
+										submenuItem.active && submenuItem.disabled && 'text-ink'
+									)}
+								>
+									{@render menuItemContent(submenuItem)}
+									{#if submenuItem.shortcut}
+										<span class="ds-caption ds-mono pl-6 text-faint">{submenuItem.shortcut}</span>
 									{/if}
-									<button
-										type="button"
-										role="menuitem"
-										disabled={submenuItem.disabled}
-										data-disabled={submenuItem.disabled ?? false}
-										onclick={() => run(submenuItem)}
-										class={cn(
-											panelItemClass,
-											'justify-between whitespace-nowrap',
-											submenuItem.active && 'bg-primary-soft',
-											submenuItem.destructive && 'text-status-urgent hover:bg-status-urgent-soft',
-											submenuItem.active && submenuItem.disabled && 'text-ink'
-										)}
-									>
-										{@render menuItemContent(submenuItem)}
-										{#if submenuItem.shortcut}
-											<span class="ds-caption ds-mono pl-6 text-faint">{submenuItem.shortcut}</span>
-										{/if}
-										{#if submenuItem.active}
-											<HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} class="shrink-0 text-primary" />
-										{/if}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
+									{#if submenuItem.active}
+										<HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} class="shrink-0 text-primary" />
+									{/if}
+								</MenuPrimitive.Item>
+							{/each}
+						</MenuPrimitive.SubContent>
+					</MenuPrimitive.Sub>
 				{:else}
-					<button
-						type="button"
-						role="menuitem"
+					<MenuPrimitive.Item
 						disabled={item.disabled}
-						data-disabled={item.disabled ?? false}
-						onclick={() => run(item)}
+						onSelect={() => selectItem(item)}
 						class={cn(
 							panelItemClass,
 							'justify-between whitespace-nowrap',
@@ -184,9 +134,9 @@
 						{#if item.active}
 							<HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} class="shrink-0 text-primary" />
 						{/if}
-					</button>
+					</MenuPrimitive.Item>
 				{/if}
 			{/each}
-		</div>
-	{/if}
-</div>
+		</MenuPrimitive.Content>
+	</Portal>
+</MenuPrimitive.Root>

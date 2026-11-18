@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto, invalidateAll } from '$app/navigation';
   import { mode, toggleMode } from 'mode-watcher';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
@@ -8,8 +7,8 @@
     Moon02Icon,
     Sun03Icon
   } from '@hugeicons/core-free-icons';
-  import { api } from '$lib/api/client';
-  import { locale, locales, setLocale } from '$lib/i18n/index.js';
+  import { isLocale, locale, locales, setLocale } from '$lib/i18n/index.js';
+  import { LanguageSwitcher } from '$lib/components/molecules/index.js';
   import { landingCopy } from '$lib/i18n/landing.js';
   import Logo from '../atoms/Logo.svelte';
   import Button from '../atoms/Button.svelte';
@@ -18,43 +17,23 @@
 
   let { user = null }: { user?: NavUser } = $props();
   const copy = $derived(landingCopy[$locale]);
+  const localeOptions = $derived(
+    locales.map((lang) => ({ code: lang.code, short: lang.short, label: copy.language.options[lang.code] }))
+  );
   const links = $derived(copy.nav.links);
   const isDark = $derived(mode.current === 'dark');
   let open = $state(false);
-  let loggingOut = $state(false);
-
-  async function logout() {
-    loggingOut = true;
-    try {
-      await api.logout();
-      await invalidateAll();
-      await goto('/login');
-    } finally {
-      loggingOut = false;
-      open = false;
-    }
-  }
 </script>
 
 {#snippet languageSwitcher(compact = false)}
-  <div
-    class="inline-flex items-center rounded-full bg-lane/80 p-1"
-    role="group"
-    aria-label={copy.language.label}
-  >
-    {#each locales as language (language.code)}
-      <button
-        type="button"
-        aria-pressed={$locale === language.code}
-        aria-label={copy.language.options[language.code]}
-        title={copy.language.options[language.code]}
-        onclick={() => setLocale(language.code)}
-        class="inline-flex h-7 items-center justify-center rounded-full px-2.5 text-[10px] font-semibold tracking-[0.06em] transition-[background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus-visible:outline-none {$locale === language.code ? 'bg-card text-ink shadow-[0_2px_8px_rgba(47,46,101,0.1)]' : 'text-mute hover:text-ink'} {compact ? 'min-w-8' : 'min-w-9'}"
-      >
-        {language.short}
-      </button>
-    {/each}
-  </div>
+  <LanguageSwitcher
+    value={$locale}
+    languages={localeOptions}
+    variant="compact"
+    onchange={(code) => {
+      if (isLocale(code)) setLocale(code);
+    }}
+  />
 {/snippet}
 
 <a
@@ -94,8 +73,7 @@
       </button>
 
       {#if user}
-        <div class="hidden items-center gap-2 md:flex">
-          <Button variant="tertiary" size="sm" onclick={logout} loading={loggingOut}>{copy.nav.signOut}</Button>
+        <div class="hidden items-center md:flex">
           <Button variant="primary" size="sm" href="/dashboard/chat">{copy.nav.openWorkspace}</Button>
         </div>
       {:else}

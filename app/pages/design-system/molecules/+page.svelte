@@ -43,7 +43,7 @@
     ChatAudioPlayer
   } from '$lib/components/molecules/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
-  import { KanbanIcon, Home09Icon } from '@hugeicons/core-free-icons';
+  import { KanbanIcon, Home09Icon, ArrowDown01Icon } from '@hugeicons/core-free-icons';
 
   const subnav = [
     { href: '#forms', label: 'Forms' },
@@ -222,7 +222,7 @@
     <div class="flex flex-wrap items-start gap-6">
       <DropdownMenu items={menuItems} bind:open={menuOpen} label="Card actions">
         {#snippet trigger({ toggle })}
-          <Button variant="secondary" onclick={toggle}>Actions ▾</Button>
+          <Button variant="secondary" onclick={toggle}>Actions <HugeiconsIcon icon={ArrowDown01Icon} size={14} strokeWidth={1.8} /></Button>
         {/snippet}
       </DropdownMenu>
       <ContextMenu items={menuItems}>

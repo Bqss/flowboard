@@ -29,6 +29,12 @@ export const categories: ShowcaseCategory[] = [
 		label: 'Organisms',
 		description: 'Board, dialogs, layout chrome, data views',
 		count: 36
+	},
+	{
+		href: '/design-system/bits',
+		label: 'Bits',
+		description: 'Komponen yang sudah dipindah ke Bits UI',
+		count: 0
 	}
 ];
 

@@ -1,31 +1,32 @@
 <script lang="ts" module>
-	import { type VariantProps, tv } from 'tailwind-variants';
+	import type { VariantProps } from 'tailwind-variants';
+	import { tv } from '$lib/utils.js';
 
 	export const buttonVariants = tv({
 		base: 'ds-button-text inline-flex shrink-0 items-center justify-center gap-2 transition-all duration-150 ease-out select-none whitespace-nowrap outline-none [&_svg]:pointer-events-none [&_svg]:shrink-0 active:scale-[.98] disabled:pointer-events-none disabled:opacity-50',
 		variants: {
 			variant: {
 				primary:
-					'rounded-full bg-primary text-on-primary shadow-primary hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2',
+					'rounded-md bg-primary text-on-primary shadow-primary hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2',
 				secondary:
-					'rounded-full border border-hairline bg-card text-ink-soft hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
+					'rounded-md border border-hairline bg-card text-ink-soft hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
 				tertiary:
-					'rounded-full bg-lane text-ink-soft hover:bg-primary-soft focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
+					'rounded-md bg-lane text-ink-soft hover:bg-primary-soft focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
 				ghost:
 					'rounded-md text-mute hover:bg-lane hover:text-ink-soft focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
 				destructive:
-					'rounded-full bg-status-urgent text-on-primary hover:bg-status-urgent-strong focus-visible:ring-2 focus-visible:ring-status-urgent/25 focus-visible:ring-offset-2',
+					'rounded-md bg-status-urgent text-on-primary hover:bg-status-urgent-strong focus-visible:ring-2 focus-visible:ring-status-urgent/25 focus-visible:ring-offset-2',
 				danger:
-					'rounded-full bg-status-urgent text-on-primary hover:bg-status-urgent-strong focus-visible:ring-2 focus-visible:ring-status-urgent/25 focus-visible:ring-offset-2',
+					'rounded-md bg-status-urgent text-on-primary hover:bg-status-urgent-strong focus-visible:ring-2 focus-visible:ring-status-urgent/25 focus-visible:ring-offset-2',
 				success:
-					'rounded-full bg-status-done text-status-done-ink hover:bg-status-done-strong focus-visible:ring-2 focus-visible:ring-status-done/25 focus-visible:ring-offset-2',
+					'rounded-md bg-status-done text-status-done-ink hover:bg-status-done-strong focus-visible:ring-2 focus-visible:ring-status-done/25 focus-visible:ring-offset-2',
 				warning:
-					'rounded-full bg-status-progress text-status-progress-ink hover:bg-status-progress-strong focus-visible:ring-2 focus-visible:ring-status-progress/25 focus-visible:ring-offset-2',
+					'rounded-md bg-status-progress text-status-progress-ink hover:bg-status-progress-strong focus-visible:ring-2 focus-visible:ring-status-progress/25 focus-visible:ring-offset-2',
 				info:
-					'rounded-full bg-status-queued text-on-primary hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-status-queued/25 focus-visible:ring-offset-2',
+					'rounded-md bg-status-queued text-on-primary hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-status-queued/25 focus-visible:ring-offset-2',
 				link: 'rounded-md text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:ring-offset-2',
 				lane:
-					'rounded-full border border-hairline/80 shadow-xs focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 transition-all font-semibold'
+					'rounded-md border border-hairline/80 shadow-xs focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 transition-all font-semibold'
 			},
 			lane: {
 				queued: 'bg-primary-soft text-primary-ink border-primary-border/60 hover:bg-primary-soft-hover',
@@ -34,7 +35,7 @@
 				none: ''
 			},
 			size: {
-				sm: 'h-9 px-4 text-[13px] [&_svg:not([class*=size-])]:size-4',
+				sm: 'h-9 px-4 text-meta [&_svg:not([class*=size-])]:size-4',
 				md: 'h-10 px-5 [&_svg:not([class*=size-])]:size-[18px]',
 				lg: 'h-11 px-5 text-[14px] [&_svg:not([class*=size-])]:size-5',
 				lane: 'h-11 w-full px-5 [&_svg:not([class*=size-])]:size-[18px]',

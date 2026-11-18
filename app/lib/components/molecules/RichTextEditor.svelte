@@ -10,10 +10,11 @@
 	import ListOrderedIcon from '@lucide/svelte/icons/list-ordered';
 	import StrikethroughIcon from '@lucide/svelte/icons/strikethrough';
 	import TypeIcon from '@lucide/svelte/icons/type';
+	import { DropdownMenu as MenuPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
 	import { cn } from '$lib/utils.js';
 	import { sanitizeRichText } from '$lib/rich-text.js';
 
-	type EditorMenu = 'heading' | 'format' | 'list' | null;
 	type HeadingOption = { tag: string; label: string; shortcut: string };
 
 	type Props = {
@@ -38,7 +39,6 @@
 
 	let editor = $state<HTMLDivElement | null>(null);
 	let imageInput = $state<HTMLInputElement | null>(null);
-	let openMenu = $state<EditorMenu>(null);
 	let activeHeading = $state('Normal text');
 	let imageUploading = $state(false);
 	let savedSelection = $state<Range | null>(null);
@@ -102,7 +102,6 @@
 		editor.focus();
 		document.execCommand(command, false, commandValue);
 		syncValue();
-		openMenu = null;
 	}
 
 	function runBlock(tag: string, label: string) {
@@ -122,7 +121,6 @@
 		if (disabled || !onimageupload || imageUploading) return;
 		saveSelection();
 		imageInput?.click();
-		openMenu = null;
 	}
 
 	async function handleImageSelection(event: Event) {
@@ -173,10 +171,6 @@
 		syncValue();
 	}
 
-	function handleWindowKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') openMenu = null;
-	}
-
 	$effect(() => {
 		if (editor && document.activeElement !== editor) {
 			const next = sanitizeRichText(value);
@@ -189,43 +183,39 @@
 	});
 </script>
 
-<svelte:window onclick={(event) => {
-	if (editor && !editor.parentElement?.contains(event.target as Node)) openMenu = null;
-}} onkeydown={handleWindowKeydown} />
-
-<div class={cn('relative overflow-visible rounded-card border border-hairline bg-card', className)}>
+<div class={cn('relative overflow-visible rounded-card border border-hairline bg-card transition-colors duration-150 hover:border-primary-border focus-within:border-primary focus-within:ring-2 focus-within:ring-[var(--focus)]', className)}>
 	<div class="flex flex-wrap items-center gap-1 border-b border-hairline bg-lane/40 p-2">
-		<div class="relative">
-			<button
-				type="button"
-				class={cn('rich-toolbar-button rich-toolbar-button--wide min-w-[7.5rem] justify-between gap-1 px-2', openMenu === 'heading' && 'bg-primary-soft text-primary-ink')}
-				aria-label="Gaya teks"
-				aria-haspopup="menu"
-				aria-expanded={openMenu === 'heading'}
-				disabled={disabled}
-				onmousedown={(event) => { event.preventDefault(); saveSelection(); }}
-				onclick={() => (openMenu = openMenu === 'heading' ? null : 'heading')}
-			>
-				<span class="flex items-center gap-1.5"><TypeIcon class="size-4" />{activeHeading}</span>
-				<ChevronDownIcon class="size-3.5" />
-			</button>
-			{#if openMenu === 'heading'}
-				<div class="rich-toolbar-menu left-0 w-60" role="menu" aria-label="Gaya teks">
+		<MenuPrimitive.Root>
+			<MenuPrimitive.Trigger>
+				{#snippet child({ props })}
+					<button
+						{...props}
+						type="button"
+						class="rich-toolbar-button rich-toolbar-button--wide min-w-[7.5rem] justify-between gap-1 px-2"
+						aria-label="Gaya teks"
+						disabled={disabled}
+						onmousedown={(event) => { event.preventDefault(); saveSelection(); }}
+					>
+						<span class="flex items-center gap-1.5"><TypeIcon class="size-4" />{activeHeading}</span>
+						<ChevronDownIcon class="size-3.5" />
+					</button>
+				{/snippet}
+			</MenuPrimitive.Trigger>
+			<Portal>
+				<MenuPrimitive.Content align="start" sideOffset={6} aria-label="Gaya teks" class="rich-toolbar-menu z-[400] w-60">
 					{#each headingOptions as option (option.tag)}
-						<button
-							type="button"
+						<MenuPrimitive.Item
 							class={cn('rich-toolbar-menu-item', activeHeading === option.label && 'bg-primary-soft text-primary-ink')}
-							role="menuitem"
-							onmousedown={(event) => { event.preventDefault(); saveSelection(); }}
-							onclick={() => runBlock(option.tag, option.label)}
+							onmousedown={(event: MouseEvent) => { event.preventDefault(); saveSelection(); }}
+							onSelect={() => runBlock(option.tag, option.label)}
 						>
 							<span class={cn('truncate', option.tag === 'p' ? 'text-sm' : 'font-bold')}><span class="mr-2 text-mute">{option.tag === 'p' ? 'Tt' : option.tag.toUpperCase()}</span>{option.label}</span>
 							<kbd>{option.shortcut}</kbd>
-						</button>
+						</MenuPrimitive.Item>
 					{/each}
-				</div>
-			{/if}
-		</div>
+				</MenuPrimitive.Content>
+			</Portal>
+		</MenuPrimitive.Root>
 
 		<span class="mx-1 h-5 w-px bg-hairline"></span>
 
@@ -233,52 +223,56 @@
 			<BoldIcon class="size-4" />
 		</button>
 
-		<div class="relative">
-			<button
-				type="button"
-				class={cn('rich-toolbar-button rich-toolbar-button--wide gap-1 px-2', openMenu === 'format' && 'bg-primary-soft text-primary-ink')}
-				aria-label="Format teks"
-				aria-haspopup="menu"
-				aria-expanded={openMenu === 'format'}
-				disabled={disabled}
-				onmousedown={(event) => { event.preventDefault(); saveSelection(); }}
-				onclick={() => (openMenu = openMenu === 'format' ? null : 'format')}
-			>
-				<ItalicIcon class="size-4" /><ChevronDownIcon class="size-3.5" />
-			</button>
-			{#if openMenu === 'format'}
-				<div class="rich-toolbar-menu left-0 w-52" role="menu" aria-label="Format teks">
-					<button type="button" class="rich-toolbar-menu-item" role="menuitem" onmousedown={(event) => { event.preventDefault(); saveSelection(); }} onclick={() => run('italic')}><span class="flex items-center gap-3"><ItalicIcon class="size-4" />Italic</span><kbd>⌘I</kbd></button>
-					<button type="button" class="rich-toolbar-menu-item" role="menuitem" onmousedown={(event) => { event.preventDefault(); saveSelection(); }} onclick={() => run('strikeThrough')}><span class="flex items-center gap-3"><StrikethroughIcon class="size-4" />Strikethrough</span><kbd>⌘⇧S</kbd></button>
-					<button type="button" class="rich-toolbar-menu-item" role="menuitem" onmousedown={(event) => { event.preventDefault(); saveSelection(); }} onclick={() => run('formatBlock', 'pre')}><span class="flex items-center gap-3"><CodeIcon class="size-4" />Code</span><kbd>⌘⇧M</kbd></button>
+		<MenuPrimitive.Root>
+			<MenuPrimitive.Trigger>
+				{#snippet child({ props })}
+					<button
+						{...props}
+						type="button"
+						class="rich-toolbar-button rich-toolbar-button--wide gap-1 px-2"
+						aria-label="Format teks"
+						disabled={disabled}
+						onmousedown={(event) => { event.preventDefault(); saveSelection(); }}
+					>
+						<ItalicIcon class="size-4" /><ChevronDownIcon class="size-3.5" />
+					</button>
+				{/snippet}
+			</MenuPrimitive.Trigger>
+			<Portal>
+				<MenuPrimitive.Content align="start" sideOffset={6} aria-label="Format teks" class="rich-toolbar-menu z-[400] w-52">
+					<MenuPrimitive.Item class="rich-toolbar-menu-item" onmousedown={(event: MouseEvent) => { event.preventDefault(); saveSelection(); }} onSelect={() => run('italic')}><span class="flex items-center gap-3"><ItalicIcon class="size-4" />Italic</span><kbd>⌘I</kbd></MenuPrimitive.Item>
+					<MenuPrimitive.Item class="rich-toolbar-menu-item" onmousedown={(event: MouseEvent) => { event.preventDefault(); saveSelection(); }} onSelect={() => run('strikeThrough')}><span class="flex items-center gap-3"><StrikethroughIcon class="size-4" />Strikethrough</span><kbd>⌘⇧S</kbd></MenuPrimitive.Item>
+					<MenuPrimitive.Item class="rich-toolbar-menu-item" onmousedown={(event: MouseEvent) => { event.preventDefault(); saveSelection(); }} onSelect={() => run('formatBlock', 'pre')}><span class="flex items-center gap-3"><CodeIcon class="size-4" />Code</span><kbd>⌘⇧M</kbd></MenuPrimitive.Item>
 					<div class="my-1 border-t border-hairline"></div>
-					<button type="button" class="rich-toolbar-menu-item text-mute" role="menuitem" onmousedown={(event) => { event.preventDefault(); saveSelection(); }} onclick={() => { run('removeFormat'); runBlock('p', 'Normal text'); }}><span class="flex items-center gap-3"><EraserIcon class="size-4" />Clear formatting</span><kbd>⌘\\</kbd></button>
-				</div>
-			{/if}
-		</div>
+					<MenuPrimitive.Item class="rich-toolbar-menu-item text-mute" onmousedown={(event: MouseEvent) => { event.preventDefault(); saveSelection(); }} onSelect={() => { run('removeFormat'); runBlock('p', 'Normal text'); }}><span class="flex items-center gap-3"><EraserIcon class="size-4" />Clear formatting</span><kbd>⌘\\</kbd></MenuPrimitive.Item>
+				</MenuPrimitive.Content>
+			</Portal>
+		</MenuPrimitive.Root>
 
 		<span class="mx-1 h-5 w-px bg-hairline"></span>
 
-		<div class="relative">
-			<button
-				type="button"
-				class={cn('rich-toolbar-button rich-toolbar-button--wide gap-1 px-2', openMenu === 'list' && 'bg-primary-soft text-primary-ink')}
-				aria-label="Daftar"
-				aria-haspopup="menu"
-				aria-expanded={openMenu === 'list'}
-				disabled={disabled}
-				onmousedown={(event) => { event.preventDefault(); saveSelection(); }}
-				onclick={() => (openMenu = openMenu === 'list' ? null : 'list')}
-			>
-				<ListIcon class="size-4" /><ChevronDownIcon class="size-3.5" />
-			</button>
-			{#if openMenu === 'list'}
-				<div class="rich-toolbar-menu left-0 w-52" role="menu" aria-label="Daftar">
-					<button type="button" class="rich-toolbar-menu-item" role="menuitem" onmousedown={(event) => { event.preventDefault(); saveSelection(); }} onclick={() => run('insertUnorderedList')}><span class="flex items-center gap-3"><ListIcon class="size-4" />Bullet list</span><kbd>⌘⇧8</kbd></button>
-					<button type="button" class="rich-toolbar-menu-item" role="menuitem" onmousedown={(event) => { event.preventDefault(); saveSelection(); }} onclick={() => run('insertOrderedList')}><span class="flex items-center gap-3"><ListOrderedIcon class="size-4" />Numbered list</span><kbd>⌘⇧7</kbd></button>
-				</div>
-			{/if}
-		</div>
+		<MenuPrimitive.Root>
+			<MenuPrimitive.Trigger>
+				{#snippet child({ props })}
+					<button
+						{...props}
+						type="button"
+						class="rich-toolbar-button rich-toolbar-button--wide gap-1 px-2"
+						aria-label="Daftar"
+						disabled={disabled}
+						onmousedown={(event) => { event.preventDefault(); saveSelection(); }}
+					>
+						<ListIcon class="size-4" /><ChevronDownIcon class="size-3.5" />
+					</button>
+				{/snippet}
+			</MenuPrimitive.Trigger>
+			<Portal>
+				<MenuPrimitive.Content align="start" sideOffset={6} aria-label="Daftar" class="rich-toolbar-menu z-[400] w-52">
+					<MenuPrimitive.Item class="rich-toolbar-menu-item" onmousedown={(event: MouseEvent) => { event.preventDefault(); saveSelection(); }} onSelect={() => run('insertUnorderedList')}><span class="flex items-center gap-3"><ListIcon class="size-4" />Bullet list</span><kbd>⌘⇧8</kbd></MenuPrimitive.Item>
+					<MenuPrimitive.Item class="rich-toolbar-menu-item" onmousedown={(event: MouseEvent) => { event.preventDefault(); saveSelection(); }} onSelect={() => run('insertOrderedList')}><span class="flex items-center gap-3"><ListOrderedIcon class="size-4" />Numbered list</span><kbd>⌘⇧7</kbd></MenuPrimitive.Item>
+				</MenuPrimitive.Content>
+			</Portal>
+		</MenuPrimitive.Root>
 
 		<button type="button" class="rich-toolbar-button" aria-label="Tautan" disabled={disabled} onmousedown={(event) => { event.preventDefault(); saveSelection(); }} onclick={addLink}>
 			<LinkIcon class="size-4" />
@@ -295,7 +289,7 @@
 	<input bind:this={imageInput} type="file" accept="image/*" class="hidden" onchange={handleImageSelection} />
 	<div
 		bind:this={editor}
-		class="min-h-48 p-4 text-sm leading-6 text-ink outline-none empty:before:text-mute empty:before:content-[attr(data-placeholder)]"
+		class="min-h-48 p-4 text-sm leading-6 text-ink outline-none focus-visible:outline-none empty:before:text-mute empty:before:content-[attr(data-placeholder)]"
 		contenteditable={!disabled}
 		data-placeholder={placeholder}
 		oninput={() => syncValue()}
@@ -316,7 +310,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		color: var(--color-mute);
 		font-size: 0.875rem;
 		transition: background-color 150ms, color 150ms;
@@ -351,11 +345,8 @@
 	}
 
 	:global(.rich-toolbar-menu) {
-		position: absolute;
-		top: calc(100% + 0.375rem);
-		z-index: 30;
 		border: 1px solid var(--color-hairline);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-lg);
 		background: var(--color-card);
 		padding: 0.375rem;
 		box-shadow: var(--shadow-popover);
@@ -367,7 +358,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		padding: 0.625rem 0.75rem;
 		color: var(--color-ink-soft);
 		text-align: left;
@@ -382,7 +373,7 @@
 
 	:global(.rich-toolbar-menu-item kbd) {
 		flex-shrink: 0;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: var(--color-canvas-sunken);
 		padding: 0.125rem 0.375rem;
 		color: var(--color-mute);
@@ -442,13 +433,13 @@
 		object-fit: contain;
 		height: auto;
 		margin: 0.5rem 0;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-lg);
 		border: 1px solid var(--color-hairline);
 	}
 
 	:global([contenteditable='true'] pre) {
 		overflow-x: auto;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: var(--color-canvas-sunken);
 		padding: 0.75rem 1rem;
 		font-family: monospace;

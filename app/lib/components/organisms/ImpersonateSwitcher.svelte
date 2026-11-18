@@ -71,7 +71,7 @@
       size="sm"
       loading={switching}
       onclick={handleStopImpersonating}
-      class="h-6 gap-1 rounded-full px-2 text-[11px] font-medium shrink-0"
+      class="h-6 gap-1 rounded-full px-2 text-micro font-medium shrink-0"
       title={`${tr('admin.impersonate.backToAdmin')} (${impersonator.name})`}
     >
       {#if !switching}

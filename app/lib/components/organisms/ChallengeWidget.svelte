@@ -98,7 +98,7 @@
             class="transition-all duration-500"
           />
         </svg>
-        <span class="text-[10px] font-bold text-primary">{completedCount}/{totalCount}</span>
+        <span class="text-tiny font-bold text-primary">{completedCount}/{totalCount}</span>
       </div>
 
       <span class="max-w-0 overflow-hidden whitespace-nowrap text-xs font-medium text-ink transition-all duration-300 group-hover:max-w-xs group-hover:pr-1">
@@ -132,7 +132,7 @@
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-sm font-semibold text-ink">{labels.title}</p>
-            <p class="text-[11px] text-mute">
+            <p class="text-micro text-mute">
               {allDone ? labels.complete : labels.progress(completedCount, totalCount)}
             </p>
           </div>
@@ -159,8 +159,8 @@
         <!-- Progress bar -->
         <div class="px-3.5 pt-3 pb-1">
           <div class="flex items-center justify-between gap-2 mb-1.5">
-            <span class="text-[11px] font-medium text-mute">{progressPct}%</span>
-            <span class="text-[11px] font-medium text-mute">{completedCount}/{totalCount}</span>
+            <span class="text-micro font-medium text-mute">{progressPct}%</span>
+            <span class="text-micro font-medium text-mute">{completedCount}/{totalCount}</span>
           </div>
           <div class="h-1.5 overflow-hidden rounded-full bg-lane">
             <div class="h-full rounded-full bg-primary transition-all duration-500" style="width: {progressPct}%"></div>
@@ -178,7 +178,7 @@
               <div class="flex items-start gap-2.5">
                 <!-- Number badge -->
                 <div
-                  class="flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold {chal.completed
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full text-micro font-bold {chal.completed
                     ? 'bg-status-done text-white'
                     : 'bg-primary-soft text-primary'}"
                 >
@@ -191,10 +191,10 @@
 
                 <!-- Content -->
                 <div class="min-w-0 flex-1 space-y-0.5">
-                  <p class="text-[12px] font-semibold {chal.completed ? 'text-mute line-through' : 'text-ink'}">
+                  <p class="text-badge font-semibold {chal.completed ? 'text-mute line-through' : 'text-ink'}">
                     {chal.label}
                   </p>
-                  <p class="text-[11px] text-mute leading-relaxed">{chal.desc}</p>
+                  <p class="text-micro text-mute leading-relaxed">{chal.desc}</p>
                 </div>
               </div>
 
@@ -202,7 +202,7 @@
               {#if !chal.completed}
                 <a
                   href={chal.href}
-                  class="mt-2 flex items-center gap-1 pl-8.5 text-[11px] font-semibold text-primary transition-colors hover:text-primary-hover"
+                  class="mt-2 flex items-center gap-1 pl-8.5 text-micro font-semibold text-primary transition-colors hover:text-primary-hover"
                 >
                   {chal.ctaLabel}
                   <HugeiconsIcon icon={ArrowRight01Icon} size={11} strokeWidth={2} />
@@ -249,7 +249,7 @@
                 class="transition-all duration-500"
               />
             </svg>
-            <span class="text-[10px] font-bold text-primary">{completedCount}/{totalCount}</span>
+            <span class="text-tiny font-bold text-primary">{completedCount}/{totalCount}</span>
           </div>
 
           <HugeiconsIcon icon={ChevronDownIcon} size={16} strokeWidth={1.8} class="shrink-0 text-mute rotate-180" />

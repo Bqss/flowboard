@@ -266,7 +266,7 @@
     style={tooltipStyle}
   >
     <div class="mb-1 flex items-center justify-between gap-3">
-      <span class="text-[11px] font-semibold uppercase tracking-wide text-mute">
+      <span class="text-micro font-semibold uppercase tracking-wide text-mute">
         {labels.step(currentStep + 1, steps.length)}
       </span>
       <button
@@ -286,7 +286,7 @@
       <button
         type="button"
         onclick={onSkip ?? onClose}
-        class="text-[13px] font-medium text-mute transition-colors hover:text-ink"
+        class="text-meta font-medium text-mute transition-colors hover:text-ink"
       >
         {labels.skip}
       </button>
@@ -296,7 +296,7 @@
           <button
             type="button"
             onclick={prev}
-            class="rounded-lg border border-hairline bg-card px-3 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-lane"
+            class="rounded-lg border border-hairline bg-card px-3 py-1.5 text-meta font-medium text-ink transition-colors hover:bg-lane"
           >
             {labels.prev}
           </button>
@@ -304,7 +304,7 @@
         <button
           type="button"
           onclick={next}
-          class="rounded-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-primary/90"
+          class="rounded-lg bg-primary px-3 py-1.5 text-meta font-semibold text-white transition-colors hover:bg-primary/90"
         >
           {currentStep < steps.length - 1 ? labels.next : labels.done}
         </button>

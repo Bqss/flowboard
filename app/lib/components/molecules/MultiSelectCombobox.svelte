@@ -1,14 +1,10 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements';
+  import { Popover as PopoverPrimitive } from 'bits-ui';
+	import Portal from '$lib/components/atoms/Portal.svelte';
   import { cn, type WithElementRef } from '$lib/utils.js';
-  import Portal from '$lib/components/atoms/Portal.svelte';
   import Avatar from '$lib/components/atoms/Avatar.svelte';
-  import {
-    computeFloatingRect,
-    panelClass,
-    panelItemClass,
-    type FloatingRect
-  } from './shared.js';
+  import { panelClass } from './shared.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Search01Icon,
@@ -29,7 +25,7 @@
     disabled?: boolean;
   };
 
-  type Props = WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+  type Props = WithElementRef<Omit<HTMLAttributes<HTMLDivElement>, 'onchange'>> & {
     options: MultiSelectOption[];
     values?: string[];
     primary?: string | null;
@@ -60,6 +56,7 @@
     class: className,
     ...rest
   }: Props = $props();
+
   const tr = (key: string, values?: Record<string, string | number>) =>
     dashboardText($locale, key, values);
   const resolvedPlaceholder = $derived(placeholder ?? tr('setup.assigneesPlaceholder'));
@@ -69,16 +66,14 @@
   const setPrimaryLabel = $derived(tr('setup.setPrimary'));
   const removeLabel = $derived(tr('setup.removeSelection'));
   const clearAllLabel = $derived(tr('setup.clearAll'));
-  const closePanelLabel = $derived(tr('setup.closePanel'));
   const searchLabel = $derived(tr('setup.searchMembers'));
   const selectAllLabel = $derived(tr('setup.selectAll'));
   const clearSelectedLabel = $derived(tr('setup.clearSelected'));
 
-  let triggerEl = $state<HTMLDivElement | null>(null);
-  let searchInputEl = $state<HTMLInputElement | null>(null);
   let open = $state(false);
   let search = $state('');
-  let panelRect = $state<FloatingRect | null>(null);
+  let triggerWidth = $state(0);
+  let triggerEl = $state<HTMLElement | null>(null);
 
   const selectedOptions = $derived(
     values.map((val) => options.find((o) => o.value === val)).filter(Boolean) as MultiSelectOption[]
@@ -95,270 +90,195 @@
     );
   });
 
-  const allSelected = $derived(
-    options.length > 0 && options.every((o) => values.includes(o.value))
-  );
+  const allSelected = $derived(options.length > 0 && options.every((o) => values.includes(o.value)));
 
-  const panelStyle = $derived(
-    panelRect
-      ? `top:${panelRect.top}px;left:${panelRect.left}px;width:${panelRect.width}px;max-height:${panelRect.maxHeight}px;`
-      : ''
-  );
-
-  function updatePanelPosition() {
-    if (!triggerEl || !open) return;
-    panelRect = computeFloatingRect(triggerEl, 260);
-  }
-
-  function toggleOpen() {
-    if (disabled) return;
-    open = !open;
-    if (open) {
-      requestAnimationFrame(() => {
-        updatePanelPosition();
-        searchInputEl?.focus();
-      });
-    }
-  }
-
-  function close() {
-    open = false;
-    search = '';
-  }
-
-  function toggleOption(val: string) {
-    if (disabled) return;
-    const isSelected = values.includes(val);
-    let next: string[];
-    if (isSelected) {
-      next = values.filter((x) => x !== val);
-      if (primary === val) {
-        primary = next[0] ?? null;
-        onprimarychange?.(primary);
-      }
-    } else {
-      next = [...values, val];
-      if (!primary && showPrimaryBadge) {
-        primary = val;
-        onprimarychange?.(primary);
-      }
-    }
+  function commit(next: string[]) {
     values = next;
     onchange?.(next);
   }
 
-  function removeOption(val: string, e?: MouseEvent) {
-    e?.stopPropagation();
+  function toggleOption(val: string) {
+    if (disabled) return;
+    if (values.includes(val)) {
+      const next = values.filter((x) => x !== val);
+      if (primary === val) {
+        primary = next[0] ?? null;
+        onprimarychange?.(primary);
+      }
+      commit(next);
+    } else {
+      if (!primary && showPrimaryBadge) {
+        primary = val;
+        onprimarychange?.(primary);
+      }
+      commit([...values, val]);
+    }
+  }
+
+  function removeOption(val: string) {
     if (disabled) return;
     const next = values.filter((x) => x !== val);
     if (primary === val) {
       primary = next[0] ?? null;
       onprimarychange?.(primary);
     }
-    values = next;
-    onchange?.(next);
+    commit(next);
   }
 
   function selectAll() {
     if (disabled) return;
     const all = options.filter((o) => !o.disabled).map((o) => o.value);
-    values = all;
     if (!primary && all.length > 0) {
       primary = all[0];
       onprimarychange?.(primary);
     }
-    onchange?.(all);
+    commit(all);
   }
 
-  function clearAll(e?: MouseEvent) {
-    e?.stopPropagation();
+  function clearAll() {
     if (disabled) return;
-    values = [];
     primary = null;
     onprimarychange?.(null);
-    onchange?.([]);
+    commit([]);
   }
 
-  function setAsPrimary(val: string, e?: MouseEvent) {
-    e?.stopPropagation();
-    if (!values.includes(val)) {
-      values = [...values, val];
-      onchange?.(values);
-    }
+  function setAsPrimary(val: string) {
+    if (disabled) return;
+    if (!values.includes(val)) commit([...values, val]);
     primary = val;
     onprimarychange?.(val);
   }
 
+  // Keep the panel the same width as the trigger, like the original floating panel.
   $effect(() => {
-    if (!open) return;
-    updatePanelPosition();
-    const onReflow = () => updatePanelPosition();
-    window.addEventListener('scroll', onReflow, true);
-    window.addEventListener('resize', onReflow);
-    return () => {
-      window.removeEventListener('scroll', onReflow, true);
-      window.removeEventListener('resize', onReflow);
-    };
+    if (open && triggerEl) triggerWidth = triggerEl.getBoundingClientRect().width;
   });
 </script>
 
 <div bind:this={ref} class={cn('relative w-full', className)} {...rest}>
-  <!-- Combobox Trigger Area -->
-  <div
-    bind:this={triggerEl}
-    {id}
-    role="combobox"
-    aria-expanded={open}
-    aria-controls={`${id ?? 'multi-select'}-listbox`}
-    aria-haspopup="listbox"
-    tabindex={disabled ? -1 : 0}
-    onclick={toggleOpen}
-    onkeydown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggleOpen();
-      } else if (e.key === 'Escape' && open) {
-        close();
-      }
-    }}
-    class={cn(
-      'ds-body flex min-h-10 w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border bg-card p-1.5 pr-2 text-ink transition-colors duration-150',
-      disabled
-        ? 'cursor-not-allowed bg-lane opacity-60'
-        : 'hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
-      invalid ? 'border-status-urgent' : 'border-hairline'
-    )}
-  >
-    {#if selectedOptions.length > 0}
-      <div class="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
-        {#each selectedOptions as option (option.value)}
-          {@const isPrimary = primary === option.value}
-          <span
-            class={cn(
-              'inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-1 pr-1.5 text-xs font-semibold transition-colors',
-              isPrimary
-                ? 'border-primary/30 bg-primary-soft text-primary'
-                : 'border-hairline bg-lane text-ink'
-            )}
-          >
-            <Avatar name={option.label} src={option.avatarUrl} size={18} />
-            <span class="max-w-[120px] truncate">{option.label}</span>
-
-            {#if showPrimaryBadge}
-              {#if isPrimary}
-                <span class="rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-on-primary">
-                  {primaryLabel}
-                </span>
-              {:else}
-                <button
-                  type="button"
-                  title={makePrimaryLabel}
-                  onclick={(e) => setAsPrimary(option.value, e)}
-                  class="text-[10px] text-mute hover:text-primary underline px-0.5 cursor-pointer"
+  <PopoverPrimitive.Root bind:open onOpenChange={(next) => { if (!next) search = ''; }}>
+    <PopoverPrimitive.Trigger>
+      {#snippet child({ props })}
+        <div
+          {...props}
+          bind:this={triggerEl}
+          {id}
+          role="combobox"
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          aria-invalid={invalid || undefined}
+          aria-disabled={disabled || undefined}
+          tabindex={disabled ? -1 : 0}
+          class={cn(
+            'text-sm flex min-h-10 w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-md border bg-card px-2 py-1.5 text-ink transition-colors duration-150 hover:border-primary-border',
+            disabled
+              ? 'cursor-not-allowed bg-lane opacity-60'
+              : 'hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
+            invalid ? 'border-status-urgent' : 'border-hairline'
+          )}
+        >
+          {#if selectedOptions.length > 0}
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              {#each selectedOptions as option (option.value)}
+                {@const isPrimary = primary === option.value}
+                <span
+                  class={cn(
+                    'inline-flex h-6 items-center gap-1.5 rounded-sm border pr-1.5 pl-1 text-badge font-semibold transition-colors',
+                    isPrimary ? 'border-primary/30 bg-primary-soft text-primary' : 'border-hairline bg-lane text-ink'
+                  )}
                 >
-                  {setPrimaryLabel}
-                </button>
-              {/if}
-            {/if}
+                  <Avatar name={option.label} src={option.avatarUrl} size={18} />
+                  <span class="max-w-[120px] truncate">{option.label}</span>
 
-            {#if !disabled}
+                  {#if showPrimaryBadge}
+                    {#if isPrimary}
+                      <span class="rounded-full bg-primary px-1.5 py-0.5 text-tiny font-bold text-on-primary">
+                        {primaryLabel}
+                      </span>
+                    {:else}
+                      <button
+                        type="button"
+                        title={makePrimaryLabel}
+                        onclick={(e) => { e.stopPropagation(); setAsPrimary(option.value); }}
+                        class="cursor-pointer px-0.5 text-tiny text-mute underline hover:text-primary"
+                      >
+                        {setPrimaryLabel}
+                      </button>
+                    {/if}
+                  {/if}
+
+                  {#if !disabled}
+                    <button
+                      type="button"
+                      title={`${removeLabel} ${option.label}`}
+                      aria-label={`${removeLabel} ${option.label}`}
+                      onclick={(e) => { e.stopPropagation(); removeOption(option.value); }}
+                      class="grid size-4 cursor-pointer place-items-center rounded-full text-mute transition-colors hover:bg-card hover:text-ink"
+                    >
+                      <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
+                    </button>
+                  {/if}
+                </span>
+              {/each}
+            </div>
+          {:else}
+            <span class="flex-1 px-2 text-sm text-mute select-none">{resolvedPlaceholder}</span>
+          {/if}
+
+          <div class="ml-auto flex shrink-0 items-center gap-1 pl-1 text-mute">
+            {#if values.length > 0 && !disabled}
               <button
                 type="button"
-                title={`${removeLabel} ${option.label}`}
-                onclick={(e) => removeOption(option.value, e)}
-                class="grid size-4 place-items-center rounded-full text-mute hover:bg-card hover:text-ink transition-colors cursor-pointer"
+                title={clearAllLabel}
+                aria-label={clearAllLabel}
+                onclick={(e) => { e.stopPropagation(); clearAll(); }}
+                class="grid size-6 cursor-pointer place-items-center rounded-md text-mute transition-colors hover:bg-lane hover:text-ink"
               >
-                <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
+                <HugeiconsIcon icon={Cancel01Icon} size={13} strokeWidth={2} />
               </button>
             {/if}
-          </span>
-        {/each}
-      </div>
-    {:else}
-      <span class="flex-1 px-2 text-sm text-mute select-none">
-        {resolvedPlaceholder}
-      </span>
-    {/if}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              size={15}
+              strokeWidth={1.8}
+              class={cn('transition-transform duration-150', open && 'rotate-180')}
+            />
+          </div>
+        </div>
+      {/snippet}
+    </PopoverPrimitive.Trigger>
 
-    <!-- Action icons on trigger right -->
-    <div class="ml-auto flex items-center gap-1 text-mute shrink-0 pl-1">
-      {#if values.length > 0 && !disabled}
-        <button
-          type="button"
-          title={clearAllLabel}
-          onclick={clearAll}
-          class="grid size-6 place-items-center rounded-md hover:bg-lane hover:text-ink text-mute transition-colors cursor-pointer text-xs"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} size={13} strokeWidth={2} />
-        </button>
-      {/if}
-      <HugeiconsIcon
-        icon={ArrowDown01Icon}
-        size={15}
-        strokeWidth={1.8}
-        class={cn('transition-transform duration-150', open && 'rotate-180')}
-      />
-    </div>
-  </div>
-
-  <!-- Floating Multi-Select Dropdown Panel -->
-  {#if open}
     <Portal>
-      <!-- Backdrop dismiss layer -->
-      <div
-        data-floating
-        class="fixed inset-0 z-[405]"
-        onclick={close}
-        role="button"
-        tabindex="-1"
-        aria-label={closePanelLabel}
-        onkeydown={(e) => e.key === 'Escape' && close()}
-      ></div>
-
-      <div
-        data-floating
-        id={`${id ?? 'multi-select'}-listbox`}
-        role="listbox"
-        aria-multiselectable="true"
-        data-theme="app"
-        class={cn(
-          'fixed z-[410] flex flex-col gap-2 overflow-hidden rounded-2xl border border-hairline bg-card p-2.5 shadow-popover'
-        )}
-        style={panelStyle}
+      <PopoverPrimitive.Content
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        avoidCollisions
+        class={cn(panelClass, 'z-[410] flex flex-col gap-2 overflow-hidden rounded-lg border border-hairline bg-card p-2.5 shadow-popover')}
+        style={`width:${Math.max(triggerWidth, 260)}px`}
       >
-        <!-- Search and Quick Action Toolbar -->
         <div class="space-y-1.5 px-0.5 pt-0.5">
           <div class="relative flex items-center">
-            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-mute pointer-events-none">
+            <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-mute">
               <HugeiconsIcon icon={Search01Icon} size={14} strokeWidth={1.8} />
             </span>
             <input
-              bind:this={searchInputEl}
               type="text"
               placeholder={searchLabel}
+              aria-label={searchLabel}
               bind:value={search}
-              onclick={(e) => e.stopPropagation()}
-              onkeydown={(e) => {
-                if (e.key === 'Escape') close();
-              }}
-              class="ds-body h-8.5 w-full rounded-xl border border-hairline bg-lane/80 pl-8.5 pr-3 text-sm text-ink placeholder:text-mute focus-visible:border-primary focus-visible:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all"
+              class="text-sm h-9 w-full rounded-md border border-hairline bg-card pl-8 pr-3 text-ink placeholder:text-faint transition-colors hover:border-primary-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
             />
           </div>
 
-          <!-- Quick actions: Pilih Semua / Batal Semua -->
-          <div class="flex items-center justify-between px-1 text-[11px] text-mute font-medium">
-            <span>
-              {values.length} {tr('setup.of')} {options.length} {tr('setup.selected')}
-            </span>
-            <div class="flex items-center gap-2">
+          <div class="flex items-center justify-between gap-2 border-t border-hairline px-1 pt-2 text-badge">
+            <span class="text-mute">{values.length} {tr('setup.of')} {options.length} {tr('setup.selected')}</span>
+            <div class="flex items-center gap-1">
               {#if !allSelected}
                 <button
                   type="button"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    selectAll();
-                  }}
-                  class="text-primary hover:underline font-semibold cursor-pointer"
+                  onclick={selectAll}
+                  class="rounded-sm px-2 py-1 font-semibold text-primary transition-colors hover:bg-primary-soft cursor-pointer"
                 >
                   {selectAllLabel}
                 </button>
@@ -366,11 +286,8 @@
               {#if values.length > 0}
                 <button
                   type="button"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    clearAll(e);
-                  }}
-                  class="text-status-urgent-ink hover:underline font-medium cursor-pointer"
+                  onclick={clearAll}
+                  class="rounded-sm px-2 py-1 font-semibold text-status-urgent-ink transition-colors hover:bg-status-urgent-soft cursor-pointer"
                 >
                   {clearSelectedLabel}
                 </button>
@@ -379,8 +296,7 @@
           </div>
         </div>
 
-        <!-- Options Scroll List -->
-        <div class="max-h-56 overflow-y-auto space-y-1 pr-0.5 pt-0.5">
+        <div role="listbox" aria-multiselectable="true" class="max-h-56 space-y-1 overflow-y-auto pr-0.5 pt-0.5">
           {#each filteredOptions as option (option.value)}
             {@const isSelected = values.includes(option.value)}
             {@const isPrimary = primary === option.value}
@@ -388,10 +304,7 @@
               role="option"
               aria-selected={isSelected}
               tabindex="0"
-              onclick={(e) => {
-                e.stopPropagation();
-                toggleOption(option.value);
-              }}
+              onclick={() => toggleOption(option.value)}
               onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -399,21 +312,15 @@
                 }
               }}
               class={cn(
-                'flex items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-colors cursor-pointer',
-                isSelected
-                  ? 'bg-primary-soft text-primary font-semibold'
-                  : 'hover:bg-lane text-ink'
+                'flex cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-sm transition-colors',
+                isSelected ? 'bg-primary-soft font-semibold text-primary' : 'text-ink hover:bg-lane'
               )}
             >
-              <!-- Option Left: Checkbox + Avatar + Name/Email -->
-              <div class="flex items-center gap-2.5 min-w-0">
-                <!-- Custom Checkbox Box -->
+              <div class="flex min-w-0 items-center gap-2.5">
                 <div
                   class={cn(
                     'flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
-                    isSelected
-                      ? 'border-primary bg-primary text-on-primary'
-                      : 'border-hairline-strong bg-card'
+                    isSelected ? 'border-primary bg-primary text-on-primary' : 'border-hairline-strong bg-card'
                   )}
                 >
                   {#if isSelected}
@@ -424,23 +331,20 @@
                 <Avatar name={option.label} src={option.avatarUrl} size={22} />
 
                 <div class="min-w-0 flex-1">
-                  <p class="truncate text-xs font-semibold leading-snug {isSelected ? 'text-primary' : 'text-ink'}">{option.label}</p>
+                  <p class="truncate text-sm leading-snug font-semibold">{option.label}</p>
                   {#if option.description}
-                    <p class="truncate text-[11px] text-mute font-normal leading-tight">
-                      {option.description}
-                    </p>
+                    <p class="truncate text-badge leading-tight font-normal text-mute">{option.description}</p>
                   {/if}
                 </div>
               </div>
 
-              <!-- Option Right: Primary badge or Set Primary action -->
               {#if showPrimaryBadge && isSelected}
                 <button
                   type="button"
                   title={makePrimaryLabel}
-                  onclick={(e) => setAsPrimary(option.value, e)}
+                  onclick={(e) => { e.stopPropagation(); setAsPrimary(option.value); }}
                   class={cn(
-                    'rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors shrink-0 cursor-pointer',
+                    'shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-tiny font-bold transition-colors',
                     isPrimary
                       ? 'bg-primary text-on-primary'
                       : 'border border-hairline bg-card text-mute hover:border-primary/40 hover:bg-primary-soft hover:text-primary'
@@ -451,13 +355,13 @@
               {/if}
             </div>
           {:else}
-            <div class="py-6 text-center text-xs text-mute space-y-1">
+            <div class="space-y-1 py-6 text-center text-micro text-mute">
               <HugeiconsIcon icon={UserGroupIcon} size={20} class="mx-auto text-faint" />
               <p>{resolvedEmptyText}</p>
             </div>
           {/each}
         </div>
-      </div>
+      </PopoverPrimitive.Content>
     </Portal>
-  {/if}
+  </PopoverPrimitive.Root>
 </div>
