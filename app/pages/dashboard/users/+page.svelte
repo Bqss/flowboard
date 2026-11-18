@@ -91,14 +91,14 @@
     </div>
   </div>
 
-  <div class="overflow-hidden rounded-2xl bg-card shadow-card">
+  <div class="overflow-hidden rounded-lg bg-card shadow-card">
     <table class="w-full text-left">
       <thead class="border-b border-hairline bg-canvas-sunken">
         <tr>
-          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.user')}</th>
-          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.email')}</th>
-          <th class="px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.id')}</th>
-          <th class="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-mute">{tr('users.actions')}</th>
+          <th class="px-6 py-3.5 text-meta font-semibold text-mute">{tr('users.user')}</th>
+          <th class="px-6 py-3.5 text-meta font-semibold text-mute">{tr('users.email')}</th>
+          <th class="px-6 py-3.5 text-meta font-semibold text-mute">{tr('users.id')}</th>
+          <th class="px-6 py-3.5 text-right text-meta font-semibold text-mute">{tr('users.actions')}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-hairline">
@@ -111,7 +111,7 @@
               </div>
             </td>
             <td class="px-6 py-4 text-sm text-body">{user.email}</td>
-            <td class="px-6 py-4 font-mono text-xs text-mute">{user.id}</td>
+            <td class="px-6 py-4 font-mono text-badge text-mute">{user.id}</td>
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-2">
                 <Button 

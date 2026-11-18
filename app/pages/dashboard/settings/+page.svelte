@@ -341,7 +341,7 @@
   </header>
 
   <div class="grid gap-6 lg:grid-cols-2">
-    <section data-onboarding="profile-settings-section" class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
+    <section data-onboarding="profile-settings-section" class="rounded-lg border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={UserCircleIcon} size={20} strokeWidth={1.8} class="text-primary" />
         <h2 class="ds-section-title text-ink">{tr('settings.profile')}</h2>
@@ -415,7 +415,7 @@
       </form>
     </section>
 
-    <section data-onboarding="security-settings-section" class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
+    <section data-onboarding="security-settings-section" class="rounded-lg border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
       <div class="flex items-center gap-2">
         <HugeiconsIcon icon={LockPasswordIcon} size={20} strokeWidth={1.8} class="text-primary" />
         <h2 class="ds-section-title text-ink">{tr('settings.security')}</h2>
@@ -481,7 +481,7 @@
     </section>
   </div>
 
-  <section data-onboarding="notifications-settings-section" class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
+  <section data-onboarding="notifications-settings-section" class="rounded-lg border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-6">
     <div class="flex items-center gap-2">
       <HugeiconsIcon icon={BellRingIcon} size={20} strokeWidth={1.8} class="text-primary" />
       <div>
@@ -520,7 +520,7 @@
                   <td class="py-3 px-4 text-center">
                     <Checkbox
                       checked={notifSettings[key]}
-                      onchange={() => {
+                      onCheckedChange={() => {
                         notifSettings = { ...notifSettings!, [key]: !notifSettings![key] };
                       }}
                     />
@@ -528,7 +528,7 @@
                   <td class="py-3 pl-4 text-center">
                     <Checkbox
                       checked={notifSettings[`email${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof ApiNotificationSettings] as boolean}
-                      onchange={() => {
+                      onCheckedChange={() => {
                         const emailKey = `email${key.charAt(0).toUpperCase()}${key.slice(1)}` as keyof ApiNotificationSettings;
                         notifSettings = { ...notifSettings!, [emailKey]: !(notifSettings![emailKey] as boolean) };
                       }}
@@ -540,10 +540,10 @@
           </table>
         </div>
 
-        <label class="flex items-start gap-3 rounded-xl border border-hairline bg-lane/45 p-4">
+        <label class="flex items-start gap-3 rounded-md border border-hairline bg-lane/45 p-4">
           <Checkbox
             checked={notifSettings.emailDigest}
-            onchange={() => {
+            onCheckedChange={() => {
               notifSettings = { ...notifSettings!, emailDigest: !notifSettings!.emailDigest };
             }}
           />
@@ -553,10 +553,10 @@
           </span>
         </label>
 
-        <label class="flex items-start gap-3 rounded-xl border border-hairline bg-lane/45 p-4">
+        <label class="flex items-start gap-3 rounded-md border border-hairline bg-lane/45 p-4">
           <Checkbox
             checked={notifSettings.soundEnabled}
-            onchange={() => {
+            onCheckedChange={() => {
               notifSettings = { ...notifSettings!, soundEnabled: !notifSettings!.soundEnabled };
             }}
           />
@@ -569,13 +569,13 @@
           </Button>
         </label>
 
-        <div class="flex flex-col gap-3 rounded-xl border border-hairline bg-lane/45 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-col gap-3 rounded-md border border-hairline bg-lane/45 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div class="min-w-0">
             <h3 class="text-sm font-medium text-ink">{tr('settings.browserPushTitle')}</h3>
             <p class="mt-1 text-sm font-normal leading-relaxed text-mute">{tr('settings.browserPushHelper')}</p>
-            <p class="mt-2 text-xs text-mute">{pushStatusText}</p>
+            <p class="mt-2 text-badge text-mute">{pushStatusText}</p>
             {#if pushError}
-              <p class="mt-2 text-xs text-status-urgent-ink">{pushError}</p>
+              <p class="mt-2 text-badge text-status-urgent-ink">{pushError}</p>
             {/if}
           </div>
           {#if pushStatus === 'active'}

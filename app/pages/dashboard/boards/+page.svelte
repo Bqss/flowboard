@@ -273,28 +273,28 @@
     : (b.workspaceMemberGroupId ? [b.workspaceMemberGroupId] : [])}
   {@const allowedUsers = b.allowedUserIds ?? []}
   {#if groupIds.length === 0 && allowedUsers.length === 0}
-    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">Publik</Badge>
+    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-tiny sm:text-micro font-semibold">Publik</Badge>
   {:else}
     <div class="flex flex-wrap items-center gap-1">
       {#if groupIds.length === 1}
         {@const matchedGroup = groups.find((g) => g.id === groupIds[0])}
-        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
           <span>{matchedGroup?.name ?? '1 Departemen'}</span>
         </Badge>
       {:else if groupIds.length > 1}
-        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
           <span>{groupIds.length} Departemen</span>
         </Badge>
       {/if}
       {#if allowedUsers.length === 1}
         {@const matchedMember = members.find((m) => m.id === allowedUsers[0])}
-        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <span>{matchedMember?.name ?? '1 Pengguna'}</span>
         </Badge>
       {:else if allowedUsers.length > 1}
-        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <span>{allowedUsers.length} Pengguna</span>
         </Badge>
       {/if}
@@ -342,11 +342,11 @@
         />
       </div>
       <div class="flex items-center justify-between sm:justify-end gap-3">
-        <span class="text-[13px] font-medium text-mute">
+        <span class="text-meta font-medium text-mute">
           {filteredBoards.length} {tr('taskboard.cardCount')}
         </span>
         <div
-          class="inline-flex items-center gap-0.5 rounded-xl border border-hairline/60 bg-lane p-1"
+          class="inline-flex items-center gap-0.5 rounded-md border border-hairline/60 bg-lane p-1"
           role="radiogroup"
           aria-label={tr('common.viewMode')}
         >
@@ -357,7 +357,7 @@
             aria-label={tr('common.viewGrid')}
             title={tr('common.viewGrid')}
             onclick={() => setViewMode('grid')}
-            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'grid' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+            class="flex size-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'grid' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
           >
             <HugeiconsIcon icon={GridViewIcon} size={16} strokeWidth={1.8} />
           </button>
@@ -368,7 +368,7 @@
             aria-label={tr('common.viewList')}
             title={tr('common.viewList')}
             onclick={() => setViewMode('list')}
-            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'list' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+            class="flex size-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'list' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
           >
             <HugeiconsIcon icon={ListViewIcon} size={16} strokeWidth={1.8} />
           </button>
@@ -380,24 +380,24 @@
   {#if loadingData}
     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {#each [1, 2, 3] as i (i)}
-        <div class="flex flex-col justify-between space-y-5 rounded-2xl border border-hairline bg-card p-5 shadow-card">
+        <div class="flex flex-col justify-between space-y-5 rounded-lg border border-hairline bg-card p-5 shadow-card">
           <div class="space-y-3">
             <div class="flex items-center justify-between">
-              <Skeleton shape="rect" class="size-10 rounded-xl" />
-              <Skeleton shape="rect" class="size-6 rounded-lg" />
+              <Skeleton shape="rect" class="size-10 rounded-md" />
+              <Skeleton shape="rect" class="size-6 rounded-md" />
             </div>
             <Skeleton shape="rect" class="h-5 w-40 rounded-md" />
             <Skeleton shape="rect" class="h-4 w-28 rounded-md" />
           </div>
           <div class="flex items-center justify-between border-t border-hairline pt-3">
-            <Skeleton shape="rect" class="h-8 w-20 rounded-lg" />
-            <Skeleton shape="rect" class="h-8 w-28 rounded-lg" />
+            <Skeleton shape="rect" class="h-8 w-20 rounded-md" />
+            <Skeleton shape="rect" class="h-8 w-28 rounded-md" />
           </div>
         </div>
       {/each}
     </div>
   {:else if loadError}
-    <div class="space-y-3 rounded-2xl border border-hairline bg-card p-10 text-center shadow-card">
+    <div class="space-y-3 rounded-lg border border-hairline bg-card p-10 text-center shadow-card">
       <p class="ds-section-title text-ink">{loadError}</p>
       <Button variant="secondary" size="sm" onclick={loadBoards}>
         {tr('taskboard.retry')}
@@ -411,7 +411,7 @@
       onaction={openCreate}
     />
   {:else if filteredBoards.length === 0}
-      <div class="space-y-3 rounded-2xl border border-hairline bg-card p-10 text-center shadow-card">
+      <div class="space-y-3 rounded-lg border border-hairline bg-card p-10 text-center shadow-card">
         <HugeiconsIcon icon={Search01Icon} size={32} strokeWidth={1.5} class="mx-auto text-faint" />
         <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
         <p class="text-sm font-normal leading-relaxed text-mute">
@@ -425,11 +425,11 @@
     <div class="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {#each filteredBoards as board (board.id)}
         {@const canManage = canManageBoard(board)}
-        <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover min-w-0 overflow-hidden">
+        <article class="group relative flex flex-col justify-between rounded-lg border border-hairline bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover min-w-0 overflow-hidden">
           <div class="space-y-3.5">
             <div class="flex items-start justify-between gap-3">
               <div class="flex min-w-0 items-center gap-3">
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft font-bold text-primary shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-soft font-bold text-primary shadow-xs transition-colors group-hover:bg-primary group-hover:text-on-primary">
                   <HugeiconsIcon icon={KanbanIcon} size={20} strokeWidth={1.8} />
                 </div>
                 <div class="min-w-0 flex-1">
@@ -441,7 +441,7 @@
                     {board.name}
                   </a>
                   {#if board.ownerName}
-                    <span class="block truncate text-[11px] text-faint">
+                    <span class="block truncate text-micro text-faint">
                       {tr('taskboard.owner', { name: board.ownerName })}
                     </span>
                   {/if}
@@ -481,13 +481,13 @@
             {/if}
 
             <div class="flex flex-wrap items-center gap-1.5">
-              <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">
+              <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-tiny font-semibold">
                 {board.taskCount ?? 0} {tr('taskboard.cardCount')}
               </Badge>
               {#if (board.labels && board.labels.length > 0) || board.label}
                 {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
                 {#each bLabels as l (l)}
-                  <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[10px] font-semibold">
+                  <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-tiny font-semibold">
                     {l}
                   </Badge>
                 {/each}
@@ -508,15 +508,15 @@
     </div>
   {:else}
     <!-- LIST / TABLE VIEW -->
-    <div class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
+    <div class="overflow-hidden rounded-lg border border-hairline bg-card shadow-card">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm">
-          <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+          <thead class="border-b border-hairline bg-canvas-sunken text-badge font-semibold text-mute">
             <tr>
               <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.title')}</th>
               <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.viewer')}</th>
               <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('common.pic')}</th>
-              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.cardCount')}</th>
+              <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.taskColumn')}</th>
               <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5 text-right">{tr('common.actions')}</th>
             </tr>
           </thead>
@@ -527,7 +527,7 @@
               <tr class="group hover:bg-lane/40 transition-colors">
                 <td class="px-4 py-3.5 sm:px-6">
                   <div class="flex items-center gap-3 min-w-0">
-                    <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                    <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-on-primary">
                       <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
                     </div>
                     <div class="min-w-0">
@@ -539,13 +539,13 @@
                         {board.name}
                       </a>
                       {#if board.description}
-                        <p class="text-xs text-mute truncate max-w-xs sm:max-w-md">{board.description}</p>
+                        <p class="text-badge text-mute truncate max-w-xs sm:max-w-md">{board.description}</p>
                       {/if}
                       {#if (board.labels && board.labels.length > 0) || board.label}
                         {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
                         <div class="flex flex-wrap gap-1 mt-1">
                           {#each bLabels as l (l)}
-                            <Badge tone="queued" variant="soft" class="px-1.5 py-0.2 text-[10px] font-semibold">
+                            <Badge tone="queued" variant="soft" class="px-1.5 py-0.5 text-tiny font-semibold">
                               {l}
                             </Badge>
                           {/each}
@@ -557,11 +557,11 @@
                 <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
                   {@render boardAccessBadge(board)}
                 </td>
-                <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap text-xs text-mute font-medium">
+                <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap text-badge text-mute font-medium">
                   {board.ownerName ?? '—'}
                 </td>
                 <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
-                  <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                  <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-micro font-semibold">
                     {board.taskCount ?? 0} {tr('taskboard.cardCount')}
                   </Badge>
                 </td>
@@ -572,7 +572,7 @@
                         <IconButton
                           variant="ghost"
                           size="sm"
-                          class="size-8 rounded-lg"
+                          class="size-8 rounded-md"
                           label={tr('common.edit')}
                           onclick={() => openEditBoard(board)}
                         >
@@ -583,7 +583,7 @@
                         <IconButton
                           variant="ghost"
                           size="sm"
-                          class="size-8 rounded-lg text-mute hover:text-status-urgent hover:bg-status-urgent/10"
+                          class="size-8 rounded-md text-mute hover:text-status-urgent hover:bg-status-urgent/10"
                           label={tr('common.delete')}
                           onclick={() => openDeleteBoard(board)}
                         >
@@ -596,7 +596,7 @@
                         href="/dashboard/boards/{board.id}"
                         variant="primary"
                         size="sm"
-                        class="size-8 rounded-lg shadow-xs"
+                        class="size-8 rounded-md shadow-xs"
                         label={tr('taskboard.openBoard')}
                       >
                         <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
@@ -617,7 +617,7 @@
     <button
       type="button"
       onclick={openCreate}
-      class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+      class="flex items-center gap-2 rounded-md bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-on-primary shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
       aria-label={tr('taskboard.create')}
     >
       <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
@@ -635,10 +635,10 @@
       {/snippet}
     </FormField>
 
-    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+    <div class="space-y-3 rounded-md border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
       <div>
-        <p class="text-xs font-semibold text-ink">Hak Akses Papan</p>
-        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+        <p class="text-badge font-semibold text-ink">Hak Akses Papan</p>
+        <p class="text-micro text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
       </div>
       <FormField label="Akses Grup / Departemen">
         {#snippet control()}
@@ -700,10 +700,10 @@
       {/snippet}
     </FormField>
 
-    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+    <div class="space-y-3 rounded-md border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
       <div>
-        <p class="text-xs font-semibold text-ink">Hak Akses Papan</p>
-        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+        <p class="text-badge font-semibold text-ink">Hak Akses Papan</p>
+        <p class="text-micro text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
       </div>
       <FormField label="Akses Grup / Departemen">
         {#snippet control()}

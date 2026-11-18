@@ -3,7 +3,7 @@
   import { dashboardText, dashboardIntlLocale } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import { Badge, Button, Input, Skeleton } from '$lib/components/atoms/index.js';
-  import { FormField, SearchInput, SelectMenu, StatCard, toast } from '$lib/components/molecules/index.js';
+  import { DatePicker,  FormField, SearchInput, SelectMenu, StatCard, toast } from '$lib/components/molecules/index.js';
   import { AlertBanner, DataTable, Dialog } from '$lib/components/organisms/index.js';
   import type { TableColumn } from '$lib/components/organisms/shared.js';
   import type { Option } from '$lib/components/molecules/shared.js';
@@ -146,6 +146,10 @@
 
 <svelte:head><title>{tr('admin.vouchers.title')} — actjom</title></svelte:head>
 
+{#snippet voucherEmptyIcon()}
+  <HugeiconsIcon icon={Coupon01Icon} size={28} strokeWidth={1.8} />
+{/snippet}
+
 {#snippet totalIcon()}
   <HugeiconsIcon icon={Coupon01Icon} size={18} strokeWidth={1.8} />
 {/snippet}
@@ -175,8 +179,8 @@
     {#if loading}
       <div class="grid grid-cols-3 gap-3 sm:gap-4">
         {#each [1, 2, 3] as _i}
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
-            <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
+          <div class="rounded-lg border border-hairline bg-card p-5 space-y-3 shadow-card">
+            <Skeleton shape="circle" class="h-9 w-9 rounded-md" />
             <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
             <Skeleton shape="rect" class="h-7 w-14 rounded-md" />
           </div>
@@ -188,19 +192,19 @@
           label={tr('admin.stats.total')}
           value={String(vouchers.length)}
           icon={totalIcon}
-          class="rounded-2xl"
+          class="rounded-lg"
         />
         <StatCard
           label={tr('admin.stats.activeVouchers')}
           value={String(activeCount)}
           icon={activeIcon}
-          class="rounded-2xl"
+          class="rounded-lg"
         />
         <StatCard
           label={tr('admin.stats.redeemedTotal')}
           value={String(redeemedTotal)}
           icon={redeemedIcon}
-          class="rounded-2xl"
+          class="rounded-lg"
         />
       </div>
     {/if}
@@ -225,7 +229,7 @@
     </div>
 
     {#if loading}
-      <Skeleton shape="rect" class="h-64 w-full rounded-2xl" />
+      <Skeleton shape="rect" class="h-64 w-full rounded-lg" />
     {:else if error}
       <AlertBanner tone="negative" dismissible={false}>
         {tr('admin.overview.loadError')}
@@ -237,6 +241,7 @@
         rowKey="id"
         emptyTitle={query ? tr('admin.empty.noResults') : tr('admin.vouchers.empty')}
         emptyDescription={query ? tr('admin.empty.noResultsDesc') : tr('admin.vouchers.emptyDesc')}
+        emptyIcon={voucherEmptyIcon}
       />
     {/if}
   </section>
@@ -283,7 +288,7 @@
       </FormField>
       <FormField label={tr('admin.vouchers.expiresAt')}>
         {#snippet control(args)}
-          <Input {...args} type="date" bind:value={form.expiresAt} />
+          <DatePicker {...args} bind:value={form.expiresAt} />
         {/snippet}
       </FormField>
     </div>

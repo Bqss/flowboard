@@ -9,34 +9,33 @@
     type ApiWorkspaceMember,
     type ApiWaitingActionCard
   } from '$lib/api/client';
-  import { dashboardText } from '$lib/i18n/dashboard.js';
+  import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
   import {
+    Avatar,
     Badge,
     Button,
-    Avatar,
-    Input,
+    Checkbox,
+    IconButton,
     Skeleton,
-    Checkbox
+    StatusDot
   } from '$lib/components/atoms/index.js';
-  import {
-    StatCard,
-    EmptyStateBlock,
-    FormField,
-    TagInput
-  } from '$lib/components/molecules/index.js';
-  import { Dialog } from '$lib/components/organisms/index.js';
+  import { SelectMenu, StatCard } from '$lib/components/molecules/index.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     Add01Icon,
-    WorkflowSquare01Icon,
     Alert02Icon,
-    UserGroupIcon,
-    Settings01Icon,
-    Layers01Icon,
     ArrowRight01Icon,
+    CheckListIcon,
+    CheckmarkCircle02Icon,
     KanbanIcon,
-    UserCheck01Icon
+    Layers01Icon,
+    Settings01Icon,
+    Tick02Icon,
+    UserAdd01Icon,
+    UserCheck01Icon,
+    UserGroupIcon,
+    WorkflowSquare01Icon
   } from '@hugeicons/core-free-icons';
   import type { LayoutData } from './$types';
 
@@ -45,6 +44,9 @@
   const tr = (key: string, values?: Record<string, string | number>) =>
     dashboardText($locale, key, values);
 
+  const CLEAR_ASSIGNEE = '__clear__';
+  const LIST_LIMIT = 5;
+
   let loadingData = $state(true);
   let workflows = $state<ApiWorkflow[]>([]);
   let taskBoards = $state<ApiTaskBoard[]>([]);
@@ -52,7 +54,7 @@
   let members = $state<ApiWorkspaceMember[]>([]);
   let waitingCards = $state<ApiWaitingActionCard[]>([]);
   let selectedWaitingIds = $state<string[]>([]);
-  let bulkAssigneeId = $state('');
+  let bulkAssigneeId = $state(CLEAR_ASSIGNEE);
   let bulkLoading = $state(false);
   let bulkError = $state<string | null>(null);
 
@@ -84,13 +86,50 @@
       });
   });
 
+  // ── View helpers ─────────────────────────────────────────────────
+  type Tone = 'queued' | 'progress' | 'done' | 'urgent';
+
+  const formatNum = (value: number) => value.toLocaleString(dashboardIntlLocale($locale));
 
   const totalCards = $derived(
     (stats.pending ?? 0) + (stats.progress ?? 0) + (stats.waiting ?? 0) + (stats.done ?? 0)
   );
+  const activeCards = $derived((stats.pending ?? 0) + (stats.progress ?? 0));
 
-  const urgentCount = $derived((stats.waiting ?? 0) + (stats.pending ?? 0));
+  const flowSegments = $derived<Array<{ key: string; label: string; value: number; tone: Tone }>>([
+    { key: 'pending', label: tr('home.statusPending'), value: stats.pending ?? 0, tone: 'queued' },
+    { key: 'progress', label: tr('home.statusProgress'), value: stats.progress ?? 0, tone: 'progress' },
+    { key: 'waiting', label: tr('home.statusWaiting'), value: stats.waiting ?? 0, tone: 'urgent' },
+    { key: 'done', label: tr('home.statusDone'), value: stats.done ?? 0, tone: 'done' }
+  ]);
 
+  const toneBg: Record<Tone, string> = {
+    queued: 'bg-status-queued',
+    progress: 'bg-status-progress',
+    done: 'bg-status-done',
+    urgent: 'bg-status-urgent'
+  };
+
+  /** Share of the flow; tiny non-zero shares read "<1%" rather than a misleading 0%. */
+  const pctLabel = (value: number) => {
+    if (totalCards === 0 || value === 0) return '0%';
+    const pct = (value / totalCards) * 100;
+    if (pct < 1) return '<1%';
+    if (pct > 99 && value < totalCards) return '>99%';
+    return `${Math.round(pct)}%`;
+  };
+
+  const labelsOf = (item: { labels?: string[]; label?: string | null }) =>
+    item.labels && item.labels.length > 0 ? item.labels : item.label ? [item.label] : [];
+
+  const workspaceName = $derived(data.workspace?.name ?? tr('common.dashboard'));
+
+  const assigneeOptions = $derived([
+    { value: CLEAR_ASSIGNEE, label: tr('home.clearAssignee') },
+    ...members.map((m) => ({ value: m.id, label: m.name }))
+  ]);
+
+  // ── Data loading ─────────────────────────────────────────────────
   async function loadDashboardData() {
     if (!data.workspace?.id) return;
     loadingData = true;
@@ -124,39 +163,11 @@
     }
   });
 
-  let createOpen = $state(false);
-  let name = $state('');
-  let workflowLabels = $state<string[]>([]);
-  let loading = $state(false);
-  let error = $state<string | null>(null);
-
-  async function createWorkflow() {
-    if (!name.trim() || !data.workspace) return;
-    loading = true;
-    error = null;
-    try {
-      const { workflow } = await api.createWorkflow(data.workspace.id, {
-        name: name.trim(),
-        labels: workflowLabels
-      });
-      window.dispatchEvent(new CustomEvent('onboarding-challenge', { detail: 'create_workflow' }));
-      createOpen = false;
-      name = '';
-      workflowLabels = [];
-      await goto(`/dashboard/workflows/${workflow.id}/setup`);
-    } catch (err) {
-      error = err instanceof ApiError ? err.message : tr('home.createError');
-    } finally {
-      loading = false;
-    }
-  }
-
+  // ── Needs attention bulk actions ─────────────────────────────────
   function toggleWaitingSelection(cardId: string, checked: boolean) {
-    if (checked) {
-      selectedWaitingIds = [...selectedWaitingIds, cardId];
-    } else {
-      selectedWaitingIds = selectedWaitingIds.filter((id) => id !== cardId);
-    }
+    selectedWaitingIds = checked
+      ? [...selectedWaitingIds, cardId]
+      : selectedWaitingIds.filter((id) => id !== cardId);
   }
 
   function toggleAllWaiting(checked: boolean) {
@@ -170,10 +181,10 @@
     try {
       await api.bulkReassignCards(data.workspace.id, {
         cardIds: selectedWaitingIds,
-        assigneeId: bulkAssigneeId || null
+        assigneeId: bulkAssigneeId === CLEAR_ASSIGNEE ? null : bulkAssigneeId
       });
       selectedWaitingIds = [];
-      bulkAssigneeId = '';
+      bulkAssigneeId = CLEAR_ASSIGNEE;
       await loadDashboardData();
     } catch (err) {
       bulkError = err instanceof ApiError ? err.message : tr('home.bulkReassignError');
@@ -184,387 +195,354 @@
 </script>
 
 <svelte:head>
-  <title>{tr('common.dashboard')} — actjom</title>
+  <title>{tr('common.dashboard')} · actjom</title>
 </svelte:head>
 
-{#snippet customersIcon()}
-  <HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />
+<!-- ── Snippets ─────────────────────────────────────────────────── -->
+{#snippet arrowIcon()}
+  <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} />
+{/snippet}
+{#snippet customersIcon()}<HugeiconsIcon icon={UserGroupIcon} size={18} strokeWidth={1.8} />{/snippet}
+{#snippet activeIcon()}<HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />{/snippet}
+{#snippet attentionIcon()}<HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />{/snippet}
+{#snippet doneIcon()}<HugeiconsIcon icon={CheckmarkCircle02Icon} size={18} strokeWidth={1.8} />{/snippet}
+
+{#snippet sectionHeader(title: string, href: string, linkLabel: string)}
+  <header class="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+    <h2 class="ds-section-title text-ink">{title}</h2>
+    <Button {href} variant="ghost" size="sm">
+      {linkLabel}
+      {@render arrowIcon()}
+    </Button>
+  </header>
 {/snippet}
 
-{#snippet workflowsIcon()}
-  <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+{#snippet rowSkeletons()}
+  {#each [1, 2, 3] as _i}
+    <div class="flex items-center gap-3 px-5 py-3.5">
+      <Skeleton shape="rect" class="size-9 rounded-md" />
+      <div class="flex-1 space-y-2">
+        <Skeleton shape="rect" class="h-3.5 w-40 rounded-md" />
+        <Skeleton shape="rect" class="h-3 w-24 rounded-md" />
+      </div>
+    </div>
+  {/each}
 {/snippet}
 
-{#snippet membersIcon()}
-  <HugeiconsIcon icon={UserCheck01Icon} size={18} strokeWidth={1.8} />
-{/snippet}
-
-{#snippet urgentIcon()}
-  <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
-{/snippet}
-<div class="space-y-6 sm:space-y-8">
-  <!-- Clean Header -->
-  <header class="space-y-1">
-    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">{data.workspace?.name ?? tr('common.dashboard')}</h1>
-    <p class="ds-caption text-mute text-xs sm:text-sm">{tr('home.description')}</p>
+<div class="space-y-6">
+  <!-- ── Page header ──────────────────────────────────────────────── -->
+  <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div class="min-w-0">
+      <h1 class="ds-page-title truncate text-ink">{workspaceName}</h1>
+      <p class="ds-caption mt-1 text-mute">{tr('home.description')}</p>
+    </div>
   </header>
 
-  <!-- Workspace Stats Grid (Clean & Direct) -->
-  <section data-onboarding="stats-overview">
-    {#if loadingData}
-      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {#each [1, 2, 3, 4] as _i}
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
-            <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
-            <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
-            <Skeleton shape="rect" class="h-7 w-14 rounded-md" />
+  <!-- ── Pending invites ──────────────────────────────────────────── -->
+  {#if pendingInvites.length > 0}
+    <div class="space-y-2">
+      {#each pendingInvites as inv (inv.id)}
+        <div class="flex flex-col gap-3 rounded-card border border-primary-border bg-primary-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex min-w-0 items-center gap-3 text-primary">
+            <HugeiconsIcon icon={UserCheck01Icon} size={18} strokeWidth={1.8} />
+            <p class="min-w-0 truncate text-meta text-ink">
+              <span class="font-bold">{inv.workspaceName}</span>
+              <span class="text-mute"> · {tr('home.invitedAs', { role: inv.role })}</span>
+            </p>
           </div>
-        {/each}
-      </div>
+          <Button variant="primary" size="sm" loading={acceptingInvite} onclick={() => acceptPendingInvite(inv.token)}>
+            {tr('home.acceptInvite')}
+          </Button>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  <!-- ── Stat row ─────────────────────────────────────────────────── -->
+  <section data-onboarding="stats-overview" class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+    {#if loadingData}
+      {#each [1, 2, 3, 4] as _i}
+        <div class="flex items-start gap-3 rounded-xl border border-hairline bg-card p-4 shadow-card sm:p-5">
+          <Skeleton shape="rect" class="size-9 rounded-md" />
+          <div class="space-y-2">
+            <Skeleton shape="rect" class="h-3 w-24 rounded-md" />
+            <Skeleton shape="rect" class="h-7 w-16 rounded-md" />
+          </div>
+        </div>
+      {/each}
     {:else}
-      <div class="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
-        <StatCard
-          label={tr('home.totalCustomers')}
-          value={String(stats.totalCustomers ?? totalCards)}
-          icon={customersIcon}
-          class="p-3.5 sm:p-5 rounded-2xl"
-        />
-        <StatCard
-          label={tr('home.workflowCount')}
-          value={String(workflows.length)}
-          icon={workflowsIcon}
-          class="p-3.5 sm:p-5 rounded-2xl"
-        />
-        <StatCard
-          label={tr('home.teamMembers')}
-          value={String(members.length)}
-          icon={membersIcon}
-          class="p-3.5 sm:p-5 rounded-2xl"
-        />
-        <StatCard
-          label={tr('home.needsAction')}
-          value={String(urgentCount)}
-          icon={urgentIcon}
-          class="p-3.5 sm:p-5 rounded-2xl"
-        />
-      </div>
+      <StatCard class="min-w-0 p-4 sm:p-5" label={tr('home.totalCustomers')} value={formatNum(Number(stats.totalCustomers ?? 0))} icon={customersIcon} />
+      <StatCard class="min-w-0 p-4 sm:p-5" label={tr('home.statusProgress')} value={formatNum(activeCards)} icon={activeIcon} />
+      <StatCard class="min-w-0 p-4 sm:p-5" label={tr('home.statusWaiting')} value={formatNum(stats.waiting ?? 0)} icon={attentionIcon} />
+      <StatCard class="min-w-0 p-4 sm:p-5" label={tr('home.statusDone')} value={formatNum(stats.done ?? 0)} icon={doneIcon} />
     {/if}
   </section>
 
-
-  <!-- Waiting Action Section -->
-  {#if !loadingData && waitingCards.length > 0}
-    <section class="space-y-4">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 class="ds-section-title text-ink">{tr('home.needsAction')}</h2>
-          <p class="ds-caption text-mute">{tr('home.needsActionDescription')}</p>
+  <!-- ── Attention + flow breakdown ───────────────────────────────── -->
+  <div class="grid items-stretch gap-4 lg:grid-cols-3">
+    <!-- Needs attention -->
+    <section id="needs-attention" class="flex flex-col overflow-hidden rounded-xl border border-hairline bg-card shadow-card lg:col-span-2">
+      <header class="flex items-center justify-between gap-3 px-5 py-4">
+        <div class="flex min-w-0 items-center gap-2">
+          <h2 class="ds-section-title truncate text-ink">{tr('home.needsAction')}</h2>
+          {#if !loadingData && waitingCards.length > 0}
+            <span class="shrink-0 rounded-full bg-status-urgent-soft px-2 py-0.5 text-badge font-semibold tabular-nums text-status-urgent-ink">
+              {waitingCards.length}
+            </span>
+          {/if}
         </div>
-        <Badge tone="urgent">{tr('home.cards', { count: waitingCards.length })}</Badge>
-      </div>
-
-      <div class="rounded-2xl border border-hairline bg-card shadow-card overflow-hidden">
-        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 border-b border-hairline bg-canvas-sunken px-4 py-3">
-          <label class="flex items-center gap-2 text-[13px] font-semibold text-ink cursor-pointer">
-            <Checkbox
-              checked={selectedWaitingIds.length === waitingCards.length && waitingCards.length > 0}
-              onchange={(e) => toggleAllWaiting(e.currentTarget.checked)}
-            />
+        {#if !loadingData && waitingCards.length > 1}
+          <label class="flex shrink-0 cursor-pointer items-center gap-2 text-meta font-medium text-mute hover:text-ink">
             <span>{tr('home.selectAll')}</span>
+            <Checkbox
+              checked={selectedWaitingIds.length === waitingCards.length}
+              onCheckedChange={(c) => toggleAllWaiting(c)}
+            />
           </label>
-          <select
-            bind:value={bulkAssigneeId}
-            class="h-8 rounded-full border border-hairline bg-card px-3 text-[13px] font-medium text-ink outline-none focus:border-primary"
-            aria-label={tr('home.bulkAssignee')}
-          >
-            <option value="">{tr('home.clearAssignee')}</option>
-            {#each members as member (member.id)}
-              <option value={member.id}>{member.name}</option>
-            {/each}
-          </select>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={bulkLoading}
-            disabled={selectedWaitingIds.length === 0}
-            onclick={bulkReassignWaiting}
-          >
-            {tr('home.reassign', { count: selectedWaitingIds.length })}
-          </Button>
-        </div>
+        {/if}
+      </header>
 
-        {#if bulkError}
-          <p class="px-4 py-2 text-[13px] font-semibold text-status-urgent-ink bg-status-urgent-soft">
-            {bulkError}
-          </p>
+      {#if loadingData}
+        {@render rowSkeletons()}
+      {:else if waitingCards.length === 0}
+        <div class="flex items-center gap-3 border-t border-hairline px-5 py-6">
+          <span class="grid size-8 shrink-0 place-items-center rounded-full bg-status-done-soft text-status-done-ink">
+            <HugeiconsIcon icon={Tick02Icon} size={16} strokeWidth={1.8} />
+          </span>
+          <p class="ds-body text-mute">{tr('home.attentionEmpty')}</p>
+        </div>
+      {:else}
+        <!-- Action bar: only appears once something is selected -->
+        {#if selectedWaitingIds.length > 0}
+          <div class="flex flex-col gap-2 border-t border-primary-border/60 bg-primary-soft px-5 py-2.5 sm:flex-row sm:items-center">
+            <p class="text-meta font-semibold text-primary-ink sm:flex-1">
+              {tr('home.selectedCount', { count: selectedWaitingIds.length })}
+            </p>
+            <div class="flex gap-2">
+              <SelectMenu
+                options={assigneeOptions}
+                bind:value={bulkAssigneeId}
+                size="sm"
+                class="min-w-0 flex-1 sm:w-52 sm:flex-none"
+                aria-label={tr('home.bulkAssignee')}
+              />
+              <Button variant="primary" size="sm" loading={bulkLoading} onclick={bulkReassignWaiting}>
+                {tr('home.reassign', { count: selectedWaitingIds.length })}
+              </Button>
+            </div>
+          </div>
         {/if}
 
-        <ul class="divide-y divide-hairline">
+        {#if bulkError}
+          <p class="bg-status-urgent-soft px-5 py-2 text-meta font-semibold text-status-urgent-ink">{bulkError}</p>
+        {/if}
+
+        <ul class="max-h-[420px] divide-y divide-hairline overflow-y-auto border-t border-hairline">
           {#each waitingCards as card (card.cardId)}
-            <li class="flex items-center gap-3 px-4 py-3 hover:bg-canvas-sunken/50">
+            {@const selected = selectedWaitingIds.includes(card.cardId)}
+            <li class="flex items-center gap-3 px-5 py-3 transition-colors {selected ? 'bg-primary-soft/40' : 'hover:bg-canvas-sunken/60'}">
               <Checkbox
-                checked={selectedWaitingIds.includes(card.cardId)}
-                onchange={(e) => toggleWaitingSelection(card.cardId, e.currentTarget.checked)}
+                checked={selected}
+                onCheckedChange={(c) => toggleWaitingSelection(card.cardId, c)}
+                aria-label={card.customerName}
               />
               <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <p class="text-base font-bold text-ink">{card.customerName}</p>
-                  {#if card.waErrorFlag}
-                    <Badge tone="urgent" variant="soft">{tr('home.waError')}</Badge>
-                  {:else if card.waFollowupsStopped}
-                    <Badge tone="progress" variant="soft">{tr('home.followupStopped')}</Badge>
-                  {/if}
-                </div>
-                <p class="ds-caption text-mute">
+                <p class="truncate text-sm font-semibold text-ink">{card.customerName}</p>
+                <p class="ds-caption mt-0.5 truncate text-mute">
                   {card.workflowName} · {card.stageName}
-                  {#if card.assigneeName} · {tr('home.picShort', { name: card.assigneeName })}{/if}
                 </p>
               </div>
-              <Button
-                href="/dashboard/workflows/{card.workflowId}"
-                variant="ghost"
-                size="sm"
-              >
-                {tr('home.open')}
-              </Button>
+              {#if card.waErrorFlag}
+                <Badge tone="urgent" class="shrink-0">{tr('home.waError')}</Badge>
+              {:else if card.waFollowupsStopped}
+                <Badge tone="progress" class="shrink-0">{tr('home.followupStopped')}</Badge>
+              {/if}
+              <IconButton href="/dashboard/workflows/{card.workflowId}" variant="ghost" size="sm" label={tr('home.open')}>
+                {@render arrowIcon()}
+              </IconButton>
             </li>
           {/each}
         </ul>
-      </div>
+      {/if}
     </section>
-  {/if}
 
-  {#if pendingInvites.length > 0}
-    <section class="space-y-4">
-      <div class="flex items-center gap-2">
-        <HugeiconsIcon icon={UserCheck01Icon} size={18} strokeWidth={1.8} class="text-primary" />
-        <div>
-          <h2 class="ds-section-title text-ink">{tr('home.pendingInvites')}</h2>
-          <p class="ds-caption text-mute">{tr('home.pendingInvitesDescription')}</p>
+    <!-- Right column: flow breakdown + team -->
+    <div class="grid gap-4">
+      <section class="rounded-xl border border-hairline bg-card p-5 shadow-card">
+        <div class="flex items-baseline justify-between gap-3">
+          <h2 class="ds-section-title text-ink">{tr('home.flowTitle')}</h2>
+          {#if !loadingData}
+            <span class="text-meta font-semibold tabular-nums text-mute">{formatNum(totalCards)}</span>
+          {/if}
         </div>
-      </div>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each pendingInvites as inv (inv.id)}
-          <article class="flex flex-col justify-between rounded-2xl border border-primary/30 bg-primary-soft p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-            <div>
-              <div class="mb-3 h-1 w-7 rounded-full bg-primary"></div>
-              <h3 class="text-sm font-bold text-ink">{inv.workspaceName}</h3>
-              <p class="ds-caption mt-1 text-mute">{tr('home.invitedAs', { role: inv.role })}</p>
+
+        <div class="mt-4">
+          {#if loadingData}
+            <Skeleton shape="rect" class="h-2 w-full rounded-full" />
+          {:else if totalCards > 0}
+            <div class="flex h-2 w-full gap-1" role="img" aria-label={tr('home.flowTotal', { count: formatNum(totalCards) })}>
+              {#each flowSegments.filter((s) => s.value > 0) as seg (seg.key)}
+                <div class="h-full rounded-full {toneBg[seg.tone]}" style="flex: {seg.value} 1 0; min-width: 6px"></div>
+              {/each}
             </div>
-            <div class="mt-4 border-t border-primary/20 pt-3.5">
-              <Button
-                variant="primary"
-                size="sm"
-                class="w-full"
-                loading={acceptingInvite}
-                onclick={() => acceptPendingInvite(inv.token)}
-              >
-                {tr('home.acceptInvite')}
-              </Button>
-            </div>
-          </article>
-        {/each}
-      </div>
-    </section>
-  {/if}
+          {:else}
+            <div class="h-2 w-full rounded-full bg-lane" aria-hidden="true"></div>
+          {/if}
+        </div>
 
-
-  <!-- Workflows Section (Subtle description added) -->
-  <section class="space-y-4" data-onboarding="workflows-section">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="ds-section-title text-ink">{tr('common.workflows')}</h2>
-        <p class="ds-caption text-mute">{tr('home.workflowDescription')}</p>
-      </div>
-      <Button href="/dashboard/workflows" variant="ghost" size="sm">
-        <span>{tr('home.allWorkflows', { count: workflows.length })}</span>
-        <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
-      </Button>
-    </div>
-
-    {#if loadingData}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each [1, 2, 3] as _i}
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
-            <Skeleton shape="rect" class="h-1 w-7 rounded-full" />
-            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
-            <Skeleton shape="rect" class="h-4 w-24 rounded-md" />
-            <div class="flex gap-2 pt-2">
-              <Skeleton shape="rect" class="h-8 flex-1 rounded-full" />
-              <Skeleton shape="rect" class="h-8 w-16 rounded-full" />
-            </div>
-          </div>
-        {/each}
-      </div>
-    {:else if workflows.length === 0}
-      <EmptyStateBlock
-        title={tr('home.noWorkflow')}
-        description={tr('home.noWorkflowDescription')}
-        actionLabel={tr('home.createWorkflow')}
-        onaction={() => (createOpen = true)}
-      />
-    {:else}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each workflows.slice(0, 3) as workflow (workflow.id)}
-          <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
-            <div>
-              <!-- 4px Signature Tag Strip + Label -->
-              <div class="mb-3 flex items-center justify-between gap-2">
-                <div class="h-1 w-7 rounded-full bg-primary shrink-0"></div>
-                {#if (workflow.labels && workflow.labels.length > 0) || workflow.label}
-                  {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
-                  <div class="flex flex-wrap gap-1">
-                    {#each wfLabels as tag (tag)}
-                      <Badge tone="info" variant="soft" class="text-[10px] px-1.5 py-0.2 font-semibold">
-                        {tag}
-                      </Badge>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              <a
-                href="/dashboard/workflows/{workflow.id}"
-                class="block text-base sm:text-lg font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
-              >
-                {workflow.name}
-              </a>
-              {#if workflow.description}
-                <p class="ds-caption text-mute line-clamp-2 mt-1">{workflow.description}</p>
+        <ul class="mt-4 space-y-3">
+          {#each flowSegments as seg (seg.key)}
+            <li class="flex items-center justify-between gap-3">
+              <StatusDot tone={seg.tone} label={seg.label} />
+              {#if loadingData}
+                <Skeleton shape="rect" class="h-3 w-12 rounded-md" />
+              {:else}
+                <span class="flex items-baseline gap-2 tabular-nums">
+                  <span class="text-sm font-bold text-ink">{formatNum(seg.value)}</span>
+                  <span class="w-10 text-right text-meta text-faint">{pctLabel(seg.value)}</span>
+                </span>
               {/if}
-              <div class="mt-3 flex items-center gap-2">
-                <Avatar name={workflow.ownerName ?? tr('common.pic')} size={22} />
-                <span class="ds-caption text-mute">{workflow.ownerName ?? tr('home.noAssignee')}</span>
-              </div>
-            </div>
-            <div class="mt-5 flex items-center gap-2 border-t border-hairline pt-3.5">
-              <Button href="/dashboard/workflows/{workflow.id}" variant="primary" size="sm" class="flex-1">
-                <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
-                <span>{tr('home.openBoard')}</span>
-              </Button>
-              <Button href="/dashboard/workflows/{workflow.id}/setup" variant="secondary" size="sm">
-                {tr('home.setup')}
-              </Button>
-            </div>
-          </article>
-        {/each}
-      </div>
-    {/if}
-  </section>
-  <!-- Task Boards Section -->
-  <section class="space-y-4" data-onboarding="boards-section">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="ds-section-title text-ink">{tr('nav.boards') ?? 'Papan Tugas'}</h2>
-        <p class="ds-caption text-mute">{tr('taskboard.description') ?? 'Papan pengurusan tugas dan projek pasukan.'}</p>
-      </div>
-      <Button href="/dashboard/boards" variant="ghost" size="sm">
-        <span>{tr('taskboard.allBoards', { count: taskBoards.length }) ?? `Semua (${taskBoards.length})`}</span>
-        <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={1.8} />
-      </Button>
-    </div>
+            </li>
+          {/each}
+        </ul>
+      </section>
 
-    {#if loadingData}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each [1, 2, 3] as _i}
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-4 shadow-card">
-            <Skeleton shape="rect" class="h-1 w-7 rounded-full" />
-            <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
-            <Skeleton shape="rect" class="h-4 w-24 rounded-md" />
-            <div class="flex gap-2 pt-2">
-              <Skeleton shape="rect" class="h-8 flex-1 rounded-full" />
-            </div>
+      <section data-onboarding="team-section" class="rounded-xl border border-hairline bg-card p-5 shadow-card">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="ds-section-title text-ink">{tr('home.teamTitle')}</h2>
+          <div class="flex items-center gap-1" data-onboarding="shortcuts-section">
+            <IconButton href="/dashboard/members" variant="ghost" size="sm" label={tr('home.inviteStaff')}>
+              <HugeiconsIcon icon={UserAdd01Icon} size={16} strokeWidth={1.8} />
+            </IconButton>
+            <IconButton href="/dashboard/workflows" variant="ghost" size="sm" label={tr('home.stageSetup')}>
+              <HugeiconsIcon icon={Layers01Icon} size={16} strokeWidth={1.8} />
+            </IconButton>
+            <IconButton href="/dashboard/settings" variant="ghost" size="sm" label={tr('home.settings')}>
+              <HugeiconsIcon icon={Settings01Icon} size={16} strokeWidth={1.8} />
+            </IconButton>
           </div>
-        {/each}
-      </div>
-    {:else if taskBoards.length === 0}
-      <EmptyStateBlock
-        title={tr('taskboard.empty') ?? 'Tiada papan tugas'}
-        description={tr('taskboard.emptyDesc') ?? 'Cipta papan tugas pertama untuk mengurus kerja pasukan anda.'}
-        actionLabel={tr('taskboard.create') ?? 'Cipta papan'}
-        onaction={() => goto('/dashboard/boards')}
-      />
-    {:else}
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each taskBoards.slice(0, 3) as board (board.id)}
-          <article class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover">
-            <div>
-              <!-- 4px Signature Tag Strip + Label (Sky/Cyan for Board) -->
-              <div class="mb-3 flex items-center justify-between gap-2">
-                <div class="h-1 w-7 rounded-full bg-sky-500 shrink-0"></div>
-                {#if (board.labels && board.labels.length > 0) || board.label}
-                  {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
-                  <div class="flex flex-wrap gap-1">
-                    {#each bLabels as tag (tag)}
-                      <Badge tone="queued" variant="soft" class="text-[10px] px-1.5 py-0.2 font-semibold">
-                        {tag}
-                      </Badge>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
+        </div>
 
-              <a
-                href="/dashboard/boards/{board.id}"
-                class="block text-base sm:text-lg font-bold text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
-              >
-                {board.name}
-              </a>
-              {#if board.description}
-                <p class="ds-caption text-mute line-clamp-2 mt-1">{board.description}</p>
+        {#if loadingData}
+          <div class="mt-4 flex -space-x-2">
+            {#each [1, 2, 3] as _i}
+              <Skeleton shape="circle" class="size-8 ring-2 ring-card" />
+            {/each}
+          </div>
+        {:else if members.length === 0}
+          <p class="ds-caption mt-3 text-mute">{tr('home.noOtherMembers')}</p>
+        {:else}
+          <a href="/dashboard/members" class="group mt-4 flex items-center justify-between gap-3">
+            <div class="flex -space-x-2">
+              {#each members.slice(0, 5) as member (member.id)}
+                <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={32} title={member.name} class="ring-card" />
+              {/each}
+              {#if members.length > 5}
+                <span class="relative grid size-8 place-items-center rounded-full bg-lane text-micro text-mute ring-2 ring-card">
+                  +{members.length - 5}
+                </span>
               {/if}
-              <div class="mt-3 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <Avatar name={board.ownerName ?? tr('common.pic')} size={22} />
-                  <span class="ds-caption text-mute">{board.ownerName ?? tr('home.noAssignee')}</span>
-                </div>
-                {#if board.taskCount != null}
-                  <Badge tone="queued" variant="soft" class="text-[10px] px-2 py-0.5">
-                    {board.taskCount} {tr('taskboard.cardCount') ?? 'tugas'}
-                  </Badge>
-                {/if}
-              </div>
             </div>
-
-            <div class="mt-5 flex items-center gap-2 border-t border-hairline pt-3.5">
-              <Button href="/dashboard/boards/{board.id}" variant="primary" size="sm" class="flex-1">
-                <HugeiconsIcon icon={KanbanIcon} size={15} strokeWidth={1.8} />
-                <span>{tr('home.openBoard')}</span>
-              </Button>
-            </div>
-          </article>
-        {/each}
-      </div>
-    {/if}
-  </section>
-
-</div>
-
-<!-- Modal Dialog: Buat Workflow Baru -->
-<Dialog
-  bind:open={createOpen}
-  title={tr('home.createDialogTitle')}
-  description={tr('home.createDialogDescription')}
->
-  <div class="space-y-4">
-    <FormField label={tr('home.workflowName')} required>
-      {#snippet control(args)}
-        <Input {...args} bind:value={name} placeholder={tr('home.workflowNamePlaceholder')} />
-      {/snippet}
-    </FormField>
-    <FormField label={tr('workflows.label') ?? 'Label'} helper={tr('workflows.labelHelper')}>
-      {#snippet control(field)}
-        <TagInput bind:value={workflowLabels} placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'} {...field} />
-      {/snippet}
-    </FormField>
-    {#if error}
-      <p class="ds-caption text-status-urgent">{error}</p>
-    {/if}
+            <span class="flex items-center gap-1 text-meta font-semibold text-mute group-hover:text-primary">
+              {tr('home.memberCount', { count: members.length })}
+              {@render arrowIcon()}
+            </span>
+          </a>
+        {/if}
+      </section>
+    </div>
   </div>
-  {#snippet footer()}
-    <div class="flex justify-end gap-2">
-      <Button variant="secondary" onclick={() => (createOpen = false)}>{tr('common.cancel')}</Button>
-      <Button variant="primary" {loading} onclick={createWorkflow}>{tr('common.save')}</Button>
-    </div>
-  {/snippet}
-</Dialog>
+
+  <!-- ── Recent workflows + boards ────────────────────────────────── -->
+  <div class="grid items-start gap-4 lg:grid-cols-2">
+    <section data-onboarding="workflows-section" class="overflow-hidden rounded-xl border border-hairline bg-card shadow-card">
+      {@render sectionHeader(tr('common.workflows'), '/dashboard/workflows', tr('home.allWorkflows', { count: workflows.length }))}
+
+      {#if loadingData}
+        {@render rowSkeletons()}
+      {:else if workflows.length === 0}
+        <div class="flex flex-col items-center gap-3 px-5 py-10 text-center">
+          <p class="ds-body text-mute">{tr('home.noWorkflowDescription')}</p>
+          <Button href="/dashboard/workflows" variant="secondary" size="sm" data-onboarding="quick-create-workflow">
+            <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
+            {tr('home.createWorkflow')}
+          </Button>
+        </div>
+      {:else}
+        <ul class="divide-y divide-hairline">
+          {#each workflows.slice(0, LIST_LIMIT) as workflow (workflow.id)}
+            {@const wfLabels = labelsOf(workflow)}
+            <li class="group relative flex items-center gap-3 px-5 py-3 transition-colors hover:bg-canvas-sunken/60">
+              <span class="grid size-9 shrink-0 place-items-center rounded-md bg-primary-soft text-primary">
+                <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
+              </span>
+              <div class="min-w-0 flex-1">
+                <a
+                  href="/dashboard/workflows/{workflow.id}"
+                  class="block truncate text-sm font-semibold text-ink after:absolute after:inset-0 group-hover:text-primary focus-visible:outline-none"
+                >
+                  {workflow.name}
+                </a>
+                <p class="ds-caption mt-0.5 truncate text-mute">{workflow.ownerName ?? tr('home.noAssignee')}</p>
+              </div>
+              {#if wfLabels.length > 0}
+                <Badge tone="queued" class="hidden max-w-[120px] truncate sm:inline-flex">{wfLabels[0]}</Badge>
+              {/if}
+              <a
+                href="/dashboard/workflows/{workflow.id}/setup"
+                class="relative z-10 shrink-0 text-meta font-semibold text-primary hover:underline"
+              >
+                {tr('home.setup')}
+              </a>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+
+    <section data-onboarding="boards-section" class="overflow-hidden rounded-xl border border-hairline bg-card shadow-card">
+      {@render sectionHeader(tr('nav.boards'), '/dashboard/boards', tr('taskboard.allBoards', { count: taskBoards.length }))}
+
+      {#if loadingData}
+        {@render rowSkeletons()}
+      {:else if taskBoards.length === 0}
+        <div class="flex flex-col items-center gap-3 px-5 py-10 text-center">
+          <p class="ds-body text-mute">{tr('taskboard.emptyDescription')}</p>
+          <Button href="/dashboard/boards" variant="secondary" size="sm">
+            <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.8} />
+            {tr('taskboard.create')}
+          </Button>
+        </div>
+      {:else}
+        <ul class="divide-y divide-hairline">
+          {#each taskBoards.slice(0, LIST_LIMIT) as board (board.id)}
+            {@const bLabels = labelsOf(board)}
+            <li class="group relative flex items-center gap-3 px-5 py-3 transition-colors hover:bg-canvas-sunken/60">
+              <span class="grid size-9 shrink-0 place-items-center rounded-md bg-lane text-mute">
+                <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
+              </span>
+              <div class="min-w-0 flex-1">
+                <a
+                  href="/dashboard/boards/{board.id}"
+                  class="block truncate text-sm font-semibold text-ink after:absolute after:inset-0 group-hover:text-primary focus-visible:outline-none"
+                >
+                  {board.name}
+                </a>
+                <p class="ds-caption mt-0.5 truncate text-mute">{board.ownerName ?? tr('home.noAssignee')}</p>
+              </div>
+              {#if bLabels.length > 0}
+                <Badge tone="neutral" class="hidden max-w-[120px] truncate sm:inline-flex">{bLabels[0]}</Badge>
+              {/if}
+              {#if board.taskCount != null}
+                <span class="flex shrink-0 items-center gap-1 text-faint" title={tr('taskboard.cardCount')}>
+                  <HugeiconsIcon icon={CheckListIcon} size={16} strokeWidth={1.8} />
+                  <span class="text-meta font-bold tabular-nums text-ink-soft">{formatNum(board.taskCount)}</span>
+                </span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+  </div>
+</div>

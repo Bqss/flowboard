@@ -2,7 +2,9 @@
   import '../../ds.css';
   import { page } from '$app/stores';
   import { authCopy } from '$lib/i18n/auth.js';
-  import { locale, locales, setLocale } from '$lib/i18n/index.js';
+  import { isLocale, locale, locales, setLocale } from '$lib/i18n/index.js';
+  import { LanguageSwitcher } from '$lib/components/molecules/index.js';
+  const localeOptions = $derived(locales.map((lang) => ({ code: lang.code, short: lang.short, label: copy.shell.language.options[lang.code] })));
   import { landingCopy } from '$lib/i18n/landing.js';
   import LandingLogo from '$lib/components/landing/atoms/Logo.svelte';
   import { Button } from '$lib/components/atoms/index.js';
@@ -23,24 +25,14 @@
 </script>
 
 {#snippet languageSwitcher()}
-  <div
-    class="inline-flex items-center gap-0.5 rounded-full border border-hairline bg-lane p-1"
-    role="group"
-    aria-label={copy.shell.language.label}
-  >
-    {#each locales as language (language.code)}
-      <button
-        type="button"
-        aria-pressed={$locale === language.code}
-        aria-label={copy.shell.language.options[language.code]}
-        title={copy.shell.language.options[language.code]}
-        onclick={() => setLocale(language.code)}
-        class="inline-flex h-7 min-w-8 items-center justify-center rounded-full px-2 text-[11px] font-bold tracking-[0.04em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-1 {$locale === language.code ? 'bg-card text-ink shadow-control' : 'text-mute hover:text-ink'}"
-      >
-        {language.short}
-      </button>
-    {/each}
-  </div>
+  <LanguageSwitcher
+    value={$locale}
+    languages={localeOptions}
+    variant="compact"
+    onchange={(code) => {
+      if (isLocale(code)) setLocale(code);
+    }}
+  />
 {/snippet}
 
 <div data-theme="app" class="relative min-h-screen bg-canvas text-body lg:grid lg:grid-cols-[1.05fr_1fr]">
@@ -72,10 +64,10 @@
       <div class="rounded-2xl border border-hairline bg-card p-6 shadow-card">
         <div class="flex items-center justify-between gap-4 border-b border-hairline pb-4">
           <div>
-            <p class="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">{heroCopy.recordLabel}</p>
+            <p class="text-micro font-bold uppercase tracking-[0.08em] text-faint">{heroCopy.recordLabel}</p>
             <p class="mt-1.5 text-sm font-bold text-ink">{heroCopy.recordTitle}</p>
           </div>
-          <span class="rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.04em] text-primary-ink">{heroCopy.illustrative}</span>
+          <span class="rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-micro font-bold uppercase tracking-[0.04em] text-primary-ink">{heroCopy.illustrative}</span>
         </div>
 
         <div class="relative mt-6">
@@ -96,7 +88,7 @@
         </div>
 
         <div class="mt-6 border-t border-hairline pt-4">
-          <p class="text-[11px] font-bold uppercase tracking-[0.08em] text-faint">{heroCopy.nextAction}</p>
+          <p class="text-micro font-bold uppercase tracking-[0.08em] text-faint">{heroCopy.nextAction}</p>
           <p class="mt-1.5 text-sm font-bold text-ink">{heroCopy.reviewReply}</p>
         </div>
       </div>

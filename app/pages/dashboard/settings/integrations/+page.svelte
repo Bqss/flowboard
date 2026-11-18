@@ -659,20 +659,20 @@
   </header>
 
   {#if errorMessage}
-    <div class="flex items-start gap-2 rounded-xl border border-status-urgent/25 bg-status-urgent-soft px-4 py-3 text-sm text-status-urgent-ink">
+    <div class="flex items-start gap-2 rounded-md border border-status-urgent/25 bg-status-urgent-soft px-4 py-3 text-sm text-status-urgent-ink">
       <HugeiconsIcon icon={Alert02Icon} size={17} strokeWidth={1.8} class="mt-0.5 shrink-0" />
       <span>{errorMessage}</span>
     </div>
   {/if}
   {#if successMessage}
-    <div class="flex items-start gap-2 rounded-xl border border-status-done/25 bg-status-done-soft px-4 py-3 text-sm text-status-done-ink">
+    <div class="flex items-start gap-2 rounded-md border border-status-done/25 bg-status-done-soft px-4 py-3 text-sm text-status-done-ink">
       <HugeiconsIcon icon={CheckmarkCircle02Icon} size={17} strokeWidth={1.8} class="mt-0.5 shrink-0" />
       <span>{successMessage}</span>
     </div>
   {/if}
 
 
-  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="wa-section">
+  <section class="rounded-lg border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="wa-section">
     <div class="mb-4 sm:mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Link01Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
@@ -690,11 +690,11 @@
     {#if loading}
       <div class="space-y-2">
         {#each Array(2) as _}
-          <Skeleton class="h-14 w-full rounded-xl" />
+          <Skeleton class="h-14 w-full rounded-md" />
         {/each}
       </div>
     {:else if connections.length === 0}
-      <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
+      <div class="rounded-md border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
         <HugeiconsIcon icon={Link01Icon} size={24} strokeWidth={1.8} class="mx-auto text-mute" />
         <p class="text-sm text-mute mt-2">{tr('integrations.noneDescription')}</p>
       </div>
@@ -702,7 +702,7 @@
       <div class="space-y-3">
         {#each connections as connection (connection.id)}
           {@const recentJobs = jobs.filter((job) => job.connectionId === connection.id).slice(0, 3)}
-          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4" data-onboarding="wa-connection-card">
+          <div class="rounded-md border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4" data-onboarding="wa-connection-card">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
@@ -735,23 +735,23 @@
             </div>
 
             {#if connection.lastError}
-              <div class="mt-3 rounded-lg border border-status-urgent/20 bg-status-urgent-soft px-3 py-2 text-xs text-status-urgent-ink">
+              <div class="mt-3 rounded-md border border-status-urgent/20 bg-status-urgent-soft px-3 py-2 text-badge text-status-urgent-ink">
                 {connection.lastError}
               </div>
             {/if}
 
             {#if recentJobs.length > 0}
-              <div class="mt-4 rounded-lg border border-hairline bg-lane/40 p-3 sm:p-4">
+              <div class="mt-4 rounded-md border border-hairline bg-lane/40 p-3 sm:p-4">
                 <div class="flex items-center justify-between gap-2">
                   <p class="ds-label text-ink">{tr('integrations.outboundLatest')}</p>
-                  <span class="text-xs font-normal text-mute">{tr('integrations.latestCount', { count: recentJobs.length })}</span>
+                  <span class="text-badge font-normal text-mute">{tr('integrations.latestCount', { count: recentJobs.length })}</span>
                 </div>
                 <div class="mt-3 space-y-2.5">
                   {#each recentJobs as job (job.id)}
                     <div class="flex items-center justify-between gap-3 text-sm">
                       <div class="min-w-0">
                         <p class="truncate font-mono text-mute">{job.toWa}</p>
-                        <p class="mt-0.5 text-xs text-faint">{formatDate(job.updatedAt)} · {tr('integrations.attempt', { count: job.attempts })}</p>
+                        <p class="mt-0.5 text-badge text-faint">{formatDate(job.updatedAt)} · {tr('integrations.attempt', { count: job.attempts })}</p>
                       </div>
                       <Badge tone={job.status === 'failed' ? 'urgent' : job.status === 'delivered' || job.status === 'read' || job.status === 'sent' ? 'done' : 'queued'}>
                         {job.status}
@@ -764,7 +764,7 @@
 
             {#if testSendId === connection.id}
               <form
-                class="mt-4 space-y-2 rounded-lg border border-hairline bg-lane/40 p-4"
+                class="mt-4 space-y-2 rounded-md border border-hairline bg-lane/40 p-4"
                 onsubmit={(event) => {
                   event.preventDefault();
                   sendTestMessage(connection);
@@ -775,7 +775,7 @@
                   <Input bind:value={testMessage} placeholder={tr('integrations.testMessage')} aria-label={tr('integrations.testMessage')} />
                   <Button variant="primary" type="submit" size="sm" loading={sendingTest}>{tr('integrations.send')}</Button>
                 </div>
-                <p class="text-xs font-normal text-mute">{tr('integrations.testHint')}</p>
+                <p class="text-badge font-normal text-mute">{tr('integrations.testHint')}</p>
               </form>
             {/if}
           </div>
@@ -785,7 +785,7 @@
   </section>
 
   <!-- MCP API keys -->
-  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="api-keys-section">
+  <section class="rounded-lg border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="api-keys-section">
     <div class="mb-4 sm:mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={Key02Icon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
@@ -803,17 +803,17 @@
     {#if apiKeysLoading}
       <div class="space-y-2">
         {#each Array(2) as _}
-          <Skeleton class="h-14 w-full rounded-xl" />
+          <Skeleton class="h-14 w-full rounded-md" />
         {/each}
       </div>
     {:else if apiKeys.length === 0}
-      <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
+      <div class="rounded-md border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
         <p class="text-sm text-mute">{tr('integrations.apiKeysEmpty')}</p>
       </div>
     {:else}
       <div class="space-y-3">
         {#each apiKeys as key (key.id)}
-          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
+          <div class="rounded-md border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
@@ -881,7 +881,7 @@
   </section>
 
   <!-- Google Sheets -->
-  <section class="rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="gs-section">
+  <section class="rounded-lg border border-hairline bg-card p-4 sm:p-6 shadow-card" data-onboarding="gs-section">
     <div class="mb-4 sm:mb-6 flex items-start gap-3">
       <HugeiconsIcon icon={AiSheetsIcon} size={20} strokeWidth={1.8} class="mt-0.5 shrink-0 text-primary" />
       <div class="flex-1">
@@ -901,18 +901,18 @@
     {#if sheetsLoading}
       <div class="space-y-2">
         {#each Array(2) as _}
-          <Skeleton class="h-14 w-full rounded-xl" />
+          <Skeleton class="h-14 w-full rounded-md" />
         {/each}
       </div>
     {:else if sheetsConnections.length === 0}
-      <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
+      <div class="rounded-md border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
         <HugeiconsIcon icon={AiSheetsIcon} size={24} strokeWidth={1.8} class="mx-auto text-mute" />
         <p class="text-sm text-mute mt-2">No Google accounts connected yet.</p>
       </div>
     {:else}
       <div class="space-y-3">
         {#each sheetsConnections as conn (conn.id)}
-          <div class="rounded-xl border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
+          <div class="rounded-md border border-hairline bg-canvas px-4 py-3 sm:px-5 sm:py-4">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
@@ -986,7 +986,7 @@
 >
   <div class="space-y-4">
     {#if sheetsStep === 'connect' && !editingSheetsId}
-      <div class="rounded-xl border border-hairline bg-canvas px-4 py-6 text-center">
+      <div class="rounded-md border border-hairline bg-canvas px-4 py-6 text-center">
         <HugeiconsIcon icon={AiSheetsIcon} size={32} strokeWidth={1.8} class="mx-auto text-primary" />
         <p class="text-sm text-mute mt-3">
           Connect your Google account to enable spreadsheet sync. You can assign it to a workflow later.
@@ -1089,14 +1089,14 @@
         <div class="flex gap-2">
           <button
             type="button"
-            class="flex-1 rounded-lg border px-3 py-2 text-sm transition {newKeyScopeMode === 'all' ? 'border-primary bg-primary-soft text-primary' : 'border-line bg-surface text-ink hover:border-ink'}"
+            class="flex-1 rounded-md border px-3 py-2 text-sm transition {newKeyScopeMode === 'all' ? 'border-primary bg-primary-soft text-primary' : 'border-hairline bg-card text-ink hover:border-ink'}"
             onclick={() => { newKeyScopeMode = 'all'; newKeySelectedWorkflowIds = []; }}
           >
             {tr('integrations.scopeAll')}
           </button>
           <button
             type="button"
-            class="flex-1 rounded-lg border px-3 py-2 text-sm transition {newKeyScopeMode === 'selected' ? 'border-primary bg-primary-soft text-primary' : 'border-line bg-surface text-ink hover:border-ink'}"
+            class="flex-1 rounded-md border px-3 py-2 text-sm transition {newKeyScopeMode === 'selected' ? 'border-primary bg-primary-soft text-primary' : 'border-hairline bg-card text-ink hover:border-ink'}"
             onclick={() => { newKeyScopeMode = 'selected'; }}
           >
             {tr('integrations.scopeSelected')}
@@ -1109,7 +1109,7 @@
     {#if newKeyScopeMode === 'selected'}
       <FormField label={tr('integrations.apiKeyWorkflows')} helper={tr('integrations.apiKeyWorkflowsHelper')}>
         {#snippet control()}
-          <div class="max-h-40 overflow-y-auto rounded-lg border border-line bg-surface p-2 space-y-1">
+          <div class="max-h-40 overflow-y-auto rounded-md border border-hairline bg-card p-2 space-y-1">
             {#if workflowsList.length === 0}
               <p class="ds-caption px-2 py-1 text-mute">{tr('integrations.noWorkflows')}</p>
             {:else}
@@ -1135,7 +1135,7 @@
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
               <p class="ds-caption mb-1.5 text-mute">{tr('integrations.toolsRead')}</p>
-              <div class="space-y-1 rounded-lg border border-line bg-surface p-2">
+              <div class="space-y-1 rounded-md border border-hairline bg-card p-2">
                 {#each READ_TOOLS as tool}
                   <label class="flex items-center gap-2 rounded px-2 py-1 text-sm text-ink hover:bg-lane/40 cursor-pointer">
                     <Checkbox checked={newKeyEnabledTools.includes(tool)} onclick={() => toggleTool(tool)} />
@@ -1146,7 +1146,7 @@
             </div>
             <div>
               <p class="ds-caption mb-1.5 text-mute">{tr('integrations.toolsWrite')}</p>
-              <div class="space-y-1 rounded-lg border border-line bg-surface p-2">
+              <div class="space-y-1 rounded-md border border-hairline bg-card p-2">
                 {#each WRITE_TOOLS as tool}
                   <label class="flex items-center gap-2 rounded px-2 py-1 text-sm text-ink hover:bg-lane/40 cursor-pointer">
                     <Checkbox checked={newKeyEnabledTools.includes(tool)} onclick={() => toggleTool(tool)} />
@@ -1156,7 +1156,7 @@
               </div>
             </div>
           </div>
-          <button type="button" class="text-xs text-primary hover:underline" onclick={resetRecommendedTools}>
+          <button type="button" class="text-badge text-primary hover:underline" onclick={resetRecommendedTools}>
             {tr('integrations.resetTools')}
           </button>
         </div>
@@ -1164,7 +1164,7 @@
     </FormField>
 
     {#if newKeyError}
-      <p class="text-xs text-status-urgent-ink">{newKeyError}</p>
+      <p class="text-badge text-status-urgent-ink">{newKeyError}</p>
     {/if}
   </form>
   {#snippet footer()}
@@ -1179,7 +1179,7 @@
 <Dialog open={Boolean(createdKey)} title={tr('integrations.apiKeyCreated')} description={tr('integrations.apiKeyCreatedWarning')} size="md" onclose={closeCreatedKeyDialog}>
   {#if createdKey}
     <div class="space-y-4">
-      <div class="flex items-start gap-2 rounded-lg border border-status-done/20 bg-status-done-soft px-3 py-2 text-xs text-status-done-ink">
+      <div class="flex items-start gap-2 rounded-md border border-status-done/20 bg-status-done-soft px-3 py-2 text-badge text-status-done-ink">
         <HugeiconsIcon icon={CheckmarkCircle02Icon} size={15} strokeWidth={1.8} class="mt-0.5 shrink-0" />
         <span>{tr('integrations.apiKeyCreatedWarning')}</span>
       </div>
@@ -1190,7 +1190,7 @@
       <div class="space-y-1">
         <p class="ds-caption text-mute">{tr('integrations.copyApiKey')}</p>
         <div class="flex gap-2">
-          <Input value={createdKey.key} readonly aria-label={tr('integrations.apiKeyLabel')} class="font-mono text-xs" />
+          <Input value={createdKey.key} readonly aria-label={tr('integrations.apiKeyLabel')} class="font-mono text-badge" />
           <Button variant="secondary" onclick={copyCreatedKey}>
             <HugeiconsIcon icon={Copy01Icon} size={15} strokeWidth={1.8} />
             {createdKeyCopied ? tr('common.copied') : tr('integrations.copyApiKey')}

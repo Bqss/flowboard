@@ -6,15 +6,17 @@
   import type { LayoutData } from '../$types';
   import { SidebarRail, Topbar, Toaster, NotificationCenter, OnboardingProvider, ChatDock, ChallengeWidget, Dialog, BottomTabBar, MobileMenuDrawer } from '$lib/components/organisms/index.js';
   import type { NotificationItem } from '$lib/components/organisms/shared.js';
-  import { Avatar, Button, Input, Logo } from '$lib/components/atoms/index.js';
+  import { Avatar, Button, Flag, Input, Logo } from '$lib/components/atoms/index.js';
+  import { LanguageSwitcher } from '$lib/components/molecules/index.js';
   import { DropdownMenu, FormField, toast, type MenuItem } from '$lib/components/molecules/index.js';
   import { dashboardIntlLocale, dashboardText } from '$lib/i18n/dashboard.js';
-  import { locale, locales, setLocale } from '$lib/i18n/index.js';
+  import { isLocale, locale, locales, setLocale } from '$lib/i18n/index.js';
   import { setMode, userPrefersMode } from 'mode-watcher';
   import { unlockNotificationSound } from '$lib/notifications/sound.js';
-  import { triggerBuzz } from '$lib/notifications/buzz.js';
+  import { triggerBuzz, CHAT_BUZZ_VIBRATE_PATTERN } from '$lib/notifications/buzz.js';
   import {
     isAutoBuzzTaskNotification,
+    isChatBuzzMessageBody,
     shouldAutoBuzzIncomingMessage
   } from '$lib/notifications/auto-buzz.js';
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -41,6 +43,7 @@
     BubbleChatIcon,
     PanelLeftOpenIcon,
     Globe02Icon,
+    ComputerIcon,
     Sun02Icon,
     Moon02Icon
   } from '@hugeicons/core-free-icons';
@@ -160,6 +163,13 @@
     }
   };
 
+  const localeOptions = $derived(
+    locales.map((lang) => ({
+      code: lang.code,
+      short: lang.short,
+      label: tr(`language.${lang.code}`) || (lang.code === 'ms' ? 'Bahasa Melayu' : 'English')
+    }))
+  );
   const themeLabels = $derived({
     light: tr('shell.themeLight'),
     dark: tr('shell.themeDark'),
@@ -705,7 +715,7 @@
 
   const notificationTargetUrl = (item: ApiNotification, workspaceId: string) => {
     if ((item.type === 'chat_message' || item.type === 'chat_reaction') && item.conversationId) {
-      return `/dashboard/chat?workspaceId=${encodeURIComponent(workspaceId)}&conversationId=${encodeURIComponent(item.conversationId)}`;
+      return `/dashboard/chat?conversationId=${encodeURIComponent(item.conversationId)}`;
     }
     if (item.boardId && item.taskId) {
       return `/dashboard/boards/${encodeURIComponent(item.boardId)}?workspaceId=${encodeURIComponent(workspaceId)}&task=${encodeURIComponent(item.taskId)}`;
@@ -789,14 +799,17 @@
     const hasAttachments =
       'attachments' in message && Array.isArray(message.attachments) && message.attachments.length > 0;
 
+    const isChatBuzz = isChatBuzzMessageBody(body);
+
     triggerBuzz({
       senderName,
-      title: tr('notifications.chatMessage'),
+      title: isChatBuzz ? `Buzz dari ${senderName}` : tr('notifications.chatMessage'),
       note: body
         ? `${senderName}: ${body}`
         : hasAttachments
           ? `${senderName}: 📎 Lampiran baharu diterima.`
           : `${senderName}: Anda menerima mesej baharu.`,
+      vibrate: isChatBuzz ? CHAT_BUZZ_VIBRATE_PATTERN : undefined,
       sound: soundAlertsEnabled
     });
   }
@@ -1067,30 +1080,30 @@
       : []),
     {
       label: tr('language.label') || 'Bahasa',
-      icon: globeIcon,
+      icon: activeLangFlagIcon,
       submenu: locales.map((lang) => ({
-        label: `${tr(`language.${lang.code}`) || (lang.code === 'ms' ? 'Bahasa Melayu' : 'English')} (${lang.short})`,
-        icon: $locale === lang.code ? checkIcon : undefined,
+        label: tr(`language.${lang.code}`) || (lang.code === 'ms' ? 'Bahasa Melayu' : 'English'),
+        icon: lang.code === 'ms' ? langFlagMsIcon : langFlagEnIcon,
         onselect: () => setLocale(lang.code)
       }))
     },
     {
-      label: tr('theme.label') || 'Tema',
+      label: tr('shell.themeGroup') || 'Tema paparan',
       icon: sunIcon,
       submenu: [
         {
-          label: 'Terang',
+          label: tr('shell.modeLight'),
           icon: userPrefersMode.current === 'light' ? checkIcon : sunIcon,
           onselect: () => setMode('light')
         },
         {
-          label: 'Gelap',
+          label: tr('shell.modeDark'),
           icon: userPrefersMode.current === 'dark' ? checkIcon : moonIcon,
           onselect: () => setMode('dark')
         },
         {
-          label: 'Sistem',
-          icon: userPrefersMode.current === 'system' ? checkIcon : undefined,
+          label: tr('shell.modeSystem'),
+          icon: userPrefersMode.current === 'system' ? checkIcon : computerIcon,
           onselect: () => setMode('system')
         }
       ]
@@ -1125,6 +1138,12 @@
   });
 </script>
 
+{#snippet langFlagEnIcon()}
+	<span class="inline-flex items-center gap-1.5"><Flag code="en" class="h-3.5 w-6" />{#if $locale === 'en'}<HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} class="text-primary" />{/if}</span>
+{/snippet}
+{#snippet langFlagMsIcon()}
+	<span class="inline-flex items-center gap-1.5"><Flag code="ms" class="h-3.5 w-6" />{#if $locale === 'ms'}<HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} class="text-primary" />{/if}</span>
+{/snippet}
 {#snippet homeIcon()}
   <HugeiconsIcon icon={Home09Icon} size={20} strokeWidth={1.8} />
 {/snippet}
@@ -1176,6 +1195,12 @@
 {/snippet}
 {#snippet menuIcon()}
   <HugeiconsIcon icon={Menu01Icon} size={20} strokeWidth={1.8} />
+{/snippet}
+{#snippet activeLangFlagIcon()}
+  <Flag code={$locale} class="h-3.5 w-6" />
+{/snippet}
+{#snippet computerIcon()}
+  <HugeiconsIcon icon={ComputerIcon} size={16} strokeWidth={1.8} />
 {/snippet}
 {#snippet globeIcon()}
   <HugeiconsIcon icon={Globe02Icon} size={16} strokeWidth={1.8} />
@@ -1235,13 +1260,13 @@
         <div class="flex items-center gap-2.5 md:hidden min-w-0">
           <a href="/dashboard" class="flex flex-col items-center shrink-0 leading-none">
             <Logo size={28} />
-            <span class="text-[9px] font-bold text-primary tracking-tight -mt-0.5">actjom</span>
+            <span class="text-tiny font-bold text-primary tracking-tight -mt-0.5">actjom</span>
           </a>
           <div class="min-w-0">
             <h1 class="text-base font-bold text-ink leading-tight truncate">
               {mobilePageTitle}
             </h1>
-            <p class="text-[11px] text-mute leading-tight truncate">
+            <p class="text-micro text-mute leading-tight truncate">
               {mobilePageSubtitle}
             </p>
           </div>
@@ -1253,7 +1278,7 @@
             <button
               type="button"
               onclick={toggleSidebar}
-              class="hidden size-9 shrink-0 items-center justify-center rounded-lg text-mute transition-colors hover:bg-canvas-sunken hover:text-ink md:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
+              class="hidden size-9 shrink-0 items-center justify-center rounded-md text-mute transition-colors hover:bg-canvas-sunken hover:text-ink md:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] cursor-pointer"
               aria-label="Kembangkan sidebar"
               title="Kembangkan sidebar (⌘B)"
             >
@@ -1272,7 +1297,7 @@
         <button
           type="button"
           onclick={() => (window as any).__onboardingReplayTour?.()}
-          class="flex size-9 shrink-0 items-center justify-center rounded-full border border-hairline bg-card text-mute shadow-control transition-colors hover:border-hairline-strong hover:text-ink"
+          class="flex size-10 shrink-0 items-center justify-center rounded-md border border-hairline bg-card text-mute shadow-control transition-colors hover:border-hairline-strong hover:text-ink"
           aria-label={tr('onboarding.tourReplay')}
           title={tr('onboarding.tourReplay')}
         >
@@ -1282,12 +1307,12 @@
           <button
             type="button"
             onclick={toggleAdminMode}
-            class="group hidden items-center gap-2 rounded-full border border-hairline bg-card px-3 py-1.5 shadow-control transition-colors hover:border-hairline-strong sm:inline-flex"
+            class="group hidden h-10 items-center gap-2 rounded-md border border-hairline bg-card px-3 shadow-control transition-colors hover:border-hairline-strong sm:inline-flex"
             aria-pressed={adminMode}
             aria-label={adminMode ? tr('nav.exitAdmin') : tr('nav.adminMode')}
             title={adminMode ? tr('nav.exitAdmin') : tr('nav.adminMode')}
           >
-            <span class="text-[11px] font-semibold tracking-wide text-mute transition-colors group-hover:text-ink">
+            <span class="text-micro font-semibold tracking-wide text-mute transition-colors group-hover:text-ink">
               {tr('nav.adminMode')}
             </span>
             <span class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {adminMode ? 'bg-primary' : 'bg-hairline-strong'}">
@@ -1297,19 +1322,15 @@
             </span>
           </button>
         {/if}
-        <div class="hidden items-center rounded-full border border-hairline bg-card p-0.5 shadow-control sm:inline-flex" aria-label={tr('language.label')}>
-          {#each locales as language}
-            <button
-              type="button"
-              class="rounded-full px-2 py-1 text-[10px] font-bold tracking-wide transition-colors {$locale === language.code ? 'bg-primary text-white' : 'text-mute hover:bg-canvas-sunken hover:text-ink'}"
-              aria-label={`${tr('language.label')}: ${tr(`language.${language.code}`)}`}
-              aria-pressed={$locale === language.code}
-              onclick={() => setLocale(language.code)}
-            >
-              {language.short}
-            </button>
-          {/each}
-        </div>
+        <LanguageSwitcher
+          value={$locale}
+          languages={localeOptions}
+          variant="compact"
+          class="hidden sm:inline-flex"
+          onchange={(code) => {
+            if (isLocale(code)) setLocale(code);
+          }}
+        />
         <NotificationCenter
           items={notificationItems}
           unreadCount={notificationUnreadCount}
@@ -1324,7 +1345,7 @@
             <button
               type="button"
               onclick={toggle}
-              class="flex items-center gap-2 rounded-full border border-hairline bg-card py-1 pl-1.5 pr-2 shadow-control transition-all hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] sm:pr-3"
+              class="flex h-10 items-center gap-2 rounded-md border border-hairline bg-card pl-1.5 pr-2 shadow-control transition-all hover:border-hairline-strong hover:bg-canvas-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] sm:pr-3"
               aria-expanded={open}
               aria-label={tr('shell.userMenu')}
 

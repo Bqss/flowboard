@@ -124,6 +124,7 @@
     {
       key: 'createdAt',
       label: tr('admin.users.joined'),
+      nowrap: true,
       render: (row) => formatDate(row.createdAt)
     },
     {
@@ -159,8 +160,8 @@
     {#if loading}
       <div class="grid grid-cols-3 gap-3 sm:gap-4">
         {#each [1, 2, 3] as _i}
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
-            <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
+          <div class="rounded-lg border border-hairline bg-card p-5 space-y-3 shadow-card">
+            <Skeleton shape="circle" class="h-9 w-9 rounded-md" />
             <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
             <Skeleton shape="rect" class="h-7 w-14 rounded-md" />
           </div>
@@ -172,19 +173,19 @@
           label={tr('admin.stats.total')}
           value={String(users.length)}
           icon={totalIcon}
-          class="rounded-2xl"
+          class="rounded-lg"
         />
         <StatCard
           label={tr('admin.stats.admins')}
           value={String(adminCount)}
           icon={adminsIcon}
-          class="rounded-2xl"
+          class="rounded-lg"
         />
         <StatCard
           label={tr('admin.stats.regular')}
           value={String(regularCount)}
           icon={regularIcon}
-          class="rounded-2xl"
+          class="rounded-lg"
         />
       </div>
     {/if}
@@ -228,7 +229,7 @@
             <Button
               size="sm"
               variant="secondary"
-              class="h-7 gap-1.5 px-2.5 text-xs font-medium"
+              class="h-7 gap-1.5 px-2.5 text-badge font-medium"
               disabled={impersonatingId === row.id}
               onclick={(e) => {
                 e.stopPropagation();

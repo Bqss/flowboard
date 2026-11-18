@@ -174,8 +174,8 @@
   {#if loading}
     <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {#each [1, 2, 3, 4] as _i}
-        <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
-          <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
+        <div class="rounded-lg border border-hairline bg-card p-5 space-y-3 shadow-card">
+          <Skeleton shape="circle" class="h-9 w-9 rounded-md" />
           <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
           <Skeleton shape="rect" class="h-7 w-14 rounded-md" />
         </div>
@@ -183,7 +183,7 @@
     </div>
     <div class="space-y-4">
       {#each [1, 2, 3] as _i}
-        <Skeleton shape="rect" class="h-32 w-full rounded-2xl" />
+        <Skeleton shape="rect" class="h-32 w-full rounded-lg" />
       {/each}
     </div>
   {:else if error}
@@ -197,25 +197,25 @@
         label={statusLabel.active}
         value={String(counts.active)}
         icon={activeIcon}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
       <StatCard
         label={statusLabel.trial}
         value={String(counts.trial)}
         icon={trialIcon}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
       <StatCard
         label={statusLabel.past_due}
         value={String(counts.past_due)}
         icon={pastDueIcon}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
       <StatCard
         label={statusLabel.canceled}
         value={String(counts.canceled)}
         icon={canceledIcon}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
     </section>
 
@@ -228,7 +228,7 @@
     />
 
     {#if filtered.length === 0}
-      <section class="rounded-2xl border border-hairline bg-card p-6 shadow-card">
+      <section class="rounded-lg border border-hairline bg-card p-6 shadow-card">
         <p class="ds-body text-mute">{tr('admin.subs.empty')}</p>
         <p class="ds-caption mt-1 text-faint">{tr('admin.subs.emptyDesc')}</p>
       </section>
@@ -236,7 +236,7 @@
       <div class="space-y-4">
         {#each filtered as sub (sub.id)}
           <article
-            class="rounded-2xl border border-hairline bg-card shadow-card transition-all duration-200 hover:border-hairline-strong hover:shadow-card-hover"
+            class="rounded-lg border border-hairline bg-card shadow-card transition-all duration-200 hover:border-hairline-strong hover:shadow-card-hover"
           >
             <div class="p-4 sm:p-5 space-y-4">
               <div class="flex flex-wrap items-start justify-between gap-4">

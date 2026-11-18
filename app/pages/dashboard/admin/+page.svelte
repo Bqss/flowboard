@@ -103,7 +103,7 @@
   <!-- Hero header -->
   <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div class="space-y-1">
-      <p class="ds-caption font-semibold uppercase tracking-wide text-primary">
+      <p class="ds-caption font-semibold text-primary">
         {tr('admin.overview.subtitle')}
       </p>
       <h1 class="ds-page-title text-ink">{tr('admin.overview.title')}</h1>
@@ -114,16 +114,16 @@
   {#if loading}
     <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {#each [1, 2, 3, 4] as _i}
-        <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
-          <Skeleton shape="circle" class="h-9 w-9 rounded-lg" />
+        <div class="rounded-lg border border-hairline bg-card p-5 space-y-3 shadow-card">
+          <Skeleton shape="circle" class="h-9 w-9 rounded-md" />
           <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
           <Skeleton shape="rect" class="h-7 w-14 rounded-md" />
         </div>
       {/each}
     </div>
     <div class="grid gap-5 lg:grid-cols-3">
-      <Skeleton shape="rect" class="h-72 rounded-2xl" />
-      <Skeleton shape="rect" class="h-72 rounded-2xl lg:col-span-2" />
+      <Skeleton shape="rect" class="h-72 rounded-lg" />
+      <Skeleton shape="rect" class="h-72 rounded-lg lg:col-span-2" />
     </div>
   {:else if error}
     <AlertBanner tone="negative" dismissible={false}>
@@ -135,25 +135,25 @@
       <StatCardHighlight
         label={tr('admin.overview.activeSubs')}
         value={String(activeCount)}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
       <StatCard
         label={tr('admin.overview.workspaces')}
         value={String(overview.workspaces)}
         icon={workspacesIcon}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
       <StatCard
         label={tr('admin.overview.users')}
         value={String(overview.users)}
         icon={usersIcon}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
       <StatCard
         label={tr('admin.overview.trialSubs')}
         value={String(overview.subscriptionsByStatus.trial ?? 0)}
         icon={trialIcon}
-        class="rounded-2xl"
+        class="rounded-lg"
       />
     </section>
 
@@ -166,11 +166,11 @@
         centerValue="{conversionPct}%"
         label="{activeCount} / {totalSubs} · {tr('admin.overview.conversionLabel')}"
         size="lg"
-        class="rounded-2xl"
+        class="rounded-lg"
       />
 
       <article
-        class="flex flex-col rounded-2xl border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-5 lg:col-span-2"
+        class="flex flex-col rounded-lg border border-hairline bg-card p-4 sm:p-6 shadow-card space-y-5 lg:col-span-2"
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="space-y-1">
@@ -225,11 +225,11 @@
         {#each shortcuts as item}
           <a
             href={item.href}
-            class="group flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover"
+            class="group flex flex-col justify-between rounded-lg border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-hairline-strong hover:shadow-card-hover"
           >
             <div class="flex items-start justify-between">
               <span
-                class="grid size-10 place-items-center rounded-lg bg-primary-soft text-primary"
+                class="grid size-10 place-items-center rounded-md bg-primary-soft text-primary"
               >
                 <HugeiconsIcon icon={item.icon} size={20} strokeWidth={1.8} />
               </span>

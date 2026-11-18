@@ -361,8 +361,8 @@
     {#if loadingData}
       <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {#each [1, 2, 3] as _i}
-          <div class="rounded-2xl border border-hairline bg-card p-5 space-y-3 shadow-card">
-            <Skeleton shape="circle" class="size-9 rounded-lg" />
+          <div class="rounded-lg border border-hairline bg-card p-5 space-y-3 shadow-card">
+            <Skeleton shape="circle" class="size-9 rounded-md" />
             <Skeleton shape="rect" class="h-4 w-24 rounded-md" />
             <Skeleton shape="rect" class="h-7 w-16 rounded-md" />
           </div>
@@ -374,26 +374,26 @@
           label={tr('members.total')}
           value={String(members.length)}
           icon={totalMembersIcon}
-          class="p-5 rounded-2xl"
+          class="p-5 rounded-lg"
         />
         <StatCard
           label={tr('members.owners')}
           value={String(ownersCount)}
           icon={ownersIcon}
-          class="p-5 rounded-2xl"
+          class="p-5 rounded-lg"
         />
         <StatCard
           label={tr('members.pendingInvites')}
           value={String(invites.length)}
           icon={pendingInvitesIcon}
-          class="p-5 rounded-2xl"
+          class="p-5 rounded-lg"
         />
       </div>
     {/if}
   </section>
 
   <!-- Members Section -->
-  <section class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
+  <section class="overflow-hidden rounded-lg border border-hairline bg-card shadow-card">
     <!-- Section Toolbar -->
     <div class="flex flex-col gap-3 border-b border-hairline p-4 sm:flex-row sm:items-center sm:justify-between">
       <Tabs
@@ -443,7 +443,7 @@
     {:else}
       <div class="overflow-x-auto" data-onboarding="members-table">
         <table class="w-full text-left text-sm">
-          <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+          <thead class="border-b border-hairline bg-canvas-sunken text-badge font-semibold text-mute">
             <tr>
               <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.nameProfile')}</th>
               <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.email')}</th>
@@ -536,7 +536,7 @@
       </div>
     {/if}
   </section>
-  <section class="rounded-2xl border border-hairline bg-card p-5 shadow-card space-y-4">
+  <section class="rounded-lg border border-hairline bg-card p-5 shadow-card space-y-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h2 class="ds-section-title text-ink">{tr('members.groupsTitle')}</h2>
@@ -554,16 +554,16 @@
     {:else}
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {#each groups as group (group.id)}
-          <article class="group rounded-2xl border border-hairline bg-card p-4 shadow-card transition-shadow hover:shadow-raised">
+          <article class="group rounded-lg border border-hairline bg-card p-4 shadow-card transition-shadow hover:shadow-raised">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="grid size-8 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+                  <span class="grid size-8 shrink-0 place-items-center rounded-md bg-primary-soft text-primary">
                     <HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} />
                   </span>
                   <div class="min-w-0">
                     <h3 class="truncate text-sm font-bold text-ink">{group.name}</h3>
-                    <p class="mt-0.5 text-xs text-mute">{tr('members.groupMembers', { count: group.members.length })}</p>
+                    <p class="mt-0.5 text-badge text-mute">{tr('members.groupMembers', { count: group.members.length })}</p>
                   </div>
                 </div>
               </div>
@@ -595,11 +595,11 @@
             </div>
             <div class="mt-4 space-y-2 border-t border-hairline pt-3">
               {#each group.members as member (member.id)}
-                <div class="flex min-w-0 items-center gap-2.5 rounded-xl bg-canvas-sunken/55 px-2.5 py-2">
+                <div class="flex min-w-0 items-center gap-2.5 rounded-md bg-canvas-sunken/55 px-2.5 py-2">
                   <Avatar name={member.name} src={member.avatarUrl ?? undefined} size={28} />
                   <div class="min-w-0">
-                    <p class="truncate text-xs font-semibold text-ink">{member.name}</p>
-                    <p class="truncate text-[11px] text-mute">{member.email}</p>
+                    <p class="truncate text-badge font-semibold text-ink">{member.name}</p>
+                    <p class="truncate text-micro text-mute">{member.email}</p>
                   </div>
                 </div>
               {/each}
@@ -612,14 +612,14 @@
 
   <!-- Pending Invites Table -->
   {#if isOwner && invites.length > 0}
-    <section class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
+    <section class="overflow-hidden rounded-lg border border-hairline bg-card shadow-card">
       <div class="border-b border-hairline px-4 py-3 sm:px-6 sm:py-4">
         <h2 class="ds-section-title text-ink">{tr('members.invitesTitle', { count: invites.length })}</h2>
       </div>
 
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm">
-          <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+          <thead class="border-b border-hairline bg-canvas-sunken text-badge font-semibold text-mute">
             <tr>
               <th class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.email')}</th>
               <th class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('members.inviteStatus')}</th>
@@ -726,9 +726,9 @@
     {/if}
 
     {#if lastInviteLink}
-      <div class="rounded-xl border border-hairline bg-lane p-4 text-sm space-y-2">
+      <div class="rounded-md border border-hairline bg-lane p-4 text-sm space-y-2">
         <p class="ds-caption text-mute">{tr('members.directLink')}</p>
-        <code class="block break-all rounded bg-card p-2 text-xs font-mono text-ink-soft border border-hairline">
+        <code class="block break-all rounded bg-card p-2 text-badge font-mono text-ink-soft border border-hairline">
           {lastInviteLink}
         </code>
         <Button
