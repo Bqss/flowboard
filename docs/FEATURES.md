@@ -38,8 +38,9 @@ Status: **v1** kecuali ditandai nanti.
 - 2.2 Stage CRUD (urutan, tipe todo / in_progress / conditional / done)
 - 2.3 Editor manual (stage + checklist + action + rule)
 - 2.4 Wizard AI: cerita proses → draf → preview → simpan (lalu edit manual)
+- 2.4a Prompt AI mendukung paste/lampiran gambar; tabel bertingkat dipetakan menjadi workflow → stage → group checklist → item checklist.
+- 2.4b Gambar hanya diproses saat provider AI multimodal dikonfigurasi; struktur nested tetap bisa diedit di setup.
 - 2.5 Generate draf template WA saat setup (teks tetap template, bukan chat live)
-- 2.6 Daftar workflow dapat difilter berdasarkan label.
 
 ## 3. Checklist + action
 

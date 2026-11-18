@@ -7,7 +7,7 @@ Kolom = stage. Checklist **bukan di kolom**, tapi di panel kanan saat kartu dikl
 
 ## Board + checklist (satu layar)
 
-Klik kartu Siti → panel kanan kebuka. Checklist yang tampil = milik **stage kartu itu sekarang** (Follow-up).
+Klik kartu Siti → panel kanan kebuka. Di board biasa checklist yang tampil milik **stage kartu itu sekarang**; di mode list semua checklist card per stage dapat ditandai.
 
 ```
 ┌─ Flowboard ──────────────────────────────────────────┬─ Card ──────────────┐
@@ -74,7 +74,7 @@ Pending Users          Follow-up                 Done
                        └─────────────┘
 ```
 
-Tiap kolom punya list sendiri. Yang tampil di panel = list stage tempat kartu duduk.
+Tiap kolom punya list sendiri. Pada mode list, item di stage aktif maupun tidak aktif dapat ditandai; checklist stage berikutnya yang masih preview menjadi item card saat pertama dicentang.
 
 ---
 

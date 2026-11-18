@@ -11,7 +11,8 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-  varchar
+  varchar,
+  type AnyPgColumn
 } from 'drizzle-orm/pg-core';
 
 export const workspaceRoleEnum = pgEnum('workspace_role', ['owner', 'member']);
@@ -517,11 +518,32 @@ export const stages = pgTable(
   (table) => [uniqueIndex('stages_workflow_position_idx').on(table.workflowId, table.position)]
 );
 
+/**
+ * Folder/group of checklist templates within a stage. Nested via parentId (max 3 levels, enforced in service).
+ * requiresCompletion: when true, all required items inside this group (incl. sub-groups) must be done
+ * before the card can advance to the next stage.
+ */
+export const checklistTemplateGroups = pgTable('checklist_template_groups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  stageId: uuid('stage_id')
+    .notNull()
+    .references(() => stages.id, { onDelete: 'cascade' }),
+  parentId: uuid('parent_id').references((): AnyPgColumn => checklistTemplateGroups.id, {
+    onDelete: 'cascade'
+  }),
+  name: text('name').notNull(),
+  requiresCompletion: boolean('requires_completion').notNull().default(false),
+  position: integer('position').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const checklistTemplates = pgTable('checklist_templates', {
   id: uuid('id').primaryKey().defaultRandom(),
   stageId: uuid('stage_id')
     .notNull()
     .references(() => stages.id, { onDelete: 'cascade' }),
+  groupId: uuid('group_id').references(() => checklistTemplateGroups.id, { onDelete: 'set null' }),
   label: text('label').notNull(),
   required: boolean('required').notNull().default(true),
   deadlineHours: integer('deadline_hours'),
@@ -586,6 +608,31 @@ export const cards = pgTable('cards', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+/**
+ * Per-card copy of a stage's checklist group tree. templateGroupId links back to the template group so
+ * template-level edits can be synced to existing cards. Set null when the template group is detached.
+ */
+export const checklistItemGroups = pgTable('checklist_item_groups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cardId: uuid('card_id')
+    .notNull()
+    .references(() => cards.id, { onDelete: 'cascade' }),
+  stageId: uuid('stage_id')
+    .notNull()
+    .references(() => stages.id, { onDelete: 'cascade' }),
+  parentId: uuid('parent_id').references((): AnyPgColumn => checklistItemGroups.id, {
+    onDelete: 'cascade'
+  }),
+  templateGroupId: uuid('template_group_id').references(() => checklistTemplateGroups.id, {
+    onDelete: 'set null'
+  }),
+  name: text('name').notNull(),
+  requiresCompletion: boolean('requires_completion').notNull().default(false),
+  position: integer('position').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const checklistItems = pgTable('checklist_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   cardId: uuid('card_id')
@@ -595,6 +642,7 @@ export const checklistItems = pgTable('checklist_items', {
     .notNull()
     .references(() => stages.id, { onDelete: 'cascade' }),
   templateId: uuid('template_id').references(() => checklistTemplates.id, { onDelete: 'set null' }),
+  groupId: uuid('group_id').references(() => checklistItemGroups.id, { onDelete: 'set null' }),
   label: text('label').notNull(),
   required: boolean('required').notNull().default(true),
   done: boolean('done').notNull().default(false),
@@ -891,6 +939,8 @@ export type ChatParticipantRole = (typeof chatParticipantRoleEnum.enumValues)[nu
 export type Workflow = typeof workflows.$inferSelect;
 export type Stage = typeof stages.$inferSelect;
 export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
+export type ChecklistTemplateGroup = typeof checklistTemplateGroups.$inferSelect;
+export type ChecklistItemGroup = typeof checklistItemGroups.$inferSelect;
 export type ChecklistAction = typeof checklistActions.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Card = typeof cards.$inferSelect;

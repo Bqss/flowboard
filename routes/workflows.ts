@@ -8,6 +8,11 @@ import { isWorkflowViewer } from '@services/workflow';
 import {
   CreateCardSchema,
   CreateChecklistTemplateSchema,
+  CreateChecklistGroupSchema,
+  DeleteChecklistGroupQuery,
+  MoveChecklistTemplateItemSchema,
+  SaveChecklistLayoutSchema,
+  UpdateChecklistGroupSchema,
   CreateStageSchema,
   CreateWorkflowSchema,
   ImportCardsSchema,
@@ -26,6 +31,7 @@ import {
   WorkflowIdParam,
   WorkflowStageParam,
   WorkflowStageTemplateParam,
+  WorkflowStageGroupParam,
   GenerateWorkflowDraftSchema,
   WorkflowDraftSchema,
   WorkspaceIdParam
@@ -154,6 +160,26 @@ export const createWorkflowsRoutes = () => {
         .delete('/stages/:stageId/templates/:templateId', workflowHandlers.deleteTemplate, {
           params: WorkflowStageTemplateParam
         })
+        .patch('/stages/:stageId/templates/:templateId/group', workflowHandlers.moveTemplateItemHandler, {
+          params: WorkflowStageTemplateParam,
+          body: MoveChecklistTemplateItemSchema
+        })
+        .put('/stages/:stageId/checklist-layout', workflowHandlers.saveChecklistLayoutHandler, {
+          params: WorkflowStageParam,
+          body: SaveChecklistLayoutSchema
+        })
+        .post('/stages/:stageId/checklist-groups', workflowHandlers.createChecklistGroupHandler, {
+          params: WorkflowStageParam,
+          body: CreateChecklistGroupSchema
+        })
+        .patch('/stages/:stageId/checklist-groups/:groupId', workflowHandlers.updateChecklistGroupHandler, {
+          params: WorkflowStageGroupParam,
+          body: UpdateChecklistGroupSchema
+        })
+        .delete('/stages/:stageId/checklist-groups/:groupId', workflowHandlers.deleteChecklistGroupHandler, {
+          params: WorkflowStageGroupParam,
+          query: DeleteChecklistGroupQuery
+        })
         .post('/cards', workflowHandlers.createCardHandler, {
           params: WorkflowIdParam,
           body: CreateCardSchema
@@ -163,6 +189,9 @@ export const createWorkflowsRoutes = () => {
           body: ImportCardsSchema
         })
         .get('/cards/:cardId', workflowHandlers.cardDetail, { params: WorkflowCardParam })
+        .get('/cards/:cardId/checklist-board', workflowHandlers.cardChecklistBoard, {
+          params: WorkflowCardParam
+        })
         .delete('/cards/:cardId', workflowHandlers.deleteCardHandler, { params: WorkflowCardParam })
         .patch('/cards/:cardId/assignee', workflowHandlers.updateAssignee, {
           params: WorkflowCardParam,

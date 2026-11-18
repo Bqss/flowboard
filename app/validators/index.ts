@@ -197,6 +197,13 @@ export const WorkflowStageTemplateParam = t.Object({
   templateId: t.String({ format: 'uuid' })
 });
 
+export const WorkflowStageGroupParam = t.Object({
+  workspaceId: t.String({ format: 'uuid' }),
+  workflowId: t.String({ format: 'uuid' }),
+  stageId: t.String({ format: 'uuid' }),
+  groupId: t.String({ format: 'uuid' })
+});
+
 export const WorkflowCardParam = t.Object({
   workspaceId: t.String({ format: 'uuid' }),
   workflowId: t.String({ format: 'uuid' }),
@@ -308,7 +315,8 @@ export const WorkflowDraftSchema = t.Object({
       autoMoveOnComplete: t.Optional(t.Boolean()),
       checklists: t.Array(
         t.Object({
-          label: t.String({ minLength: 1, maxLength: 200 }),
+          label: t.String({ minLength: 1, maxLength: 2000 }),
+          groupPath: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 120 }), { maxItems: 3 })),
           required: t.Optional(t.Boolean()),
           deadlineHours: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
           action: t.Optional(ChecklistActionDraftSchema)
@@ -326,8 +334,23 @@ export const WorkflowDraftSchema = t.Object({
   closureBy: t.Optional(t.Union([t.Literal('initiator'), t.Literal('assignee')]))
 });
 
+const WorkflowDraftImageSchema = t.Object({
+  mimeType: t.Union([
+    t.Literal('image/png'),
+    t.Literal('image/jpeg'),
+    t.Literal('image/webp'),
+    t.Literal('image/gif')
+  ]),
+  dataUrl: t.String({
+    minLength: 30,
+    maxLength: 6_000_000,
+    pattern: '^data:image/(png|jpeg|webp|gif);base64,'
+  })
+});
+
 export const GenerateWorkflowDraftSchema = t.Object({
-  prompt: t.String({ minLength: 3, maxLength: 2000 })
+  prompt: t.String(),
+  images: t.Optional(t.Array(WorkflowDraftImageSchema, { maxItems: 3 }))
 });
 
 export const McpCallSchema = t.Object({
@@ -365,12 +388,44 @@ export const ReorderStagesSchema = t.Object({
 
 export const CreateChecklistTemplateSchema = t.Object({
   label: t.String({ minLength: 1, maxLength: 200 }),
-  required: t.Optional(t.Boolean())
+  required: t.Optional(t.Boolean()),
+  deadlineHours: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()])),
+  groupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()]))
+});
+
+export const CreateChecklistGroupSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 200 }),
+  parentId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()])),
+  requiresCompletion: t.Optional(t.Boolean())
+});
+
+export const UpdateChecklistGroupSchema = t.Object({
+  name: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+  requiresCompletion: t.Optional(t.Boolean())
+});
+
+export const DeleteChecklistGroupQuery = t.Object({
+  mode: t.Optional(t.Union([t.Literal('with_items'), t.Literal('move_up')]))
+});
+
+export const SaveChecklistLayoutSchema = t.Object({
+  items: t.Array(
+    t.Object({
+      id: t.String({ format: 'uuid' }),
+      groupId: t.Union([t.String({ format: 'uuid' }), t.Null()]),
+      position: t.Number({ minimum: 0 })
+    })
+  )
+});
+
+export const MoveChecklistTemplateItemSchema = t.Object({
+  groupId: t.Union([t.String({ format: 'uuid' }), t.Null()])
 });
 
 export const UpdateChecklistTemplateSchema = t.Object({
   label: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
-  required: t.Optional(t.Boolean())
+  required: t.Optional(t.Boolean()),
+  deadlineHours: t.Optional(t.Union([t.Integer({ minimum: 1, maximum: 720 }), t.Null()]))
 });
 
 export const CreateCardSchema = t.Object({
@@ -409,7 +464,8 @@ export const ToggleChecklistItemSchema = t.Object({
 
 export const AddCardChecklistSchema = t.Object({
   label: t.String({ minLength: 1, maxLength: 500 }),
-  required: t.Optional(t.Boolean())
+  required: t.Optional(t.Boolean()),
+  groupId: t.Optional(t.Union([t.String({ format: 'uuid' }), t.Null()]))
 });
 const WajomToolLiteral = t.Union([
   t.Literal('get_onboarding_status'),

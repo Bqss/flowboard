@@ -15,6 +15,7 @@ import {
   deleteStage,
   deleteWorkflow,
   getBoard,
+  getCardChecklistBoard,
   getCardDetail,
   getDashboardStats,
   getStageInWorkflow,
@@ -34,6 +35,15 @@ import {
   updateTemplateAction,
   updateWorkflow
 } from '@services/workflow';
+import {
+  createChecklistTemplateGroup,
+  saveChecklistItemLayout,
+  deleteChecklistTemplateGroup,
+  moveChecklistTemplateItem,
+  updateChecklistTemplateGroup,
+  type DeleteGroupMode
+} from '@services/checklist-group';
+import { ChecklistGroupError } from '../lib/checklist-group';
 
 type WorkspaceParams = { workspaceId: string };
 type WorkflowParams = WorkspaceParams & { workflowId: string };
@@ -108,11 +118,25 @@ type UpdateTemplateActionBody = {
 type CreateTemplateBody = {
   label: string;
   required?: boolean;
+  deadlineHours?: number | null;
+  groupId?: string | null;
+};
+
+type CreateChecklistGroupBody = {
+  name: string;
+  parentId?: string | null;
+  requiresCompletion?: boolean;
+};
+
+type UpdateChecklistGroupBody = {
+  name?: string;
+  requiresCompletion?: boolean;
 };
 
 type UpdateTemplateBody = {
   label?: string;
   required?: boolean;
+  deadlineHours?: number | null;
 };
 
 type CreateCardBody = {
@@ -150,7 +174,7 @@ type ToggleItemBody = {
 };
 
 const handleWorkflowError = (error: unknown, set: Ctx['set']) => {
-  if (error instanceof WorkflowError) {
+  if (error instanceof WorkflowError || error instanceof ChecklistGroupError) {
     set.status = error.code === 'not_found' ? 404 : 400;
     return { error: error.message };
   }
@@ -383,11 +407,14 @@ export async function setup({ workflow, membership, set }: Ctx<unknown, Workflow
       onReplyNotify: row.stage.onReplyNotify,
       overdueReminderHours: row.stage.overdueReminderHours,
       nextWorkflowId: row.stage.nextWorkflowId,
+      groups: row.groups,
       templates: row.templates.map(({ template, action }) => ({
         id: template.id,
         label: template.label,
         required: template.required,
+        deadlineHours: template.deadlineHours,
         position: template.position,
+        groupId: template.groupId,
         action: action
           ? {
               kind: action.kind,
@@ -541,8 +568,12 @@ export async function createTemplate({
     return { error: 'Stage not found' };
   }
 
-  const template = await createChecklistTemplate(stage.id, body);
-  return { template };
+  try {
+    const template = await createChecklistTemplate(stage.id, body);
+    return { template };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
 }
 
 export async function updateTemplate({
@@ -597,13 +628,12 @@ export async function deleteTemplate({
     return { error: 'Stage not found' };
   }
 
-  const deleted = await deleteChecklistTemplate(params.templateId);
-  if (!deleted || deleted.stageId !== stage.id) {
-    set.status = 404;
-    return { error: 'Template not found' };
+  try {
+    await deleteChecklistTemplate(stage.id, params.templateId);
+    return { ok: true };
+  } catch (error) {
+    return handleWorkflowError(error, set);
   }
-
-  return { ok: true };
 }
 
 export async function updateTemplateActionHandler({
@@ -869,16 +899,21 @@ export async function toggleItem({
 }
 
 export async function addCardChecklistItem({
+  user,
   workflow,
   membership,
   params,
   body,
   set
-}: Ctx<{ label: string; required?: boolean }, CardParams>) {
-  if (!workflow || !membership) {
+}: Ctx<{ label: string; required?: boolean; groupId?: string | null }, CardParams>) {
+  if (!user || !workflow || !membership) {
     set.status = 404;
     return { error: 'Workflow not found' };
   }
+
+  // Drawer add writes to the stage template (mirrored to all cards), so it needs manager rights.
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
 
   try {
     const item = await addChecklistItemToCard(workflow.id, params.cardId, body);
@@ -889,19 +924,188 @@ export async function addCardChecklistItem({
 }
 
 export async function deleteCardChecklistItem({
+  user,
   workflow,
   membership,
   params,
   set
 }: Ctx<unknown, ItemParams>) {
+  if (!user || !workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  // Drawer delete removes the item from the stage template too, so it needs manager rights.
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
+
+  try {
+    const ok = await deleteChecklistItemFromCard(workflow.id, params.cardId, params.itemId);
+    return { ok };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
+}
+
+export async function createChecklistGroupHandler({
+  user,
+  workflow,
+  membership,
+  params,
+  body,
+  set
+}: Ctx<CreateChecklistGroupBody, StageParams>) {
+  if (!user || !workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
+
+  const stage = await getStageInWorkflow(workflow.id, params.stageId);
+  if (!stage) {
+    set.status = 404;
+    return { error: 'Stage not found' };
+  }
+
+  try {
+    const group = await createChecklistTemplateGroup(stage.id, body);
+    return { group };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
+}
+
+export async function updateChecklistGroupHandler({
+  user,
+  workflow,
+  membership,
+  params,
+  body,
+  set
+}: Ctx<UpdateChecklistGroupBody, StageParams & { groupId: string }>) {
+  if (!user || !workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
+
+  const stage = await getStageInWorkflow(workflow.id, params.stageId);
+  if (!stage) {
+    set.status = 404;
+    return { error: 'Stage not found' };
+  }
+
+  try {
+    const group = await updateChecklistTemplateGroup(stage.id, params.groupId, body);
+    return { group };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
+}
+
+export async function deleteChecklistGroupHandler({
+  user,
+  workflow,
+  membership,
+  params,
+  query,
+  set
+}: Ctx<unknown, StageParams & { groupId: string }> & { query: { mode?: DeleteGroupMode } }) {
+  if (!user || !workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
+
+  const stage = await getStageInWorkflow(workflow.id, params.stageId);
+  if (!stage) {
+    set.status = 404;
+    return { error: 'Stage not found' };
+  }
+
+  try {
+    await deleteChecklistTemplateGroup(stage.id, params.groupId, query.mode ?? 'move_up');
+    return { ok: true };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
+}
+
+export async function moveTemplateItemHandler({
+  user,
+  workflow,
+  membership,
+  params,
+  body,
+  set
+}: Ctx<{ groupId: string | null }, StageParams & { templateId: string }>) {
+  if (!user || !workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
+
+  const stage = await getStageInWorkflow(workflow.id, params.stageId);
+  if (!stage) {
+    set.status = 404;
+    return { error: 'Stage not found' };
+  }
+
+  try {
+    const template = await moveChecklistTemplateItem(stage.id, params.templateId, body.groupId);
+    return { template };
+  } catch (error) {
+    return handleWorkflowError(error, set);
+  }
+}
+
+export async function cardChecklistBoard({ workflow, membership, params, set }: Ctx<unknown, CardParams>) {
   if (!workflow || !membership) {
     set.status = 404;
     return { error: 'Workflow not found' };
   }
 
+  const board = await getCardChecklistBoard(workflow.id, params.cardId);
+  if (!board) {
+    set.status = 404;
+    return { error: 'Card not found' };
+  }
+  return { board };
+}
+
+export async function saveChecklistLayoutHandler({
+  user,
+  workflow,
+  membership,
+  params,
+  body,
+  set
+}: Ctx<{ items: Array<{ id: string; groupId: string | null; position: number }> }, StageParams>) {
+  if (!user || !workflow || !membership) {
+    set.status = 404;
+    return { error: 'Workflow not found' };
+  }
+
+  const denied = requireManager(user, membership, workflow, set);
+  if (denied) return denied;
+
+  const stage = await getStageInWorkflow(workflow.id, params.stageId);
+  if (!stage) {
+    set.status = 404;
+    return { error: 'Stage not found' };
+  }
+
   try {
-    const ok = await deleteChecklistItemFromCard(workflow.id, params.cardId, params.itemId);
-    return { ok };
+    await saveChecklistItemLayout(stage.id, body.items);
+    return { ok: true };
   } catch (error) {
     return handleWorkflowError(error, set);
   }

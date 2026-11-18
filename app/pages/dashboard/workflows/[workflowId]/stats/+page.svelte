@@ -236,10 +236,10 @@
     <div class="space-y-6 pt-2">
       <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {#each [1, 2, 3, 4] as _i}
-          <div class="rounded-2xl bg-card p-5 space-y-3 shadow-card border border-hairline">
+          <div class="rounded-lg bg-card p-5 space-y-3 shadow-card border border-hairline">
             <div class="flex justify-between items-center">
               <Skeleton shape="rect" class="h-4 w-20 rounded-md" />
-              <Skeleton shape="rect" class="h-9 w-9 rounded-xl" />
+              <Skeleton shape="rect" class="h-9 w-9 rounded-md" />
             </div>
             <Skeleton shape="rect" class="h-8 w-16 rounded-md" />
             <Skeleton shape="rect" class="h-3 w-32 rounded-md" />
@@ -247,13 +247,13 @@
         {/each}
       </div>
       <div class="grid gap-5 lg:grid-cols-2">
-        <div class="rounded-2xl bg-card p-5 space-y-4 shadow-card border border-hairline">
+        <div class="rounded-lg bg-card p-5 space-y-4 shadow-card border border-hairline">
           <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
-          <Skeleton shape="rect" class="h-32 w-full rounded-xl" />
+          <Skeleton shape="rect" class="h-32 w-full rounded-md" />
         </div>
-        <div class="rounded-2xl bg-card p-5 space-y-4 shadow-card border border-hairline">
+        <div class="rounded-lg bg-card p-5 space-y-4 shadow-card border border-hairline">
           <Skeleton shape="rect" class="h-6 w-36 rounded-md" />
-          <Skeleton shape="rect" class="h-32 w-full rounded-xl" />
+          <Skeleton shape="rect" class="h-32 w-full rounded-md" />
         </div>
       </div>
     </div>
@@ -261,7 +261,7 @@
     {@const totalActive = stats.totals.active ?? 0}
     {@const totalDone = stats.totals.done ?? 0}
     {@const totalAll = totalActive + totalDone}
-    {@const stageColors = ['#6366f1', '#f59e0b', '#22c55e', '#ec4899', '#06b6d4', '#8b5cf6', '#f43f5e', '#14b8a6']}
+    {@const stageColors = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)', 'var(--color-chart-6)', 'var(--color-chart-7)', 'var(--color-chart-8)']}
     {@const donutData = stats.byStage.map((s, i) => ({ label: s.stageName, value: s.total, color: stageColors[i % stageColors.length] }))}
     {@const donutSize = 160}
     {@const donutStroke = 28}
@@ -284,10 +284,10 @@
       <!-- 4 Key Metrics Cards -->
       <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <!-- Active -->
-        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
+        <div class="rounded-lg bg-card p-5 shadow-card border border-hairline space-y-3">
           <div class="flex items-center justify-between">
-            <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsActive')}</span>
-            <div class="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
+            <span class="ds-caption font-semibold text-mute">{tr('board.statsActive')}</span>
+            <div class="flex size-9 items-center justify-center rounded-md bg-primary-soft text-primary">
               <HugeiconsIcon icon={Layers01Icon} size={18} strokeWidth={1.8} />
             </div>
           </div>
@@ -298,10 +298,10 @@
         </div>
 
         <!-- Waiting -->
-        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
+        <div class="rounded-lg bg-card p-5 shadow-card border border-hairline space-y-3">
           <div class="flex items-center justify-between">
-            <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsWaiting')}</span>
-            <div class="flex size-9 items-center justify-center rounded-xl bg-status-progress-soft text-status-progress-ink">
+            <span class="ds-caption font-semibold text-mute">{tr('board.statsWaiting')}</span>
+            <div class="flex size-9 items-center justify-center rounded-md bg-status-progress-soft text-status-progress-ink">
               <HugeiconsIcon icon={Clock01Icon} size={18} strokeWidth={1.8} />
             </div>
           </div>
@@ -312,10 +312,10 @@
         </div>
 
         <!-- Overdue -->
-        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
+        <div class="rounded-lg bg-card p-5 shadow-card border border-hairline space-y-3">
           <div class="flex items-center justify-between">
-            <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsOverdue')}</span>
-            <div class="flex size-9 items-center justify-center rounded-xl bg-status-urgent-soft text-status-urgent-ink">
+            <span class="ds-caption font-semibold text-mute">{tr('board.statsOverdue')}</span>
+            <div class="flex size-9 items-center justify-center rounded-md bg-status-urgent-soft text-status-urgent-ink">
               <HugeiconsIcon icon={Alert02Icon} size={18} strokeWidth={1.8} />
             </div>
           </div>
@@ -326,10 +326,10 @@
         </div>
 
         <!-- Done -->
-        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-3">
+        <div class="rounded-lg bg-card p-5 shadow-card border border-hairline space-y-3">
           <div class="flex items-center justify-between">
-            <span class="ds-caption text-mute uppercase tracking-wider">{tr('board.statsDone')}</span>
-            <div class="flex size-9 items-center justify-center rounded-xl bg-status-done-soft text-status-done-ink">
+            <span class="ds-caption font-semibold text-mute">{tr('board.statsDone')}</span>
+            <div class="flex size-9 items-center justify-center rounded-md bg-status-done-soft text-status-done-ink">
               <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
             </div>
           </div>
@@ -349,7 +349,7 @@
       <!-- Middle Grid: Donut by Stage & Team Workload -->
       <div class="grid gap-5 lg:grid-cols-2">
         <!-- Donut Chart: Distribution by Stage -->
-        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-4">
+        <div class="rounded-lg bg-card p-5 shadow-card border border-hairline space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="ds-section-title text-ink">{tr('board.statsByStage')}</h3>
             <span class="ds-caption text-mute">{stats.byStage.length} peringkat</span>
@@ -361,14 +361,14 @@
             <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6 pt-2">
               <div class="relative shrink-0" style="width: {donutSize}px; height: {donutSize}px">
                 <svg width={donutSize} height={donutSize} viewBox="0 0 {donutSize} {donutSize}" style="transform: rotate(-90deg)">
-                  <circle cx={donutSize / 2} cy={donutSize / 2} r={donutResult.radius} fill="none" stroke="var(--color-lane, #e8edf4)" stroke-width={donutStroke} />
+                  <circle cx={donutSize / 2} cy={donutSize / 2} r={donutResult.radius} fill="none" stroke="var(--color-lane)" stroke-width={donutStroke} />
                   {#each donutResult.segments as seg}
                     <circle cx={donutSize / 2} cy={donutSize / 2} r={donutResult.radius} fill="none" stroke={seg.color} stroke-width={donutStroke} stroke-dasharray={seg.dash} stroke-dashoffset={seg.offset} />
                   {/each}
                 </svg>
                 <div class="absolute inset-0 flex flex-col items-center justify-center">
                   <span class="ds-stat text-ink text-xl sm:text-2xl">{donutResult.total}</span>
-                  <span class="ds-caption text-mute text-[11px]">total</span>
+                  <span class="ds-caption text-mute text-micro">total</span>
                 </div>
               </div>
 
@@ -381,7 +381,7 @@
                     <span class="size-3 rounded-full shrink-0" style="background: {seg.color}"></span>
                     <span class="ds-label text-ink truncate flex-1">{seg.label}</span>
                     {#if stage?.overdue > 0}
-                      <span class="inline-flex items-center rounded-full bg-status-urgent-soft text-status-urgent-ink px-1.5 py-0.2 text-[12px] font-semibold shrink-0">
+                      <span class="inline-flex items-center rounded-full bg-status-urgent-soft text-status-urgent-ink px-1.5 py-0.5 text-badge font-semibold shrink-0">
                         {stage.overdue} {tr('board.statsOverdue').toLowerCase()}
                       </span>
                     {/if}
@@ -395,7 +395,7 @@
         </div>
 
         <!-- Team Workload -->
-        <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-4">
+        <div class="rounded-lg bg-card p-5 shadow-card border border-hairline space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="ds-section-title text-ink">{tr('board.statsByAssignee')}</h3>
             <span class="ds-caption text-mute">{stats.byAssignee.length} PIC</span>
@@ -406,7 +406,7 @@
               <p class="ds-body text-mute py-8 text-center">{tr('board.unassigned')}</p>
             {:else}
               {#each stats.byAssignee as assignee (assignee.assigneeId ?? 'unassigned')}
-                <div class="flex items-center justify-between gap-3 rounded-xl bg-canvas-sunken/50 p-3 transition-colors hover:bg-canvas-sunken">
+                <div class="flex items-center justify-between gap-3 rounded-md bg-canvas-sunken/50 p-3 transition-colors hover:bg-canvas-sunken">
                   <div class="flex items-center gap-2.5 min-w-0">
                     <Avatar name={assignee.assigneeName ?? tr('board.statsUnassigned')} size={30} />
                     <div class="min-w-0">
@@ -418,21 +418,21 @@
                   </div>
 
                   <div class="flex flex-wrap items-center gap-1.5 shrink-0">
-                    <Badge tone="queued" variant="soft" class="text-[12px] font-semibold">
+                    <Badge tone="queued" variant="soft" class="text-badge font-semibold">
                       {assignee.active} {tr('board.statsActive').toLowerCase()}
                     </Badge>
                     {#if assignee.waiting > 0}
-                      <Badge tone="progress" variant="soft" class="text-[12px] font-semibold">
+                      <Badge tone="progress" variant="soft" class="text-badge font-semibold">
                         {assignee.waiting} {tr('board.statsWaiting').toLowerCase()}
                       </Badge>
                     {/if}
                     {#if assignee.overdue > 0}
-                      <Badge tone="urgent" variant="soft" class="text-[12px] font-semibold">
+                      <Badge tone="urgent" variant="soft" class="text-badge font-semibold">
                         {assignee.overdue} {tr('board.statsOverdue').toLowerCase()}
                       </Badge>
                     {/if}
                     {#if assignee.done > 0}
-                      <Badge tone="done" variant="soft" class="text-[12px] font-semibold">
+                      <Badge tone="done" variant="soft" class="text-badge font-semibold">
                         {assignee.done} {tr('board.statsDone').toLowerCase()}
                       </Badge>
                     {/if}
@@ -445,7 +445,7 @@
       </div>
 
       <!-- Line Chart: Activity Over Time -->
-      <div class="rounded-2xl bg-card p-5 shadow-card border border-hairline space-y-5">
+      <div class="rounded-lg bg-card p-5 shadow-card border border-hairline space-y-5">
         <div class="flex items-center justify-between flex-wrap gap-3">
           <h3 class="ds-section-title text-ink">{tr('board.statsByTime')}</h3>
           <div class="flex items-center gap-4">
@@ -462,7 +462,7 @@
 
         {#if statsLoading}
           <div class="flex items-center justify-center py-12">
-            <Skeleton shape="rect" class="h-48 w-full rounded-xl" />
+            <Skeleton shape="rect" class="h-48 w-full rounded-md" />
           </div>
         {:else if stats.byTime.length === 0}
           <p class="ds-body text-mute py-8 text-center">Tiada data aktiviti dalam tempoh ini</p>
@@ -473,14 +473,14 @@
                 {@const ratio = i / tickCount}
                 <line
                   x1="0" y1={chartH * ratio} x2={chartW} y2={chartH * ratio}
-                  stroke="var(--color-hairline, #e2e8f0)" stroke-width="1" stroke-dasharray="4 4"
+                  stroke="var(--color-hairline)" stroke-width="1" stroke-dasharray="4 4"
                 />
               {/each}
               {#if createdPath.line}
                 <path d={createdPath.area} fill="rgba(79, 70, 229, 0.06)" />
                 <path
                   d={createdPath.line} fill="none"
-                  stroke="var(--color-primary, #4f46e5)" stroke-width="2.5"
+                  stroke="var(--color-primary)" stroke-width="2.5"
                   stroke-linecap="round" stroke-linejoin="round"
                 />
                 {#each createdData as val, i}
@@ -489,14 +489,14 @@
                   {@const max = maxChartVal}
                   {@const range = max - min || 1}
                   {@const y = 8 + (1 - (val - min) / range) * (chartH - 16)}
-                  <circle cx={x} cy={y} r="3" fill="var(--color-primary, #4f46e5)" />
+                  <circle cx={x} cy={y} r="3" fill="var(--color-primary)" />
                 {/each}
               {/if}
               {#if completedPath.line}
                 <path d={completedPath.area} fill="rgba(34, 197, 94, 0.06)" />
                 <path
                   d={completedPath.line} fill="none"
-                  stroke="var(--color-status-done, #22c55e)" stroke-width="2.5"
+                  stroke="var(--color-status-done)" stroke-width="2.5"
                   stroke-linecap="round" stroke-linejoin="round"
                 />
                 {#each completedData as val, i}
@@ -505,7 +505,7 @@
                   {@const max = maxChartVal}
                   {@const range = max - min || 1}
                   {@const y = 8 + (1 - (val - min) / range) * (chartH - 16)}
-                  <circle cx={x} cy={y} r="3" fill="var(--color-status-done, #22c55e)" />
+                  <circle cx={x} cy={y} r="3" fill="var(--color-status-done)" />
                 {/each}
               {/if}
             </svg>

@@ -251,10 +251,7 @@
   let manualOpen = $state(false);
   let name = $state('');
   let manualLabels = $state<string[]>([]);
-  let manualUrgency = $state<'high' | 'medium' | 'low'>('medium');
   let manualAssigneeIds = $state<string[]>([]);
-  let manualDeadlineValue = $state<string | number>('');
-  let manualDeadlineUnit = $state<'hours' | 'days'>('days');
   let manualRepeatRule = $state<'none' | 'daily' | 'weekly' | 'monthly'>('none');
   let manualClosureBy = $state<'initiator' | 'assignee'>('initiator');
   let loading = $state(false);
@@ -268,11 +265,8 @@
     chooseOpen = false;
     name = '';
     manualLabels = [];
-    manualUrgency = 'medium';
     manualAssigneeIds = [];
     manualGroupId = '';
-    manualDeadlineValue = '';
-    manualDeadlineUnit = 'days';
     manualRepeatRule = 'none';
     manualClosureBy = 'initiator';
     error = null;
@@ -305,17 +299,12 @@
     loading = true;
     error = null;
     try {
-      const rawDeadline = String(manualDeadlineValue ?? '').trim();
-      const deadlineVal = rawDeadline ? Number(rawDeadline) : null;
       const { workflow } = await api.createWorkflow(data.workspace.id, {
         name: name.trim(),
         workspaceMemberGroupIds: manualGroupIds,
         allowedUserIds: manualAllowedUserIds,
         labels: manualLabels,
         defaultAssigneeIds: manualAssigneeIds,
-        urgency: manualUrgency,
-        deadlineValue: deadlineVal && deadlineVal > 0 ? deadlineVal : null,
-        deadlineUnit: manualDeadlineUnit,
         repeatRule: manualRepeatRule,
         closureBy: manualClosureBy
       });
@@ -418,28 +407,28 @@
     : (wf.workspaceMemberGroupId ? [wf.workspaceMemberGroupId] : [])}
   {@const allowedUsers = wf.allowedUserIds ?? []}
   {#if groupIds.length === 0 && allowedUsers.length === 0}
-    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">Publik</Badge>
+    <Badge tone="idle" variant="soft" class="px-2 py-0.5 text-tiny sm:text-micro font-semibold">Publik</Badge>
   {:else}
     <div class="flex flex-wrap items-center gap-1">
       {#if groupIds.length === 1}
         {@const matchedGroup = groups.find((g) => g.id === groupIds[0])}
-        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
           <span>{matchedGroup?.name ?? '1 Departemen'}</span>
         </Badge>
       {:else if groupIds.length > 1}
-        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="queued" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <HugeiconsIcon icon={UserGroupIcon} size={11} strokeWidth={2} />
           <span>{groupIds.length} Departemen</span>
         </Badge>
       {/if}
       {#if allowedUsers.length === 1}
         {@const matchedMember = members.find((m) => m.id === allowedUsers[0])}
-        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <span>{matchedMember?.name ?? '1 Pengguna'}</span>
         </Badge>
       {:else if allowedUsers.length > 1}
-        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold">
+        <Badge tone="progress" variant="soft" class="gap-1 px-2 py-0.5 text-tiny sm:text-micro font-semibold">
           <span>{allowedUsers.length} Pengguna</span>
         </Badge>
       {/if}
@@ -465,7 +454,7 @@
     <div class="flex items-center justify-between gap-3 pt-0.5 sm:pt-1">
       <div class="min-w-0">
         <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-ink">{tr('common.workflows')}</h1>
-        <p class="text-xs sm:text-sm font-normal leading-relaxed text-mute mt-0.5 sm:mt-1 truncate sm:whitespace-normal">{tr('workflows.description')}</p>
+        <p class="text-badge sm:text-sm font-normal leading-relaxed text-mute mt-0.5 sm:mt-1 truncate sm:whitespace-normal">{tr('workflows.description')}</p>
       </div>
       <Button variant="primary" size="sm" onclick={openChooser} class="hidden sm:inline-flex sm:h-10 sm:px-4 sm:text-sm shrink-0 shadow-xs" data-onboarding="create-workflow">
         <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={2} />
@@ -486,7 +475,7 @@
             class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
           />
           <input
-            class="h-9 sm:h-10 w-full rounded-xl bg-card pl-9 pr-8 text-sm sm:text-base text-ink placeholder:text-mute/70 ring-1 ring-hairline/30 transition-all focus:ring-2 focus:ring-[var(--focus)] focus:outline-none"
+            class="h-9 sm:h-10 w-full rounded-md bg-card pl-9 pr-8 text-sm sm:text-base text-ink placeholder:text-mute/70 ring-1 ring-hairline/30 transition-all focus:ring-2 focus:ring-[var(--focus)] focus:outline-none"
             bind:value={workflowSearch}
             placeholder={tr('common.search') + '…'}
           />
@@ -510,10 +499,10 @@
         />
       </div>
 
-      <div class="flex items-center justify-between sm:justify-end gap-3 text-xs sm:text-[13px] text-mute font-medium px-0.5 sm:px-0">
+      <div class="flex items-center justify-between sm:justify-end gap-3 text-badge sm:text-meta text-mute font-medium px-0.5 sm:px-0">
         <span>{filteredWorkflows.length} {filteredWorkflows.length === 1 ? 'workflow' : 'workflows'}</span>
         <div
-          class="inline-flex items-center gap-0.5 rounded-xl border border-hairline/60 bg-lane p-1"
+          class="inline-flex items-center gap-0.5 rounded-md border border-hairline/60 bg-lane p-1"
           role="radiogroup"
           aria-label={tr('common.viewMode')}
         >
@@ -524,7 +513,7 @@
             aria-label={tr('common.viewGrid')}
             title={tr('common.viewGrid')}
             onclick={() => setViewMode('grid')}
-            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'grid' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+            class="flex size-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'grid' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
           >
             <HugeiconsIcon icon={GridViewIcon} size={16} strokeWidth={1.8} />
           </button>
@@ -535,7 +524,7 @@
             aria-label={tr('common.viewList')}
             title={tr('common.viewList')}
             onclick={() => setViewMode('list')}
-            class="flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'list' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
+            class="flex size-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] {viewMode === 'list' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink'}"
           >
             <HugeiconsIcon icon={ListViewIcon} size={16} strokeWidth={1.8} />
           </button>
@@ -548,18 +537,18 @@
   {#if loadingData}
     <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {#each [1, 2, 3] as _i}
-        <div class="flex flex-col justify-between rounded-2xl border border-hairline bg-card p-5 space-y-5 shadow-card">
+        <div class="flex flex-col justify-between rounded-lg border border-hairline bg-card p-5 space-y-5 shadow-card">
           <div class="space-y-3">
             <div class="flex items-center justify-between">
-              <Skeleton shape="rect" class="size-10 rounded-xl" />
-              <Skeleton shape="rect" class="size-6 rounded-lg" />
+              <Skeleton shape="rect" class="size-10 rounded-md" />
+              <Skeleton shape="rect" class="size-6 rounded-md" />
             </div>
             <Skeleton shape="rect" class="h-5 w-40 rounded-md" />
             <Skeleton shape="rect" class="h-4 w-28 rounded-md" />
           </div>
           <div class="border-t border-hairline pt-3 flex justify-between items-center">
-            <Skeleton shape="rect" class="h-8 w-20 rounded-lg" />
-            <Skeleton shape="rect" class="h-8 w-28 rounded-lg" />
+            <Skeleton shape="rect" class="h-8 w-20 rounded-md" />
+            <Skeleton shape="rect" class="h-8 w-28 rounded-md" />
           </div>
         </div>
       {/each}
@@ -572,7 +561,7 @@
       onaction={openChooser}
     />
   {:else if filteredWorkflows.length === 0}
-    <div class="rounded-2xl border border-hairline bg-card p-10 text-center space-y-3 shadow-card">
+    <div class="rounded-lg border border-hairline bg-card p-10 text-center space-y-3 shadow-card">
       <HugeiconsIcon icon={Search01Icon} size={32} strokeWidth={1.5} class="mx-auto text-faint" />
       <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
       <p class="text-sm font-normal leading-relaxed text-mute">
@@ -592,13 +581,13 @@
               .filter((m): m is ApiWorkspaceMember => Boolean(m))}
             {@const canManage = canManageWorkflow(workflow)}
 
-            <article class="group relative flex flex-col justify-between rounded-2xl border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover min-w-0 overflow-hidden" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
+            <article class="group relative flex flex-col justify-between rounded-lg border border-hairline bg-card p-4 sm:p-5 shadow-card transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover min-w-0 overflow-hidden" {...i === 0 ? { 'data-onboarding': 'workflow-card' } : {}}>
               <!-- TOP SECTION -->
               <div class="space-y-3 sm:space-y-3.5">
                 <div class="flex items-start justify-between gap-3">
                   <!-- ICON BADGE & TITLE -->
                   <div class="flex items-center gap-3 min-w-0">
-                    <div class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                    <div class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-on-primary">
                       <HugeiconsIcon icon={WorkflowSquare01Icon} size={19} strokeWidth={1.8} />
                     </div>
                     <div class="min-w-0 flex-1">
@@ -613,14 +602,14 @@
                         {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
                         <div class="flex flex-wrap gap-1 mt-1">
                           {#each wfLabels as tag (tag)}
-                            <Badge tone="info" variant="soft" class="px-1.5 py-0.2 text-[10px] font-semibold">
+                            <Badge tone="info" variant="soft" class="px-1.5 py-0.5 text-tiny font-semibold">
                               {tag}
                             </Badge>
                           {/each}
                         </div>
                       {/if}
                       {#if workflow.createdAt}
-                        <span class="block text-[11px] text-faint">
+                        <span class="block text-micro text-faint">
                           {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       {/if}
@@ -638,7 +627,7 @@
                             e.stopPropagation();
                             openDeleteWorkflow(workflow);
                           }}
-                          class="flex size-8 items-center justify-center rounded-lg text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                          class="flex size-8 items-center justify-center rounded-md text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                           aria-label={tr('common.delete')}
                         >
                           <HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} />
@@ -649,7 +638,7 @@
                 </div>
 
                 <!-- ASSIGNEES / PIC INFO -->
-                <div class="rounded-xl bg-canvas-sunken/60 p-2.5 flex items-center justify-between gap-2 border border-hairline/60 min-w-0">
+                <div class="rounded-md bg-canvas-sunken/60 p-2.5 flex items-center justify-between gap-2 border border-hairline/60 min-w-0">
                   <div class="flex items-center gap-2 min-w-0 flex-1">
                     {#if assigned.length > 0}
                       <div class="flex items-center -space-x-2 shrink-0">
@@ -661,16 +650,16 @@
                           </Tooltip>
                         {/each}
                         {#if assigned.length > 3}
-                          <div class="flex size-6 items-center justify-center rounded-full bg-lane ring-2 ring-card text-[10px] font-bold text-ink">
+                          <div class="flex size-6 items-center justify-center rounded-full bg-lane ring-2 ring-card text-tiny font-bold text-ink">
                             +{assigned.length - 3}
                           </div>
                         {/if}
                       </div>
-                      <span class="truncate font-medium text-ink text-xs">
+                      <span class="truncate font-medium text-ink text-badge">
                         {assigned.map(m => m.name).slice(0, 2).join(', ')}{assigned.length > 2 ? ` (+${assigned.length - 2})` : ''}
                       </span>
                     {:else}
-                      <div class="flex items-center gap-1.5 text-mute text-xs">
+                      <div class="flex items-center gap-1.5 text-mute text-badge">
                         <HugeiconsIcon icon={UserGroupIcon} size={14} strokeWidth={1.8} class="text-faint" />
                         <span>{workflow.ownerName ?? tr('common.unassigned')}</span>
                       </div>
@@ -678,7 +667,7 @@
                   </div>
 
                   {#if assigned.length > 0}
-                    <Badge tone="queued" variant="soft" class="text-[10px] font-semibold py-0.5 px-2 shrink-0">
+                    <Badge tone="queued" variant="soft" class="text-tiny font-semibold py-0.5 px-2 shrink-0">
                       {tr('workflows.picCount', { count: assigned.length })}
                     </Badge>
                   {/if}
@@ -695,7 +684,7 @@
                   href="/dashboard/workflows/{workflow.id}/settings"
                   variant="secondary"
                   size="sm"
-                  class="flex-1 min-w-0 justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-xs text-mute hover:text-ink truncate"
+                  class="flex-1 min-w-0 justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 text-badge text-mute hover:text-ink truncate"
                   {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
                 >
                   <HugeiconsIcon icon={Edit02Icon} size={14} strokeWidth={1.8} class="shrink-0" />
@@ -706,7 +695,7 @@
                   href="/dashboard/workflows/{workflow.id}"
                   variant="primary"
                   size="sm"
-                  class="flex-1 min-w-0 justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 shadow-xs text-xs sm:text-sm"
+                  class="flex-1 min-w-0 justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 shadow-xs text-badge sm:text-sm"
                   {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
                 >
                   <HugeiconsIcon icon={KanbanIcon} size={14} strokeWidth={1.8} class="shrink-0" />
@@ -719,10 +708,10 @@
         </div>
       {:else}
         <!-- LIST / TABLE VIEW -->
-        <div class="overflow-hidden rounded-2xl border border-hairline bg-card shadow-card">
+        <div class="overflow-hidden rounded-lg border border-hairline bg-card shadow-card">
           <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
-              <thead class="border-b border-hairline bg-canvas-sunken text-xs font-semibold text-mute">
+              <thead class="border-b border-hairline bg-canvas-sunken text-badge font-semibold text-mute">
                 <tr>
                   <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('common.workflow')}</th>
                   <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('taskboard.viewer')}</th>
@@ -744,7 +733,7 @@
                     <!-- Workflow Icon + Name + Created Date -->
                     <td class="px-4 py-3.5 sm:px-6">
                       <div class="flex items-center gap-3 min-w-0">
-                        <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-white">
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary font-bold shadow-xs transition-colors group-hover:bg-primary group-hover:text-on-primary">
                           <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
                         </div>
                         <div class="min-w-0">
@@ -759,14 +748,14 @@
                             {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
                             <div class="flex flex-wrap gap-1 mt-1">
                               {#each wfLabels as tag (tag)}
-                                <Badge tone="info" variant="soft" class="px-1.5 py-0.2 text-[10px] font-semibold">
+                                <Badge tone="info" variant="soft" class="px-1.5 py-0.5 text-tiny font-semibold">
                                   {tag}
                                 </Badge>
                               {/each}
                             </div>
                           {/if}
                           {#if workflow.createdAt}
-                            <p class="text-[11px] text-faint">
+                            <p class="text-micro text-faint">
                               {new Date(workflow.createdAt).toLocaleDateString($locale === 'ms' ? 'ms-MY' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                           {/if}
@@ -792,17 +781,17 @@
                               </Tooltip>
                             {/each}
                             {#if assigned.length > 3}
-                              <div class="flex size-5 items-center justify-center rounded-full bg-lane ring-2 ring-card text-[9px] font-bold text-ink">
+                              <div class="flex size-5 items-center justify-center rounded-full bg-lane ring-2 ring-card text-tiny font-bold text-ink">
                                 +{assigned.length - 3}
                               </div>
                             {/if}
                           </div>
-                          <span class="truncate text-xs font-medium text-ink max-w-[160px]">
+                          <span class="truncate text-badge font-medium text-ink max-w-[160px]">
                             {assigned.map((m) => m.name).slice(0, 2).join(', ')}{assigned.length > 2 ? ` (+${assigned.length - 2})` : ''}
                           </span>
                         </div>
                       {:else}
-                        <span class="text-xs text-mute font-medium">
+                        <span class="text-badge text-mute font-medium">
                           {workflow.ownerName ?? tr('common.unassigned')}
                         </span>
                       {/if}
@@ -816,7 +805,7 @@
                             <IconButton
                               variant="ghost"
                               size="sm"
-                              class="size-8 rounded-lg text-mute hover:text-status-urgent hover:bg-status-urgent/10"
+                              class="size-8 rounded-md text-mute hover:text-status-urgent hover:bg-status-urgent/10"
                               label={tr('common.delete')}
                               onclick={() => openDeleteWorkflow(workflow)}
                               {...i === 0 ? { 'data-onboarding': 'workflow-edit' } : {}}
@@ -830,7 +819,7 @@
                             href="/dashboard/workflows/{workflow.id}/settings"
                             variant="card"
                             size="sm"
-                            class="size-8 rounded-lg text-mute hover:text-ink"
+                            class="size-8 rounded-md text-mute hover:text-ink"
                             label={tr('workflows.setup')}
                             {...i === 0 ? { 'data-onboarding': 'workflow-setup-btn' } : {}}
                           >
@@ -842,7 +831,7 @@
                             href="/dashboard/workflows/{workflow.id}"
                             variant="primary"
                             size="sm"
-                            class="size-8 rounded-lg shadow-xs"
+                            class="size-8 rounded-md shadow-xs"
                             label={tr('workflows.openBoard')}
                             {...i === 0 ? { 'data-onboarding': 'workflow-open-btn' } : {}}
                           >
@@ -866,7 +855,7 @@
     <button
       type="button"
       onclick={openChooser}
-      class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+      class="flex items-center gap-2 rounded-md bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-on-primary shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
       aria-label={tr('workflows.create')}
     >
       <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
@@ -878,84 +867,71 @@
 
 <!-- WORKFLOW CREATION MODALS -->
 <Dialog bind:open={chooseOpen} title={tr('workflows.chooseTitle')} description={tr('workflows.chooseDescription')} size="xl">
-  <div class="grid gap-3 sm:grid-cols-3 pt-1">
+  <div class="grid min-w-0 gap-3 p-1 md:grid-cols-3">
     <button
       type="button"
       onclick={startManual}
-      class="group flex flex-col rounded-2xl bg-card p-5 text-left ring-1 ring-hairline/30 transition-all hover:ring-primary/40 hover:shadow-card-hover"
+      class="group flex min-w-0 flex-col rounded-md border border-hairline/30 bg-card p-5 text-left transition-all hover:border-primary/40 hover:shadow-card-hover"
     >
-      <div class="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+      <div class="flex size-10 items-center justify-center rounded-md bg-primary-soft text-primary transition-colors group-hover:bg-primary group-hover:text-on-primary">
         <HugeiconsIcon icon={Edit02Icon} size={20} strokeWidth={1.8} />
       </div>
       <p class="mt-3.5 text-base font-semibold text-ink">{tr('workflows.manual')}</p>
-      <p class="text-[13px] text-mute mt-1 leading-relaxed">{tr('workflows.manualDescription')}</p>
+      <p class="mt-1 break-words text-meta leading-relaxed text-mute">{tr('workflows.manualDescription')}</p>
     </button>
     <button
       type="button"
       onclick={startAi}
-      class="group flex flex-col rounded-2xl bg-primary-soft/20 p-5 text-left ring-1 ring-primary/30 transition-all hover:ring-primary hover:shadow-card-hover"
+      class="group flex min-w-0 flex-col rounded-md border border-primary/30 bg-primary-soft/20 p-5 text-left transition-all hover:border-primary hover:shadow-card-hover"
     >
-      <div class="flex size-10 items-center justify-center rounded-xl bg-primary text-white shadow-sm">
+      <div class="flex size-10 items-center justify-center rounded-md bg-primary text-on-primary shadow-sm">
         <HugeiconsIcon icon={AiMagicIcon} size={20} strokeWidth={1.8} />
       </div>
       <p class="mt-3.5 text-base font-semibold text-ink">{tr('workflows.aiSetup')}</p>
-      <p class="text-[13px] text-mute mt-1 leading-relaxed">{tr('workflows.aiDescription')}</p>
+      <p class="mt-1 break-words text-meta leading-relaxed text-mute">{tr('workflows.aiDescription')}</p>
     </button>
     <button
       type="button"
       onclick={createExampleWorkflow}
       disabled={loading}
-      class="group flex flex-col rounded-2xl bg-status-done-soft/20 p-5 text-left ring-1 ring-status-done/30 transition-all hover:ring-status-done hover:shadow-card-hover disabled:cursor-not-allowed disabled:opacity-50"
+      class="group flex min-w-0 flex-col rounded-md border border-status-done/30 bg-status-done-soft/20 p-5 text-left transition-all hover:border-status-done hover:shadow-card-hover disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <div class="flex size-10 items-center justify-center rounded-xl bg-status-done-soft text-status-done-strong transition-colors group-hover:bg-status-done group-hover:text-white">
+      <div class="flex size-10 items-center justify-center rounded-md bg-status-done-soft text-status-done-strong transition-colors group-hover:bg-status-done group-hover:text-on-primary">
         <HugeiconsIcon icon={Copy01Icon} size={20} strokeWidth={1.8} />
       </div>
       <p class="mt-3.5 text-base font-semibold text-ink">{tr('workflows.example')}</p>
-      <p class="text-[13px] text-mute mt-1 leading-relaxed">{tr('workflows.exampleDescription')}</p>
+      <p class="mt-1 break-words text-meta leading-relaxed text-mute">{tr('workflows.exampleDescription')}</p>
     </button>
   </div>
 </Dialog>
 
 <Dialog bind:open={manualOpen} title={tr('workflows.manualTitle')} description={tr('workflows.manualDescriptionShort')} size="lg">
-  <div class="space-y-4">
+  <div class="manual-workflow-form space-y-4">
     <FormField label={tr('workflows.name')} required>
       {#snippet control(args)}
         <Input {...args} bind:value={name} placeholder={tr('workflows.namePlaceholder')} />
       {/snippet}
     </FormField>
-    <FormField label={tr('workflows.label') ?? 'Label'} helper={tr('workflows.labelHelper')}>
-      {#snippet control(field)}
-        <TagInput bind:value={manualLabels} placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'} {...field} />
-      {/snippet}
-    </FormField>
-
-
-    <FormField label={tr('setup.assignees')} helper={tr('setup.assigneesHelper')}>
-      {#snippet control()}
-        <MultiSelectCombobox
-          options={memberOptions}
-          bind:values={manualAssigneeIds}
-          placeholder={tr('setup.assigneesPlaceholder')}
-          emptyText={tr('setup.noMembers')}
-        />
-      {/snippet}
-    </FormField>
-
     <div class="grid gap-4 sm:grid-cols-2">
-      <FormField label={tr('setup.urgency')}>
-        {#snippet control(args)}
-          <SelectMenu
-            {...args}
-            bind:value={manualUrgency}
-            options={[
-              { value: 'high', label: tr('setup.urgencyHigh') },
-              { value: 'medium', label: tr('setup.urgencyMedium') },
-              { value: 'low', label: tr('setup.urgencyLow') }
-            ]}
-          />
+      <FormField label={tr('workflows.label') ?? 'Label'} helper={tr('workflows.labelHelper')}>
+        {#snippet control(field)}
+          <TagInput bind:value={manualLabels} placeholder={tr('workflows.labelPlaceholder') ?? 'cth. Flow, Onboarding, Jualan (tekan Enter)'} {...field} />
         {/snippet}
       </FormField>
 
+      <FormField label={tr('setup.assignees')} helper={tr('setup.assigneesHelper')}>
+        {#snippet control()}
+          <MultiSelectCombobox
+            options={memberOptions}
+            bind:values={manualAssigneeIds}
+            placeholder={tr('setup.assigneesPlaceholder')}
+            emptyText={tr('setup.noMembers')}
+          />
+        {/snippet}
+      </FormField>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2">
       <FormField label={tr('setup.repeat')} helper={tr('setup.repeatHelper')}>
         {#snippet control(args)}
           <SelectMenu
@@ -970,52 +946,25 @@
           />
         {/snippet}
       </FormField>
-    </div>
 
-    <div class="grid gap-4 sm:grid-cols-2">
-      <FormField label={tr('setup.deadlineValue')} helper={tr('setup.deadlineHelper')}>
-        {#snippet control(args)}
-          <Input
-            {...args}
-            type="number"
-            bind:value={manualDeadlineValue}
-            placeholder="e.g. 5"
-            class="h-10"
-          />
-        {/snippet}
-      </FormField>
-
-      <FormField label={tr('setup.deadlineUnitHours').split(' ')[0]}>
+      <FormField label={tr('setup.closureBy')} helper={tr('setup.closureByHelper')}>
         {#snippet control(args)}
           <SelectMenu
             {...args}
-            bind:value={manualDeadlineUnit}
+            bind:value={manualClosureBy}
             options={[
-              { value: 'hours', label: tr('setup.deadlineUnitHours') },
-              { value: 'days', label: tr('setup.deadlineUnitDays') }
+              { value: 'initiator', label: tr('setup.closureInitiator') },
+              { value: 'assignee', label: tr('setup.closureAssignee') }
             ]}
           />
         {/snippet}
       </FormField>
     </div>
 
-    <FormField label={tr('setup.closureBy')} helper={tr('setup.closureByHelper')}>
-      {#snippet control(args)}
-        <SelectMenu
-          {...args}
-          bind:value={manualClosureBy}
-          options={[
-            { value: 'initiator', label: tr('setup.closureInitiator') },
-            { value: 'assignee', label: tr('setup.closureAssignee') }
-          ]}
-        />
-      {/snippet}
-    </FormField>
-
-    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+    <div class="space-y-3 rounded-md border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
       <div>
-        <p class="text-xs font-semibold text-ink">Hak Akses Alur Kerja</p>
-        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+        <p class="text-base font-semibold leading-6 text-ink">Hak Akses Alur Kerja</p>
+        <p class="mt-1 text-sm leading-relaxed text-mute">Kosongkan kedua-duanya untuk akses publik.</p>
       </div>
       <FormField label="Akses Grup / Departemen">
         {#snippet control()}
@@ -1103,10 +1052,10 @@
       {/snippet}
     </FormField>
 
-    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+    <div class="space-y-3 rounded-md border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
       <div>
-        <p class="text-xs font-semibold text-ink">Hak Akses Alur Kerja</p>
-        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+        <p class="text-badge font-semibold text-ink">Hak Akses Alur Kerja</p>
+        <p class="text-micro text-mute mt-0.5">Pilih departemen dan/atau pengguna yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
       </div>
       <FormField label="Akses Grup / Departemen">
         {#snippet control()}
@@ -1160,3 +1109,10 @@
   onconfirm={deleteWorkflowConfirmed}
   oncancel={() => (workflowToDelete = null)}
 />
+
+<style>
+  :global([data-theme='app'] .manual-workflow-form .ds-label),
+  :global([data-theme='app'] .manual-workflow-form .ds-caption) {
+    font-weight: 500;
+  }
+</style>

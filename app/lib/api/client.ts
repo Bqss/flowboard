@@ -148,6 +148,8 @@ export type ApiBoardColumn = {
     stageId: string;
     checklistDone: number;
     checklistTotal: number;
+    checklistDoneOverall: number;
+    checklistTotalOverall: number;
     waErrorFlag?: boolean;
     dueAt: string | null;
     completedAt: string | null;
@@ -190,7 +192,10 @@ export type ApiCardDetail = {
     required: boolean;
     done: boolean;
     position: number;
+    groupId?: string | null;
+    templateId?: string | null;
   }>;
+  groups?: ApiChecklistGroup[];
   assigneeName: string | null;
   nextStage: { id: string; name: string; color: string; position: number } | null;
   nextWorkflow?: { id: string; name: string } | null;
@@ -316,6 +321,11 @@ export type ApiTaskActivity = {
   createdAt: string;
 };
 
+export type ApiWorkflowDraftImage = {
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+  dataUrl: string;
+};
+
 export type ApiWorkflowDraft = {
   label?: string | null;
   labels?: string[];
@@ -328,6 +338,7 @@ export type ApiWorkflowDraft = {
     autoMoveOnComplete?: boolean;
     checklists: Array<{
       label: string;
+      groupPath?: string[];
       required?: boolean;
       deadlineHours?: number | null;
       action?: ApiChecklistAction;
@@ -349,6 +360,50 @@ export type ApiChecklistAction = {
   followupIfNoReply: boolean;
 };
 
+export type ApiCardChecklistBoardGroup = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  requiresCompletion: boolean;
+  position: number;
+};
+
+export type ApiCardChecklistBoardItem = {
+  id: string;
+  label: string;
+  required: boolean;
+  deadlineHours?: number | null;
+  done: boolean;
+  groupId: string | null;
+  /** True for upcoming stages: template preview, not yet on the card. */
+  preview: boolean;
+  /** Items from any stage can be checked; preview templates are materialized on first toggle. */
+  editable: boolean;
+};
+
+export type ApiCardChecklistBoard = {
+  cardId: string;
+  customerName: string;
+  assigneeId: string | null;
+  currentStageId: string;
+  stages: Array<{
+    stage: { id: string; name: string; color: string; position: number };
+    status: 'current' | 'past' | 'upcoming';
+    groups: ApiCardChecklistBoardGroup[];
+    items: ApiCardChecklistBoardItem[];
+  }>;
+};
+
+export type ApiChecklistGroup = {
+  id: string;
+  stageId?: string;
+  parentId: string | null;
+  templateGroupId?: string | null;
+  name: string;
+  requiresCompletion: boolean;
+  position: number;
+};
+
 export type ApiWorkflowSetupStage = {
   id: string;
   name: string;
@@ -357,11 +412,14 @@ export type ApiWorkflowSetupStage = {
   onReplyNotify?: boolean;
   overdueReminderHours?: number | null;
   nextWorkflowId?: string | null;
+  groups?: ApiChecklistGroup[];
   templates: Array<{
     id: string;
     label: string;
     required: boolean;
+    deadlineHours?: number | null;
     position: number;
+    groupId?: string | null;
     action?: ApiChecklistAction;
   }>;
 };
@@ -1241,7 +1299,11 @@ export const api = {
       fetch: fetchFn
     }),
 
-  generateWorkflowDraft: (workspaceId: string, body: { prompt: string }, fetchFn?: FetchLike) =>
+  generateWorkflowDraft: (
+    workspaceId: string,
+    body: { prompt: string; images?: ApiWorkflowDraftImage[] },
+    fetchFn?: FetchLike
+  ) =>
     request<{ draft: ApiWorkflowDraft; provider: 'ai' | 'heuristic' }>(
       `/workspaces/${workspaceId}/workflows/ai/draft`,
       { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
@@ -1371,6 +1433,12 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
     ),
 
+  getCardChecklistBoard: (workspaceId: string, workflowId: string, cardId: string, fetchFn?: FetchLike) =>
+    request<{ board: ApiCardChecklistBoard }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}/checklist-board`,
+      { fetch: fetchFn }
+    ),
+
   getCardDetail: (workspaceId: string, workflowId: string, cardId: string, fetchFn?: FetchLike) =>
     request<{ detail: ApiCardDetail }>(
       `/workspaces/${workspaceId}/workflows/${workflowId}/cards/${cardId}`,
@@ -1422,7 +1490,7 @@ export const api = {
     workspaceId: string,
     workflowId: string,
     cardId: string,
-    body: { label: string; required?: boolean },
+    body: { label: string; required?: boolean; groupId?: string | null },
     fetchFn?: FetchLike
   ) =>
     request<{ item: { id: string; label: string; required: boolean; done: boolean; position: number } }>(
@@ -1533,7 +1601,7 @@ export const api = {
     workspaceId: string,
     workflowId: string,
     stageId: string,
-    body: { label: string; required?: boolean },
+    body: { label: string; required?: boolean; deadlineHours?: number | null; groupId?: string | null },
     fetchFn?: FetchLike
   ) =>
     request<{ template: { id: string } }>(
@@ -1546,7 +1614,7 @@ export const api = {
     workflowId: string,
     stageId: string,
     templateId: string,
-    body: { label?: string; required?: boolean },
+    body: { label?: string; required?: boolean; deadlineHours?: number | null },
     fetchFn?: FetchLike
   ) =>
     request<{ template: { id: string; label: string; required: boolean } }>(
@@ -1581,6 +1649,69 @@ export const api = {
   ) =>
     request<{ ok: true }>(
       `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/templates/${templateId}`,
+      { method: 'DELETE', fetch: fetchFn }
+    ),
+
+  moveChecklistTemplateItem: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    templateId: string,
+    body: { groupId: string | null },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ template: { id: string; groupId: string | null; position: number } }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/templates/${templateId}/group`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  saveChecklistLayout: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    body: { items: Array<{ id: string; groupId: string | null; position: number }> },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/checklist-layout`,
+      { method: 'PUT', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  createChecklistGroup: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    body: { name: string; parentId?: string | null; requiresCompletion?: boolean },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ group: ApiChecklistGroup }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/checklist-groups`,
+      { method: 'POST', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  updateChecklistGroup: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    groupId: string,
+    body: { name?: string; requiresCompletion?: boolean },
+    fetchFn?: FetchLike
+  ) =>
+    request<{ group: ApiChecklistGroup | null }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/checklist-groups/${groupId}`,
+      { method: 'PATCH', body: JSON.stringify(body), fetch: fetchFn }
+    ),
+
+  deleteChecklistGroup: (
+    workspaceId: string,
+    workflowId: string,
+    stageId: string,
+    groupId: string,
+    mode: 'with_items' | 'move_up',
+    fetchFn?: FetchLike
+  ) =>
+    request<{ ok: true }>(
+      `/workspaces/${workspaceId}/workflows/${workflowId}/stages/${stageId}/checklist-groups/${groupId}?mode=${mode}`,
       { method: 'DELETE', fetch: fetchFn }
     ),
 

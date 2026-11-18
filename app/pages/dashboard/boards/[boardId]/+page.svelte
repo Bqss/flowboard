@@ -38,6 +38,7 @@
     FormField,
     RichTextEditor,
     RichTextContent,
+    TimePicker,
     SelectMenu,
     MultiSelectCombobox,
     type MultiSelectOption,
@@ -204,9 +205,8 @@
   let columnDialogOpen = $state(false);
   let columnSaving = $state(false);
   let columnError = $state<string | null>(null);
-  let editingColumn = $state<{ id: string; name: string; color: string } | null>(null);
+  let editingColumn = $state<{ id: string; name: string } | null>(null);
   let columnName = $state('');
-  let columnColor = $state('indigo');
   let columnToDelete = $state<{ id: string; name: string } | null>(null);
   let deletingColumn = $state(false);
 
@@ -424,13 +424,6 @@
   $effect(() => {
     editAssigneeId = taskAssigneeValues[0] ?? '';
   });
-  const colorOptions = [
-    { value: 'indigo', label: 'Indigo' },
-    { value: 'sky', label: 'Sky' },
-    { value: 'amber', label: 'Amber' },
-    { value: 'emerald', label: 'Emerald' },
-    { value: 'rose', label: 'Rose' }
-  ];
   const labelColorPalette = [
     { value: 'mint', label: 'Mint', swatch: 'bg-emerald-200 border-emerald-500', tag: 'bg-emerald-100 text-emerald-700' },
     { value: 'yellow', label: 'Yellow', swatch: 'bg-yellow-300 border-yellow-600', tag: 'bg-yellow-100 text-yellow-800' },
@@ -450,8 +443,8 @@
   ];
   const labelColorClasses: Record<string, string> = {
     indigo: 'bg-indigo-100 text-indigo-700',
-    sky: 'bg-sky-100 text-sky-700',
-    amber: 'bg-amber-100 text-amber-800',
+    sky: 'bg-kind-board-soft text-kind-board',
+    amber: 'bg-kind-workflow-soft text-kind-workflow',
     emerald: 'bg-emerald-100 text-emerald-700',
     rose: 'bg-rose-100 text-rose-700',
     ...Object.fromEntries(labelColorPalette.map((color) => [color.value, color.tag]))
@@ -671,6 +664,17 @@
     const dbCol = columns.find((c) => c.id === column.id);
     if (dbCol) {
       openRenameColumn(dbCol);
+    }
+  }
+
+  async function handleColumnRename(column: KanbanColumn, name: string) {
+    if (!data.workspace?.id || !boardId || !canManage) return;
+    try {
+      await api.updateTaskColumn(data.workspace.id, boardId, column.id, { name });
+      columns = columns.map((item) => (item.id === column.id ? { ...item, name } : item));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('taskboard.columnError'));
+      throw err;
     }
   }
 
@@ -1416,15 +1420,13 @@
   function openAddColumn() {
     editingColumn = null;
     columnName = '';
-    columnColor = 'indigo';
     columnError = null;
     columnDialogOpen = true;
   }
 
   function openRenameColumn(column: ApiTaskBoardColumn) {
-    editingColumn = { id: column.id, name: column.name, color: column.color };
+    editingColumn = { id: column.id, name: column.name };
     columnName = column.name;
-    columnColor = column.color;
     columnError = null;
     columnDialogOpen = true;
   }
@@ -1436,13 +1438,11 @@
     try {
       if (editingColumn) {
         await api.updateTaskColumn(data.workspace.id, boardId, editingColumn.id, {
-          name: columnName.trim(),
-          color: columnColor
+          name: columnName.trim()
         });
       } else {
         await api.createTaskColumn(data.workspace.id, boardId, {
-          name: columnName.trim(),
-          color: columnColor
+          name: columnName.trim()
         });
       }
       columnDialogOpen = false;
@@ -1560,18 +1560,18 @@
 
 {#snippet memberAvatar(member: ApiWorkspaceMember, index: number)}
   {@const avatarPalettes = [
-    'bg-indigo-600 text-white',
-    'bg-amber-600 text-white',
-    'bg-rose-600 text-white',
-    'bg-emerald-600 text-white',
-    'bg-sky-600 text-white',
-    'bg-purple-600 text-white'
+    'bg-indigo-600 text-on-primary',
+    'bg-amber-600 text-on-primary',
+    'bg-rose-600 text-on-primary',
+    'bg-emerald-600 text-on-primary',
+    'bg-sky-600 text-on-primary',
+    'bg-purple-600 text-on-primary'
   ]}
   {@const palette = avatarPalettes[index % avatarPalettes.length]}
   {@const initials = member.name.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
   <div
     class={cn(
-      'relative flex size-9 shrink-0 items-center justify-center rounded-full font-bold text-xs ring-2 ring-card shadow-sm',
+      'relative flex size-9 shrink-0 items-center justify-center rounded-full font-bold text-badge ring-2 ring-card shadow-sm',
       palette
     )}
     title={member.name}
@@ -1604,7 +1604,7 @@
     <input bind:this={fileInputEl} type="file" class="hidden" onchange={handleAttachmentSelect} />
     <Button variant="secondary" onclick={() => fileInputEl?.click()}>Pilih file</Button>
     {#if attachmentFile}
-      <div class="rounded-lg bg-lane p-3 text-sm font-semibold text-ink">{attachmentFile.name}</div>
+      <div class="rounded-md bg-lane p-3 text-sm font-semibold text-ink">{attachmentFile.name}</div>
     {/if}
     <div class="border-t border-hairline pt-4">
       <div class="text-sm font-semibold text-ink">Search or paste a link</div>
@@ -1634,11 +1634,11 @@
 <div class="flex h-full w-full min-h-0 flex-1 flex-col overflow-hidden">
   {#if loadingData}
     <div class="flex w-full shrink-0 items-center justify-between border-b border-hairline bg-card px-5 sm:px-6 py-2.5 shadow-xs">
-      <Skeleton shape="rect" class="h-8 w-44 rounded-lg" />
+      <Skeleton shape="rect" class="h-8 w-44 rounded-md" />
       <div class="flex items-center gap-2">
         <Skeleton shape="rect" class="h-9 w-9 rounded-full" />
         <Skeleton shape="rect" class="h-9 w-9 rounded-full" />
-        <Skeleton shape="rect" class="h-9 w-28 rounded-xl" />
+        <Skeleton shape="rect" class="h-9 w-28 rounded-md" />
       </div>
     </div>
   {:else}
@@ -1670,7 +1670,7 @@
           {@const bLabels = board.labels && board.labels.length > 0 ? board.labels : (board.label ? [board.label] : [])}
           <div class="flex items-center gap-1 shrink-0">
             {#each bLabels as l (l)}
-              <Badge tone="queued" variant="soft" class="text-xs font-semibold">
+              <Badge tone="queued" variant="soft" class="text-badge font-semibold">
                 {l}
               </Badge>
             {/each}
@@ -1687,7 +1687,7 @@
               {@render memberAvatar(member, idx)}
             {/each}
             {#if members.length > 4}
-              <div class="grid size-9 place-items-center rounded-full bg-slate-800 text-white ring-2 ring-card text-xs font-bold shadow-sm">
+              <div class="grid size-9 place-items-center rounded-full bg-slate-800 text-on-primary ring-2 ring-card text-badge font-bold shadow-sm">
                 +{members.length - 4}
               </div>
             {/if}
@@ -1695,13 +1695,13 @@
         {/if}
 
         <!-- Action Icons Wrapped in a Card -->
-        <div class="flex items-center gap-0.5 rounded-xl border border-hairline bg-canvas-sunken/70 p-1 shadow-xs">
+        <div class="flex items-center gap-0.5 rounded-md border border-hairline bg-canvas-sunken/70 p-1 shadow-xs">
           <!-- Chat Board (Icon Only) -->
           <Tooltip text="Chat Board" side="bottom">
             <button
               type="button"
               onclick={openBoardChat}
-              class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+              class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
               aria-label="Chat Board"
             >
               <HugeiconsIcon icon={BubbleChatIcon} size={18} strokeWidth={1.8} />
@@ -1713,7 +1713,7 @@
             <button
               type="button"
               onclick={openActivity}
-              class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+              class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
               aria-label={tr('taskboard.activity')}
             >
               <HugeiconsIcon icon={Clock01Icon} size={18} strokeWidth={1.8} />
@@ -1726,7 +1726,7 @@
               <button
                 type="button"
                 onclick={openEditBoardSettings}
-                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
                 aria-label="Pengaturan"
               >
                 <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
@@ -1762,7 +1762,7 @@
               <button
                 type="button"
                 class={cn(
-                  "flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer",
+                  "flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer",
                   open && "text-ink bg-card shadow-xs"
                 )}
                 onclick={toggle}
@@ -1783,19 +1783,19 @@
     {#if loadingData}
       <div class="flex gap-4 overflow-hidden h-full">
         {#each [1, 2, 3] as i (i)}
-          <div class="w-lane shrink-0 space-y-3 rounded-2xl border border-hairline bg-canvas-sunken p-3.5 h-full">
+          <div class="w-lane shrink-0 space-y-3 rounded-md border border-hairline bg-canvas-sunken p-3.5 h-full">
             <div class="flex items-center justify-between">
               <Skeleton shape="rect" class="h-5 w-24 rounded-md" />
               <Skeleton shape="rect" class="h-5 w-12 rounded-full" />
             </div>
-            <Skeleton shape="rect" class="h-24 w-full rounded-xl" />
-            <Skeleton shape="rect" class="h-24 w-full rounded-xl" />
-            <Skeleton shape="rect" class="h-9 w-full rounded-xl" />
+            <Skeleton shape="rect" class="h-24 w-full rounded-md" />
+            <Skeleton shape="rect" class="h-24 w-full rounded-md" />
+            <Skeleton shape="rect" class="h-9 w-full rounded-md" />
           </div>
         {/each}
       </div>
     {:else if loadError}
-      <div class="m-auto space-y-3 rounded-2xl border border-hairline bg-card p-10 text-center shadow-card max-w-md">
+      <div class="m-auto space-y-3 rounded-md border border-hairline bg-card p-10 text-center shadow-card max-w-md">
         <p class="ds-section-title text-ink">{loadError}</p>
         <Button variant="secondary" size="sm" onclick={loadBoard}>
           {tr('taskboard.retry')}
@@ -1813,6 +1813,7 @@
         addButtonPosition="bottom"
         oncardclick={openTask}
         oncardmove={handleCardMove}
+        oncolumnrename={canManage ? handleColumnRename : undefined}
         oncomplete={handleTaskCompletion}
         onadd={openCreateTask}
         oneditcolumn={canManage ? handleEditColumn : undefined}
@@ -1832,7 +1833,7 @@
     <button
       type="button"
       onclick={() => openCreateTask('')}
-      class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+      class="flex items-center gap-2 rounded-md bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-on-primary shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
       aria-label={tr('taskboard.addTask')}
     >
       <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
@@ -1851,11 +1852,11 @@
           <div class="flex min-w-0 items-center gap-3">
             <span class="size-3 shrink-0 rounded-full border-2 border-mute"></span>
             {#if taskTitleEditing}
-              <input bind:this={taskTitleInputEl} bind:value={editTitle} class="min-w-0 flex-1 rounded-lg border border-focus bg-card px-2 py-1 text-xl font-bold text-ink outline-none" onblur={finishTaskTitleEdit} onkeydown={handleTaskTitleKeydown} aria-label="Judul tugas" />
+              <input bind:this={taskTitleInputEl} bind:value={editTitle} class="min-w-0 flex-1 rounded-md border border-primary bg-card px-2 py-1 text-xl font-bold text-ink outline-none" onblur={finishTaskTitleEdit} onkeydown={handleTaskTitleKeydown} aria-label="Judul tugas" />
             {:else}
-              <button id="dialog-title" type="button" class="truncate text-left text-xl font-bold text-ink hover:text-accent" ondblclick={beginTaskTitleEdit} title="Klik dua kali untuk mengedit judul">{taskDetail.title}</button>
+              <button id="dialog-title" type="button" class="truncate text-left text-xl font-bold text-ink hover:text-primary" ondblclick={beginTaskTitleEdit} title="Klik dua kali untuk mengedit judul">{taskDetail.title}</button>
             {/if}
-            <span class="hidden rounded-full bg-lane px-2 py-1 text-xs font-semibold text-mute sm:inline-flex">{columns.find((column) => column.id === taskDetail?.columnId)?.name ?? ''}</span>
+            <span class="hidden rounded-full bg-lane px-2 py-1 text-badge font-semibold text-mute sm:inline-flex">{columns.find((column) => column.id === taskDetail?.columnId)?.name ?? ''}</span>
           </div>
         {:else if detailLoading}
           <div class="flex items-center gap-3">
@@ -1869,7 +1870,7 @@
         {#if canDeleteTask}
           <IconButton variant="ghost" size="md" class="text-status-urgent hover:bg-status-urgent-soft" label="Hapus tugas" onclick={() => (taskToDelete = { id: taskDetail!.id, title: taskDetail!.title })}><HugeiconsIcon icon={Delete02Icon} size={20} strokeWidth={1.8} /></IconButton>
         {/if}
-        <button type="button" class="grid size-11 shrink-0 place-items-center rounded-full text-2xl leading-none text-mute hover:bg-lane hover:text-ink" onclick={closeSheet} aria-label={tr('common.close')}>×</button>
+        <button type="button" class="grid size-11 shrink-0 place-items-center rounded-md text-2xl leading-none text-mute hover:bg-lane hover:text-ink" onclick={closeSheet} aria-label={tr('common.close')}>×</button>
       </div>
     </div>
   {/snippet}
@@ -1879,7 +1880,7 @@
       <section class="min-w-0 space-y-7 overflow-y-auto p-5 sm:p-8">
         <div class="flex flex-wrap items-center gap-2">
           {#each [1, 2, 3, 4] as item (item)}
-            <Skeleton shape="rect" class={cn('h-9 rounded-xl', item === 3 ? 'w-36' : 'w-24')} />
+            <Skeleton shape="rect" class={cn('h-9 rounded-md', item === 3 ? 'w-36' : 'w-24')} />
           {/each}
         </div>
         <div class="flex flex-wrap items-start gap-8">
@@ -1901,16 +1902,16 @@
         <section class="space-y-3">
           <div class="flex items-center justify-between gap-3">
             <Skeleton shape="rect" class="h-7 w-36" />
-            <Skeleton shape="rect" class="h-9 w-16 rounded-xl" />
+            <Skeleton shape="rect" class="h-9 w-16 rounded-md" />
           </div>
-          <Skeleton shape="rect" class="h-40 w-full rounded-xl" />
+          <Skeleton shape="rect" class="h-40 w-full rounded-md" />
         </section>
         <section class="space-y-3">
           <div class="flex items-center justify-between gap-3">
             <Skeleton shape="rect" class="h-7 w-32" />
-            <Skeleton shape="rect" class="h-9 w-20 rounded-xl" />
+            <Skeleton shape="rect" class="h-9 w-20 rounded-md" />
           </div>
-          <Skeleton shape="rect" class="h-16 w-full rounded-xl" />
+          <Skeleton shape="rect" class="h-16 w-full rounded-md" />
         </section>
       </section>
       <aside class="min-w-0 border-t border-hairline bg-lane/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
@@ -1919,16 +1920,16 @@
             <Skeleton shape="circle" class="size-5" />
             <Skeleton shape="rect" class="h-6 w-44" />
           </div>
-          <Skeleton shape="rect" class="h-9 w-28 rounded-xl" />
+          <Skeleton shape="rect" class="h-9 w-28 rounded-md" />
         </div>
-        <Skeleton shape="rect" class="mt-5 h-10 w-full rounded-xl" />
+        <Skeleton shape="rect" class="mt-5 h-10 w-full rounded-md" />
         <div class="mt-6 space-y-5">
           {#each [1, 2, 3] as item (item)}
             <div class="flex gap-3">
               <Skeleton shape="circle" class="size-7 shrink-0" />
               <div class="min-w-0 flex-1 space-y-2">
                 <Skeleton shape="text" class="w-36" />
-                <Skeleton shape="rect" class="h-12 w-full rounded-xl" />
+                <Skeleton shape="rect" class="h-12 w-full rounded-md" />
               </div>
             </div>
           {/each}
@@ -1964,35 +1965,35 @@
                   />
                   <div class="space-y-2">
                     <div class="space-y-1">
-                      <span class="text-xs font-semibold text-mute">Start date</span>
+                      <span class="text-badge font-semibold text-mute">Start date</span>
                       <div class="flex items-center gap-2">
                         <Checkbox
                           size="sm"
                           checked={editStartDateEnabled}
                           disabled={!canEditCurrentTask}
                           aria-label="Aktifkan start date"
-                          onchange={(event) => setStartDateEnabled((event.currentTarget as HTMLInputElement).checked)}
+                          onCheckedChange={(c) => setStartDateEnabled(c)}
                         />
-                        <Input type="date" bind:value={editStartDate} disabled={!canEditCurrentTask || !editStartDateEnabled} onchange={() => setStartDateEnabled(Boolean(editStartDate))} />
+                        <DatePicker bind:value={editStartDate} disabled={!canEditCurrentTask || !editStartDateEnabled} placeholder="Pilih tanggal" onchange={(v) => setStartDateEnabled(Boolean(v))} />
                       </div>
                     </div>
                     <div class="space-y-1">
-                      <span class="text-xs font-semibold text-mute">Due date</span>
+                      <span class="text-badge font-semibold text-mute">Due date</span>
                       <div class="flex items-center gap-2">
                         <Checkbox
                           size="sm"
                           checked={editDueDateEnabled}
                           disabled={!canEditCurrentTask}
                           aria-label="Aktifkan due date"
-                          onchange={(event) => setDueDateEnabled((event.currentTarget as HTMLInputElement).checked)}
+                          onCheckedChange={(c) => setDueDateEnabled(c)}
                         />
-                        <Input type="date" bind:value={editDueDate} disabled={!canEditCurrentTask || !editDueDateEnabled} onchange={() => setDueDateEnabled(Boolean(editDueDate))} />
-                        <Input type="time" bind:value={editDueTime} disabled={!canEditCurrentTask || !editDueDateEnabled} aria-label="Waktu due date" />
+                        <DatePicker bind:value={editDueDate} disabled={!canEditCurrentTask || !editDueDateEnabled} placeholder="Pilih tanggal" onchange={(v) => setDueDateEnabled(Boolean(v))} />
+                        <TimePicker bind:value={editDueTime} disabled={!canEditCurrentTask || !editDueDateEnabled} aria-label="Waktu due date" />
                       </div>
                     </div>
                   </div>
                   <div class="space-y-1">
-                    <span class="text-xs font-semibold text-mute">Recurring</span>
+                    <span class="text-badge font-semibold text-mute">Recurring</span>
                     <DropdownMenu
                       items={recurrenceOptions.map((option) => ({
                         label: option.label,
@@ -2011,10 +2012,10 @@
                   </div>
                   {#if editRecurrence === 'weekly'}
                     <div class="space-y-1">
-                      <span class="text-xs font-semibold text-mute">Repeat on</span>
+                      <span class="text-badge font-semibold text-mute">Repeat on</span>
                       <div class="flex justify-between gap-1">
                         {#each recurrenceWeekdays as day (day.value)}
-                          <button type="button" class={cn('grid size-8 place-items-center rounded-full border text-xs font-semibold transition-colors', editRecurrenceDays.includes(day.value) ? 'border-primary bg-primary text-on-primary' : 'border-hairline bg-card text-mute hover:border-primary hover:text-primary')} aria-pressed={editRecurrenceDays.includes(day.value)} onclick={() => toggleRecurrenceDay(day.value)} disabled={!canEditCurrentTask}>{day.label}</button>
+                          <button type="button" class={cn('grid size-8 place-items-center rounded-full border text-badge font-semibold transition-colors', editRecurrenceDays.includes(day.value) ? 'border-primary bg-primary text-on-primary' : 'border-hairline bg-card text-mute hover:border-primary hover:text-primary')} aria-pressed={editRecurrenceDays.includes(day.value)} onclick={() => toggleRecurrenceDay(day.value)} disabled={!canEditCurrentTask}>{day.label}</button>
                         {/each}
                       </div>
                     </div>
@@ -2114,13 +2115,13 @@
                     type="button"
                     onclick={handleBuzzTaskPic}
                     disabled={taskBuzzSending || taskBuzzCooldownSec > 0}
-                    class="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 shadow-xs transition hover:bg-amber-100 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/20 cursor-pointer"
+                    class="inline-flex items-center gap-1.5 rounded-full border border-status-progress/40 bg-status-progress-soft px-2.5 py-1 text-badge font-bold text-status-progress-ink shadow-xs transition hover:bg-amber-100 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/20 cursor-pointer"
                     aria-label="Buzz PIC"
                   >
                     <span>💥</span>
                     <span>Buzz PIC</span>
                     {#if taskBuzzCooldownSec > 0}
-                      <span class="text-[10px]">({taskBuzzCooldownSec}s)</span>
+                      <span class="text-tiny">({taskBuzzCooldownSec}s)</span>
                     {/if}
                   </button>
                 </Tooltip>
@@ -2132,7 +2133,7 @@
             <h3 class="text-sm font-bold text-ink">Labels</h3>
             <div class="flex flex-wrap items-center gap-2">
               {#each editLabels as label (label)}
-                <span class={cn('inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold', labelClass(label))}>
+                <span class={cn('inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-badge font-semibold', labelClass(label))}>
                   {label}
                   {#if canEditCurrentTask}
                     <button type="button" class="text-current/70 hover:text-current" onclick={() => removeTaskLabel(label)} aria-label={`Hapus label ${label}`}>×</button>
@@ -2142,7 +2143,7 @@
               {#if canEditCurrentTask}
             <Popover bind:open={labelPickerOpen} label="Labels" class="z-20">
               {#snippet trigger({ open, toggle })}
-                <button type="button" class="grid size-8 place-items-center rounded-full border border-hairline bg-card text-xl leading-none text-mute transition hover:border-primary hover:text-primary" onclick={toggle} aria-haspopup="dialog" aria-expanded={open} aria-label="Tambah label">+</button>
+                <button type="button" class="grid size-8 place-items-center rounded-md border border-hairline bg-card text-xl leading-none text-mute transition hover:border-primary hover:text-primary" onclick={toggle} aria-haspopup="dialog" aria-expanded={open} aria-label="Tambah label">+</button>
               {/snippet}
               {#snippet content()}
                 <div class="w-[19rem] space-y-4">
@@ -2152,14 +2153,14 @@
                       <h3 class="text-sm font-bold text-ink">{editingLabel ? 'Edit label' : 'Buat label'}</h3>
                     </div>
                     {@const selectedLabelColor = labelColorPalette.find((color) => color.value === labelDraftColor)}
-                    <div class={cn('rounded-lg px-4 py-3 text-sm font-bold', selectedLabelColor?.swatch ?? 'bg-lane border-hairline text-mute')}>{labelDraftName || 'Nama label'}</div>
+                    <div class={cn('rounded-md px-4 py-3 text-sm font-bold', selectedLabelColor?.swatch ?? 'bg-lane border-hairline text-mute')}>{labelDraftName || 'Nama label'}</div>
                     <div class="space-y-1.5 text-sm font-semibold text-ink"><span>Title</span><Input bind:value={labelDraftName} /></div>
                     <div class="space-y-2 text-sm font-semibold text-ink">
                       <span>Select a color</span>
                       <div class="grid grid-cols-5 gap-2">
                         {#each labelColorPalette as color (color.value)}
-                          <button type="button" class={cn('grid size-10 place-items-center rounded-lg border-2 transition hover:scale-105', color.swatch, labelDraftColor === color.value && 'ring-2 ring-primary ring-offset-2')} aria-label={`Pilih warna ${color.label}`} aria-pressed={labelDraftColor === color.value} onclick={() => (labelDraftColor = color.value)}>
-                            {#if labelDraftColor === color.value}<span class="text-sm font-bold text-white drop-shadow">✓</span>{/if}
+                          <button type="button" class={cn('grid size-10 place-items-center rounded-md border-2 transition hover:scale-105', color.swatch, labelDraftColor === color.value && 'ring-2 ring-primary ring-offset-2')} aria-label={`Pilih warna ${color.label}`} aria-pressed={labelDraftColor === color.value} onclick={() => (labelDraftColor = color.value)}>
+                            {#if labelDraftColor === color.value}<span class="text-sm font-bold text-on-primary drop-shadow">✓</span>{/if}
                           </button>
                         {/each}
                       </div>
@@ -2179,16 +2180,16 @@
                       {#each filteredWorkspaceLabels as label (label.id)}
                         {@const selected = editLabels.includes(label.name)}
                         <div class="flex items-center gap-2">
-                          <button type="button" class={cn('flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors', selected ? labelClass(label.name) : 'border-hairline bg-card text-ink hover:bg-lane')} onclick={() => toggleTaskLabel(label.name)}><span class={cn('grid size-4 place-items-center rounded border', selected ? 'border-current bg-card/60' : 'border-hairline bg-card')}>{selected ? '✓' : ''}</span>{label.name}</button>
+                          <button type="button" class={cn('flex flex-1 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm font-semibold transition-colors', selected ? labelClass(label.name) : 'border-hairline bg-card text-ink hover:bg-lane')} onclick={() => toggleTaskLabel(label.name)}><span class={cn('grid size-4 place-items-center rounded border', selected ? 'border-current bg-card/60' : 'border-hairline bg-card')}>{selected ? '✓' : ''}</span>{label.name}</button>
                           {#if canManage}<IconButton variant="ghost" size="sm" label={`Edit ${label.name}`} onclick={() => openLabelEditor(label)}><HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} /></IconButton>{/if}
                         </div>
                       {:else}
-                        <div class="rounded-xl border border-dashed border-hairline-strong px-4 py-5 text-center">
-                          <div class="mx-auto grid size-9 place-items-center rounded-xl bg-primary-soft text-primary">
+                        <div class="rounded-md border border-dashed border-hairline-strong px-4 py-5 text-center">
+                          <div class="mx-auto grid size-9 place-items-center rounded-md bg-primary-soft text-primary">
                             <HugeiconsIcon icon={Tag01Icon} size={18} strokeWidth={1.8} />
                           </div>
                           <h4 class="mt-3 text-sm font-bold text-ink">Belum ada label</h4>
-                          <p class="mt-1 text-xs leading-relaxed text-mute">Buat label untuk mengelompokkan tugas di workspace ini.</p>
+                          <p class="mt-1 text-badge leading-relaxed text-mute">Buat label untuk mengelompokkan tugas di workspace ini.</p>
                         </div>
                       {/each}
                     </div>
@@ -2199,6 +2200,33 @@
             </Popover>
               {/if}
             </div>
+          </section>
+
+          <section class="space-y-2">
+            <h3 class="text-sm font-bold text-ink">Due date</h3>
+            <button
+              type="button"
+              class={cn(
+                'flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
+                editDueDateEnabled && editDueDate
+                  ? isOverdue(taskDetail.dueAt, taskDetail.completedAt)
+                    ? 'border-status-urgent/40 bg-status-urgent-soft text-status-urgent-ink hover:border-status-urgent'
+                    : 'border-hairline bg-card text-ink hover:border-primary-border hover:bg-canvas-sunken'
+                  : 'border-dashed border-hairline-strong bg-card text-mute hover:border-primary hover:text-primary'
+              )}
+              onclick={() => (deadlineOpen = true)}
+              aria-label={editDueDateEnabled && editDueDate ? 'Edit due date' : 'Set due date'}
+            >
+              <HugeiconsIcon icon={Clock01Icon} size={16} strokeWidth={1.8} class="shrink-0" />
+              <span class="whitespace-nowrap">
+                {#if editDueDateEnabled && editDueDate}
+                  {formatDateTime(fromDateTimeInput(editDueDate, editDueTime) ?? editDueDate)}
+                {:else}
+                  Set due date
+                {/if}
+              </span>
+              <HugeiconsIcon icon={ArrowDown01Icon} size={15} strokeWidth={1.8} class="ml-auto shrink-0 text-mute" />
+            </button>
           </section>
         </div>
 
@@ -2234,7 +2262,7 @@
           {:else}
             <div
               class={cn(
-                'rounded-xl px-2 py-3 transition-colors',
+                'rounded-md px-2 py-3 transition-colors',
                 canEditCurrentTask && 'cursor-text hover:bg-canvas-sunken/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]'
               )}
               role="button"
@@ -2277,13 +2305,13 @@
           {:else}
             <div class="space-y-2">
               {#each visibleTaskAttachments as attachment (attachment.id)}
-                <div class="flex items-center gap-3 rounded-xl border border-hairline p-3">
+                <div class="flex items-center gap-3 rounded-md border border-hairline p-3">
                   {#if isImageType(attachment.fileType)}
-                    <button type="button" class="size-14 shrink-0 overflow-hidden rounded-lg bg-lane" onclick={() => (previewAttachment = attachment)} aria-label={`Lihat ${attachment.fileName}`}><img src={attachment.filePath} alt={attachment.fileName} class="size-full object-cover" /></button>
+                    <button type="button" class="size-14 shrink-0 overflow-hidden rounded-md bg-lane" onclick={() => (previewAttachment = attachment)} aria-label={`Lihat ${attachment.fileName}`}><img src={attachment.filePath} alt={attachment.fileName} class="size-full object-cover" /></button>
                   {:else}
-                    <span class="grid size-14 shrink-0 place-items-center rounded-lg bg-lane text-xs font-bold text-mute">FILE</span>
+                    <span class="grid size-14 shrink-0 place-items-center rounded-md bg-lane text-badge font-bold text-mute">FILE</span>
                   {/if}
-                  <div class="min-w-0 flex-1"><div class="truncate text-sm font-bold text-ink">{attachment.fileName}</div><div class="text-xs text-mute">Ditambahkan {formatDateTime(attachment.createdAt)}</div></div>
+                  <div class="min-w-0 flex-1"><div class="truncate text-sm font-bold text-ink">{attachment.fileName}</div><div class="text-badge text-mute">Ditambahkan {formatDateTime(attachment.createdAt)}</div></div>
                   <a href={attachment.filePath} target="_blank" rel="noopener noreferrer" class="text-mute hover:text-ink" aria-label="Buka attachment"><HugeiconsIcon icon={Download04Icon} size={18} strokeWidth={1.8} /></a>
                   {#if canDeleteAttachment(attachment)}
                     <IconButton variant="ghost" size="sm" label="Hapus attachment" disabled={deletingAttachmentId === attachment.id} onclick={() => deleteAttachment(attachment.id)}><HugeiconsIcon icon={Delete02Icon} size={15} strokeWidth={1.8} /></IconButton>
@@ -2346,9 +2374,9 @@
                   </Button>
                 {/snippet}
               </TaskPicPicker>
-              <p class="text-xs text-mute">{tr('taskboard.mentionHelper')}</p>
+              <p class="text-badge text-mute">{tr('taskboard.mentionHelper')}</p>
               {#if commentMentionIds.length > 0}
-                <p class="text-xs text-primary">
+                <p class="text-badge text-primary">
                   {tr('taskboard.mentionedPeople', { names: formatMentionedNames(commentMentionIds) })}
                 </p>
               {/if}
@@ -2388,10 +2416,10 @@
             <article class="space-y-2">
               <div class="flex items-center gap-2">
                 <Avatar name={comment.authorName ?? '?'} size={28} />
-                <span class="truncate text-[13px] font-bold text-ink">
+                <span class="truncate text-meta font-bold text-ink">
                   {comment.authorName ?? tr('taskboard.unassigned')}
                 </span>
-                <span class="text-xs text-primary">{formatRelativeTime(comment.createdAt)}</span>
+                <span class="text-badge text-primary">{formatRelativeTime(comment.createdAt)}</span>
               </div>
 
               {#if editingCommentId === comment.id}
@@ -2420,18 +2448,18 @@
                   </Button>
                 </div>
               {:else}
-                <RichTextContent value={comment.content} class="rounded-xl bg-card px-8 py-2 !text-[15px] !leading-6" />
+                <RichTextContent value={comment.content} class="rounded-md bg-card px-8 py-2 !text-sm !leading-6" />
                 {#if comment.mentionedUserIds.length > 0}
-                  <p class="px-8 text-xs text-primary">
+                  <p class="px-8 text-badge text-primary">
                     {tr('taskboard.mentionedPeople', { names: formatMentionedNames(comment.mentionedUserIds) })}
                   </p>
                 {/if}
                 {#if canEditComment(comment)}
-                  <div class="flex items-center gap-1 pl-2 text-[11px] leading-4">
+                  <div class="flex items-center gap-1 pl-2 text-micro leading-4">
                     <Button
                       variant="link"
                       size="sm"
-                      class="h-auto px-0 py-0 !text-[11px] !leading-4"
+                      class="h-auto px-0 py-0 !text-micro !leading-4"
                       onclick={() => beginCommentEdit(comment)}
                     >
                       Edit
@@ -2440,7 +2468,7 @@
                     <Button
                       variant="link"
                       size="sm"
-                      class="h-auto px-0 py-0 !text-[11px] !leading-4 text-status-urgent"
+                      class="h-auto px-0 py-0 !text-micro !leading-4 text-status-urgent"
                       loading={deletingCommentId === comment.id}
                       onclick={() => void deleteComment(comment.id)}
                     >
@@ -2454,17 +2482,17 @@
 
           {#if taskActivityItems.length > 0}
             <div class="mt-5 border-t border-hairline pt-4">
-              <p class="mb-3 text-xs font-semibold text-mute">History</p>
+              <p class="mb-3 text-badge font-semibold text-mute">History</p>
               <div class="space-y-4">
                 {#each taskActivityItems as item (item.id)}
                   <article class="flex items-start gap-2.5">
                     <Avatar name={item.actorName ?? '?'} size={28} class="mt-0.5 shrink-0" />
                     <div class="min-w-0 flex-1">
-                      <p class="text-[13px] leading-5 text-ink-soft">
+                      <p class="text-meta leading-5 text-ink-soft">
                         <span class="font-bold text-ink">{item.actorName ?? 'System'}</span>
                         {item.description}
                       </p>
-                      <p class="mt-0.5 text-xs text-primary">{formatRelativeTime(item.createdAt)}</p>
+                      <p class="mt-0.5 text-badge text-primary">{formatRelativeTime(item.createdAt)}</p>
                     </div>
                   </article>
                 {/each}
@@ -2473,9 +2501,9 @@
           {/if}
 
           {#if activityError && taskActivityItems.length === 0}
-            <p class="text-[13px] text-status-urgent">{activityError}</p>
+            <p class="text-meta text-status-urgent">{activityError}</p>
           {:else if taskDetail.comments.length === 0 && taskActivityItems.length === 0}
-            <p class="text-[13px] text-mute">Belum ada aktivitas.</p>
+            <p class="text-meta text-mute">Belum ada aktivitas.</p>
           {/if}
         </div>
       </aside>
@@ -2500,7 +2528,7 @@
       <img
         src={previewAttachment.filePath}
         alt={previewAttachment.fileName}
-        class="max-h-[60vh] w-full rounded-xl bg-canvas-sunken object-contain"
+        class="max-h-[60vh] w-full rounded-md bg-canvas-sunken object-contain"
       />
       <p class="truncate text-sm text-mute">
         {previewAttachment.fileName} · {formatFileSize(previewAttachment.fileSize)}
@@ -2546,9 +2574,9 @@
 <Sheet bind:open={activityOpen} title={tr('taskboard.activityTitle')}>
   {#if activityLoading}
     <div class="space-y-3 py-4">
-      <Skeleton shape="rect" class="h-12 w-full rounded-xl" />
-      <Skeleton shape="rect" class="h-12 w-full rounded-xl" />
-      <Skeleton shape="rect" class="h-12 w-full rounded-xl" />
+      <Skeleton shape="rect" class="h-12 w-full rounded-md" />
+      <Skeleton shape="rect" class="h-12 w-full rounded-md" />
+      <Skeleton shape="rect" class="h-12 w-full rounded-md" />
     </div>
   {:else if activityError}
     <div class="space-y-3 py-4">
@@ -2562,11 +2590,11 @@
   {:else}
     <div class="space-y-2.5 py-2">
       {#each activityItems as item (item.id)}
-        <div class="flex items-start gap-2.5 rounded-xl border border-hairline bg-canvas-sunken/60 p-3">
+        <div class="flex items-start gap-2.5 rounded-md border border-hairline bg-canvas-sunken/60 p-3">
           <Avatar name={item.actorName ?? '?'} size={26} class="mt-0.5 shrink-0" />
           <div class="min-w-0 flex-1">
-            <p class="text-[13px] font-normal leading-relaxed text-ink-soft">{item.description}</p>
-            <p class="mt-1 text-[11px] text-faint">
+            <p class="text-meta font-normal leading-relaxed text-ink-soft">{item.description}</p>
+            <p class="mt-1 text-micro text-faint">
               {#if item.actorName}{item.actorName} · {/if}
               {formatDateTime(item.createdAt)}
             </p>
@@ -2619,7 +2647,7 @@
 
     <FormField label={tr('taskboard.dueDate')}>
       {#snippet control(args)}
-        <Input {...args} type="date" bind:value={newDueDate} />
+        <DatePicker {...args} bind:value={newDueDate} />
       {/snippet}
     </FormField>
 
@@ -2660,7 +2688,7 @@
           {#if newLabels.length > 0}
             <div class="flex flex-wrap gap-1.5 pt-1">
               {#each newLabels as label (label)}
-                <span class="inline-flex items-center gap-1 rounded-md bg-canvas-sunken border border-hairline px-2 py-0.5 text-xs font-semibold text-ink">
+                <span class="inline-flex items-center gap-1 rounded-md bg-canvas-sunken border border-hairline px-2 py-0.5 text-badge font-semibold text-ink">
                   <span>{label}</span>
                   <button
                     type="button"
@@ -2706,12 +2734,6 @@
     <FormField label={tr('taskboard.columnName')} required>
       {#snippet control(args)}
         <Input {...args} bind:value={columnName} placeholder={tr('taskboard.columnNamePlaceholder')} />
-      {/snippet}
-    </FormField>
-
-    <FormField label={tr('taskboard.columnColor')}>
-      {#snippet control(args)}
-        <SelectMenu {...args} bind:value={columnColor} options={colorOptions} />
       {/snippet}
     </FormField>
 
@@ -2761,10 +2783,10 @@
       {/snippet}
     </FormField>
 
-    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+    <div class="space-y-3 rounded-md border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
       <div>
-        <p class="text-xs font-semibold text-ink">Hak Akses Papan</p>
-        <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+        <p class="text-badge font-semibold text-ink">Hak Akses Papan</p>
+        <p class="text-micro text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
       </div>
       <FormField label="Akses Grup / Departemen">
         {#snippet control()}

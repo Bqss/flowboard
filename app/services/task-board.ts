@@ -37,6 +37,7 @@ const DEFAULT_COLUMNS: { name: string; color: string }[] = [
   { name: 'In Progress', color: 'amber' },
   { name: 'Done', color: 'emerald' }
 ];
+const AUTO_COLUMN_COLORS = ['indigo', 'amber', 'emerald', 'sky', 'rose'];
 
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50 MB
 
@@ -535,13 +536,14 @@ export const createColumn = async (
   actor?: { userId: string }
 ) => {
   const existing = await listColumns(boardId);
+  const autoColor = AUTO_COLUMN_COLORS[existing.length % AUTO_COLUMN_COLORS.length];
 
   const [column] = await db
     .insert(taskColumns)
     .values({
       boardId,
       name: input.name.trim(),
-      color: input.color?.trim() || 'indigo',
+      color: input.color?.trim() || autoColor,
       position: existing.length
     })
     .returning();
@@ -1069,7 +1071,9 @@ export const moveTask = async (
     .where(eq(tasks.columnId, target.id))
     .orderBy(asc(tasks.position), asc(tasks.createdAt));
 
-  const position = Math.min(input.position ?? targetTasks.length, targetTasks.length);
+  // A cross-column drag without an explicit drop index should land at the top
+  // of the destination column. Existing tasks are shifted down below it.
+  const position = Math.min(input.position ?? 0, targetTasks.length);
   targetTasks.splice(position, 0, { ...task, columnId: target.id });
 
   const maxPosition = columns.reduce((max, column) => Math.max(max, column.position), 0);

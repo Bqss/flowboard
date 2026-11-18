@@ -2,7 +2,9 @@ import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lt, lte, 
 import {
   cards,
   chatConversations,
+  checklistItemGroups,
   checklistItems,
+  checklistTemplateGroups,
   checklistTemplates,
   customers,
   db,
@@ -18,6 +20,17 @@ import { findOrCreateCustomer, normalizeWa } from './customer';
 import { parseCustomerCsv, type ColumnMapping } from '../lib/csv';
 import { createNotification, hasRecentNotification, resolveNotifyTarget } from './notification';
 import { getChecklistActionForTemplate, onCardEnteredStage, upsertChecklistAction } from './whatsapp';
+import {
+  copyChecklistGroupsToCard,
+  createChecklistTemplateGroup,
+  createChecklistTemplateItem,
+  deleteChecklistTemplateItem,
+  ensureCardChecklistGroups,
+  hasIncompleteGatedGroup,
+  listCardChecklistGroups,
+  listChecklistTemplateGroups,
+  syncChecklistTemplateItemToCards
+} from './checklist-group';
 import type { ChecklistActionKind, CardSource } from '@db';
 import type { WorkflowDraft } from './ai-workflow';
 import { normalizeWorkflowDraft } from './ai-workflow';
@@ -37,6 +50,7 @@ const DEFAULT_STAGES: { name: string; color: string }[] = [
   { name: 'In Progress', color: 'amber' },
   { name: 'Done', color: 'emerald' }
 ];
+const AUTO_STAGE_COLORS = ['indigo', 'amber', 'emerald', 'rose', 'cyan', 'violet', 'fuchsia', 'teal'];
 
 export const getWorkflowInWorkspace = async (workspaceId: string, workflowId: string) => {
   const [row] = await db
@@ -318,18 +332,46 @@ export const createWorkflowFromDraft = async (
       })
       .returning();
 
-    for (let cIndex = 0; cIndex < stageDraft.checklists.length; cIndex += 1) {
-      const checklist = stageDraft.checklists[cIndex];
+    const groupIdByPath = new Map<string, string>();
+    const nextChecklistPosition = new Map<string, number>();
+
+    for (const checklist of stageDraft.checklists) {
+      const groupPath = (checklist.groupPath ?? []).map((name) => name.trim()).filter(Boolean).slice(0, 3);
+      let parentGroupId: string | null = null;
+
+      for (let depth = 0; depth < groupPath.length; depth += 1) {
+        const path = groupPath.slice(0, depth + 1);
+        const groupName = groupPath[depth];
+        if (!groupName) continue;
+
+        const pathKey = JSON.stringify(path);
+        let groupId = groupIdByPath.get(pathKey);
+        if (!groupId) {
+          const createdGroup = await createChecklistTemplateGroup(stage.id, {
+            name: groupName,
+            parentId: parentGroupId
+          });
+          groupId = createdGroup.id;
+          groupIdByPath.set(pathKey, groupId);
+        }
+
+        parentGroupId = groupId;
+      }
+
+      const checklistPathKey = JSON.stringify(groupPath);
+      const position = nextChecklistPosition.get(checklistPathKey) ?? 0;
       const [template] = await db
         .insert(checklistTemplates)
         .values({
           stageId: stage.id,
+          groupId: parentGroupId,
           label: checklist.label,
           required: checklist.required ?? true,
           deadlineHours: checklist.deadlineHours ?? null,
-          position: cIndex
+          position
         })
         .returning();
+      nextChecklistPosition.set(checklistPathKey, position + 1);
 
       if (checklist.action && checklist.action.kind !== 'none') {
         await upsertChecklistAction(template.id, checklist.action);
@@ -451,13 +493,14 @@ export const createStage = async (
 ) => {
   const existing = await listStages(workflowId);
   const position = existing.length;
+  const autoColor = AUTO_STAGE_COLORS[position % AUTO_STAGE_COLORS.length];
 
   const [stage] = await db
     .insert(stages)
     .values({
       workflowId,
       name: input.name.trim(),
-      color: input.color?.trim() || 'indigo',
+      color: input.color?.trim() || autoColor,
       position
     })
     .returning();
@@ -580,52 +623,44 @@ export const listChecklistTemplates = async (stageId: string) =>
     .where(eq(checklistTemplates.stageId, stageId))
     .orderBy(asc(checklistTemplates.position), asc(checklistTemplates.createdAt));
 
+// Template item create/update/delete are mirrored onto every card in the stage (see checklist-group service).
 export const createChecklistTemplate = async (
   stageId: string,
-  input: { label: string; required?: boolean }
-) => {
-  const existing = await listChecklistTemplates(stageId);
-
-  const [template] = await db
-    .insert(checklistTemplates)
-    .values({
-      stageId,
-      label: input.label.trim(),
-      required: input.required ?? true,
-      position: existing.length
-    })
-    .returning();
-
-  return template;
-};
+  input: { label: string; required?: boolean; deadlineHours?: number | null; groupId?: string | null }
+) => createChecklistTemplateItem(stageId, input);
 
 export const updateChecklistTemplate = async (
   templateId: string,
-  input: { label?: string; required?: boolean; position?: number }
+  input: { label?: string; required?: boolean; deadlineHours?: number | null; position?: number }
 ) => {
   const [template] = await db
     .update(checklistTemplates)
     .set({
       ...(input.label !== undefined ? { label: input.label.trim() } : {}),
       ...(input.required !== undefined ? { required: input.required } : {}),
+      ...(input.deadlineHours !== undefined ? { deadlineHours: input.deadlineHours } : {}),
       ...(input.position !== undefined ? { position: input.position } : {})
     })
     .where(eq(checklistTemplates.id, templateId))
     .returning();
 
+  if (template) {
+    await syncChecklistTemplateItemToCards(templateId, {
+      label: input.label,
+      required: input.required
+    });
+  }
+
   return template ?? null;
 };
 
-export const deleteChecklistTemplate = async (templateId: string) => {
-  const [deleted] = await db
-    .delete(checklistTemplates)
-    .where(eq(checklistTemplates.id, templateId))
-    .returning();
-
-  return deleted ?? null;
-};
+export const deleteChecklistTemplate = async (stageId: string, templateId: string) =>
+  deleteChecklistTemplateItem(stageId, templateId);
 
 const copyChecklistTemplatesToCard = async (cardId: string, stageId: string) => {
+  // Groups first (even empty folders), so items can be linked to their card group.
+  const groupMap = await copyChecklistGroupsToCard(cardId, stageId);
+
   const templates = await listChecklistTemplates(stageId);
   if (templates.length === 0) return [];
 
@@ -636,6 +671,7 @@ const copyChecklistTemplatesToCard = async (cardId: string, stageId: string) => 
         cardId,
         stageId,
         templateId: template.id,
+        groupId: template.groupId ? (groupMap.get(template.groupId) ?? null) : null,
         label: template.label,
         required: template.required,
         position: index
@@ -860,6 +896,7 @@ export const advanceCardIfChecklistComplete = async (cardId: string) => {
 
   const progress = await getChecklistProgress(card.id, card.stageId);
   if (progress.total === 0 || progress.done < progress.total) return null;
+  if (await hasIncompleteGatedGroup(card.id, card.stageId)) return null;
 
   const workflowStages = await listStages(card.workflowId);
   const currentIndex = workflowStages.findIndex((stage) => stage.id === card.stageId);
@@ -952,11 +989,17 @@ export const getBoard = async (
           .orderBy(asc(checklistItems.position));
 
   const itemsByCardStage = new Map<string, typeof allItems>();
+  const progressByCard = new Map<string, { done: number; total: number }>();
   for (const item of allItems) {
     const key = `${item.cardId}:${item.stageId}`;
     const bucket = itemsByCardStage.get(key) ?? [];
     bucket.push(item);
     itemsByCardStage.set(key, bucket);
+
+    const progress = progressByCard.get(item.cardId) ?? { done: 0, total: 0 };
+    progress.total += 1;
+    if (item.done) progress.done += 1;
+    progressByCard.set(item.cardId, progress);
   }
 
   const stageIds = workflowStages.map((stage) => stage.id);
@@ -993,8 +1036,10 @@ export const getBoard = async (
       totalCount: page?.totalCount ?? 0,
       cards: (page?.cards ?? []).map((row) => {
         const stageItems = itemsByCardStage.get(`${row.card.id}:${stage.id}`) ?? [];
-        const total = stageItems.length > 0 ? stageItems.length : templates.length;
-        const done = stageItems.filter((item) => item.done).length;
+        const currentStageTotal = stageItems.length > 0 ? stageItems.length : templates.length;
+        const currentStageDone = stageItems.filter((item) => item.done).length;
+        const overallProgress = progressByCard.get(row.card.id) ?? { done: 0, total: 0 };
+        const currentStageTemplateFallback = stageItems.length === 0 ? templates.length : 0;
 
         return {
           id: row.card.id,
@@ -1005,8 +1050,10 @@ export const getBoard = async (
           assigneeId: row.card.assigneeId,
           assigneeName: row.assigneeName,
           stageId: row.card.stageId,
-          checklistDone: done,
-          checklistTotal: total,
+          checklistDone: currentStageDone,
+          checklistTotal: currentStageTotal,
+          checklistDoneOverall: overallProgress.done,
+          checklistTotalOverall: overallProgress.total + currentStageTemplateFallback,
           waErrorFlag: row.card.waErrorFlag,
           dueAt: row.card.dueAt,
           completedAt: row.card.completedAt,
@@ -1043,6 +1090,10 @@ export const getCardDetail = async (workflowId: string, cardId: string) => {
   if (checklist.length === 0 && stage) {
     checklist = await copyChecklistTemplatesToCard(cardId, stage.id);
   }
+  if (stage) {
+    await ensureCardChecklistGroups(cardId, stage.id);
+  }
+  const groups = stage ? await listCardChecklistGroups(cardId, stage.id) : [];
   const workflowStages = await listStages(workflowId);
   const stageIndex = workflowStages.findIndex((item) => item.id === card.stageId);
   const nextStage = stageIndex >= 0 ? workflowStages[stageIndex + 1] : undefined;
@@ -1062,6 +1113,7 @@ export const getCardDetail = async (workflowId: string, cardId: string) => {
     customer: customer ?? null,
     stage,
     checklist,
+    groups,
     assigneeName: assignee?.name ?? null,
     nextStage: nextStage ?? null,
     nextWorkflow,
@@ -1248,55 +1300,88 @@ export const toggleChecklistItem = async (
   const card = await getCardInWorkflow(workflowId, cardId);
   if (!card) throw new WorkflowError('Card not found.', 'not_found');
 
-  const [item] = await db
+  let [item] = await db
     .select()
     .from(checklistItems)
     .where(and(eq(checklistItems.id, itemId), eq(checklistItems.cardId, cardId)))
     .limit(1);
 
-  if (!item) throw new WorkflowError('Checklist item not found.', 'not_found');
-  if (item.stageId !== card.stageId) {
-    throw new WorkflowError('Checklist item does not belong to the current stage.');
+  if (!item) {
+    const [template] = await db
+      .select()
+      .from(checklistTemplates)
+      .where(eq(checklistTemplates.id, itemId))
+      .limit(1);
+    const templateStage = template ? await getStageInWorkflow(workflowId, template.stageId) : null;
+    if (!template || !templateStage) {
+      throw new WorkflowError('Checklist item not found.', 'not_found');
+    }
+
+    const stageItems = await getCardChecklistForStage(cardId, template.stageId);
+    if (stageItems.length === 0) {
+      await copyChecklistTemplatesToCard(cardId, template.stageId);
+    }
+
+    [item] = await db
+      .select()
+      .from(checklistItems)
+      .where(and(eq(checklistItems.cardId, cardId), eq(checklistItems.templateId, template.id)))
+      .limit(1);
   }
 
+  if (!item) throw new WorkflowError('Checklist item not found.', 'not_found');
+  if (!(await getStageInWorkflow(workflowId, item.stageId))) {
+    throw new WorkflowError('Checklist item does not belong to this workflow.');
+  }
+
+  const isCurrentStage = item.stageId === card.stageId;
   const [updated] = await db
     .update(checklistItems)
     .set({ done, updatedAt: new Date() })
-    .where(eq(checklistItems.id, itemId))
+    .where(eq(checklistItems.id, item.id))
     .returning();
 
-  if (done) {
+  if (done && isCurrentStage) {
     await advanceCardIfChecklistComplete(cardId);
   }
 
   return updated;
 };
 
+/**
+ * Adds an item from the card drawer. Per the "ikut berubah" rule this writes to the stage template
+ * and mirrors it onto every card in the stage. groupId is a CARD group id (from card detail).
+ */
 export const addChecklistItemToCard = async (
   workflowId: string,
   cardId: string,
-  input: { label: string; required?: boolean }
+  input: { label: string; required?: boolean; groupId?: string | null }
 ) => {
   const card = await getCardInWorkflow(workflowId, cardId);
   if (!card) throw new WorkflowError('Card not found.', 'not_found');
 
-  const [lastItem] = await db
-    .select({ position: checklistItems.position })
-    .from(checklistItems)
-    .where(eq(checklistItems.cardId, cardId))
-    .orderBy(desc(checklistItems.position))
-    .limit(1);
+  let templateGroupId: string | null = null;
+  if (input.groupId) {
+    const [cardGroup] = await db
+      .select({ templateGroupId: checklistItemGroups.templateGroupId })
+      .from(checklistItemGroups)
+      .where(and(eq(checklistItemGroups.id, input.groupId), eq(checklistItemGroups.cardId, cardId)))
+      .limit(1);
+    if (!cardGroup?.templateGroupId) throw new WorkflowError('Group not found.', 'not_found');
+    templateGroupId = cardGroup.templateGroupId;
+  }
+
+  const template = await createChecklistTemplateItem(card.stageId, {
+    label: input.label,
+    required: input.required ?? false,
+    groupId: templateGroupId
+  });
 
   const [item] = await db
-    .insert(checklistItems)
-    .values({
-      cardId,
-      stageId: card.stageId,
-      label: input.label.trim(),
-      required: input.required ?? false,
-      position: (lastItem?.position ?? -1) + 1
-    })
-    .returning();
+    .select()
+    .from(checklistItems)
+    .where(and(eq(checklistItems.templateId, template.id), eq(checklistItems.cardId, cardId)))
+    .limit(1);
 
   return item;
 };
@@ -1308,6 +1393,19 @@ export const deleteChecklistItemFromCard = async (
 ) => {
   const card = await getCardInWorkflow(workflowId, cardId);
   if (!card) throw new WorkflowError('Card not found.', 'not_found');
+
+  const [item] = await db
+    .select()
+    .from(checklistItems)
+    .where(and(eq(checklistItems.id, itemId), eq(checklistItems.cardId, cardId)))
+    .limit(1);
+  if (!item) return false;
+
+  if (item.templateId) {
+    // Template-linked item: remove from the stage template (mirrored to all cards),
+    // then remove this card's copy too, since the user explicitly deleted it here.
+    await deleteChecklistTemplateItem(card.stageId, item.templateId);
+  }
 
   const [deleted] = await db
     .delete(checklistItems)
@@ -1344,6 +1442,9 @@ export const moveCardToStage = async (
     const progress = await getChecklistProgress(card.id, card.stageId);
     if (progress.total > 0 && progress.done < progress.total) {
       throw new WorkflowError('Selesaikan checklist wajib sebelum pindah stage.');
+    }
+    if (await hasIncompleteGatedGroup(card.id, card.stageId)) {
+      throw new WorkflowError('Selesaikan group yang wajib sebelum pindah stage.');
     }
   }
 
@@ -1665,8 +1766,9 @@ export const getWorkflowSetup = async (workflowId: string) => {
           action: await getChecklistActionForTemplate(template.id)
         }))
       );
+      const groups = await listChecklistTemplateGroups(stage.id);
 
-      return { stage, templates: withActions };
+      return { stage, templates: withActions, groups };
     })
   );
 
@@ -1945,4 +2047,125 @@ const getPeriodTag = (rule: string, cycleStart: Date): string => {
   }
   const d = String(cycleStart.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+/**
+ * One customer's checklist laid out per stage (customer-scoped board for the list view).
+ * Stages the card has reached show their own items; upcoming stages preview templates that
+ * become card items when the first preview item is checked.
+ */
+export const getCardChecklistBoard = async (workflowId: string, cardId: string) => {
+  const card = await getCardInWorkflow(workflowId, cardId);
+  if (!card) return null;
+
+  // Make sure the current stage has its items and groups (cards created before groups or never opened).
+  const currentItems = await getCardChecklistForStage(cardId, card.stageId);
+  if (currentItems.length === 0) await copyChecklistTemplatesToCard(cardId, card.stageId);
+  await ensureCardChecklistGroups(cardId, card.stageId);
+
+  const workflowStages = await listStages(workflowId);
+  const stageIds = workflowStages.map((stage) => stage.id);
+  const currentIndex = workflowStages.findIndex((stage) => stage.id === card.stageId);
+
+  const [customer] = await db
+    .select({ name: customers.name })
+    .from(customers)
+    .where(eq(customers.id, card.customerId))
+    .limit(1);
+
+  const items = await db
+    .select()
+    .from(checklistItems)
+    .where(eq(checklistItems.cardId, cardId))
+    .orderBy(asc(checklistItems.position), asc(checklistItems.createdAt));
+
+  const cardGroups = await db
+    .select()
+    .from(checklistItemGroups)
+    .where(eq(checklistItemGroups.cardId, cardId))
+    .orderBy(asc(checklistItemGroups.position), asc(checklistItemGroups.createdAt));
+
+  const templates =
+    stageIds.length > 0
+      ? await db
+          .select()
+          .from(checklistTemplates)
+          .where(inArray(checklistTemplates.stageId, stageIds))
+          .orderBy(asc(checklistTemplates.position), asc(checklistTemplates.createdAt))
+      : [];
+
+  const templateGroups =
+    stageIds.length > 0
+      ? await db
+          .select()
+          .from(checklistTemplateGroups)
+          .where(inArray(checklistTemplateGroups.stageId, stageIds))
+          .orderBy(asc(checklistTemplateGroups.position), asc(checklistTemplateGroups.createdAt))
+      : [];
+  const templatesById = new Map(templates.map((template) => [template.id, template]));
+
+  return {
+    cardId: card.id,
+    customerName: customer?.name ?? '',
+    assigneeId: card.assigneeId ?? null,
+    currentStageId: card.stageId,
+    stages: workflowStages.map((stage, index) => {
+      const isCurrent = stage.id === card.stageId;
+      const reached = index <= currentIndex;
+      const status = isCurrent ? ('current' as const) : reached ? ('past' as const) : ('upcoming' as const);
+      const own = items.filter((item) => item.stageId === stage.id);
+
+      if (own.length > 0 || reached) {
+        return {
+          stage: { id: stage.id, name: stage.name, color: stage.color, position: stage.position },
+          status,
+          groups: cardGroups
+            .filter((group) => group.stageId === stage.id)
+            .map((group) => ({
+              id: group.id,
+              parentId: group.parentId ?? null,
+              name: group.name,
+              requiresCompletion: group.requiresCompletion,
+              position: group.position
+            })),
+          items: own.map((item) => ({
+            id: item.id,
+            label: item.label,
+            required: item.required,
+            deadlineHours: item.templateId ? templatesById.get(item.templateId)?.deadlineHours ?? null : null,
+            done: item.done,
+            groupId: item.groupId ?? null,
+            preview: false,
+            editable: true
+          }))
+        };
+      }
+
+      return {
+        stage: { id: stage.id, name: stage.name, color: stage.color, position: stage.position },
+        status,
+        groups: templateGroups
+          .filter((group) => group.stageId === stage.id)
+          .map((group) => ({
+            id: group.id,
+            parentId: group.parentId ?? null,
+            name: group.name,
+            requiresCompletion: group.requiresCompletion,
+            position: group.position
+          })),
+        items: templates
+          .filter((template) => template.stageId === stage.id)
+          .map((template) => ({
+            id: template.id,
+            label: template.label,
+            required: template.required,
+            deadlineHours: template.deadlineHours ?? null,
+            done: false,
+            groupId: template.groupId ?? null,
+            preview: true,
+            editable: true
+          }))
+      };
+    })
+  };
 };

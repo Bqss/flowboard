@@ -5,8 +5,15 @@ export type WorkflowDraftAction = {
   followupIfNoReply?: boolean;
 };
 
+export type WorkflowDraftChecklistGroup = {
+  name: string;
+  checklists?: WorkflowDraftChecklist[];
+  groups?: WorkflowDraftChecklistGroup[];
+};
+
 export type WorkflowDraftChecklist = {
   label: string;
+  groupPath?: string[];
   required?: boolean;
   deadlineHours?: number | null;
   action?: WorkflowDraftAction;
@@ -19,6 +26,12 @@ export type WorkflowDraftStage = {
   overdueReminderHours?: number | null;
   autoMoveOnComplete?: boolean;
   checklists: WorkflowDraftChecklist[];
+  groups?: WorkflowDraftChecklistGroup[];
+};
+
+export type WorkflowDraftImage = {
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+  dataUrl: string;
 };
 
 export type WorkflowDraft = {
@@ -34,6 +47,7 @@ export type WorkflowDraft = {
   repeatRule?: 'none' | 'daily' | 'weekly' | 'monthly';
   closureBy?: 'initiator' | 'assignee';
 };
+
 
 const STAGE_COLORS = ['indigo', 'amber', 'rose', 'emerald', 'violet', 'cyan'] as const;
 const webinarDraft = (prompt: string): WorkflowDraft => {
@@ -152,7 +166,11 @@ const parseDraftJson = (raw: string): WorkflowDraft | null => {
   }
 };
 
-const generateWithRouter = async (prompt: string, userPhone?: string | null): Promise<WorkflowDraft | null> => {
+const generateWithRouter = async (
+  prompt: string,
+  userPhone?: string | null,
+  images: WorkflowDraftImage[] = []
+): Promise<WorkflowDraft | null> => {
   const apiKey = process.env.BASOFI_AI_API_KEY;
   const baseURL = process.env.BASOFI_AI_ENDPOINT;
   if (!apiKey || !baseURL) return null;
@@ -181,6 +199,7 @@ Return ONLY valid JSON with shape:
       "checklists": [
         {
           "label": string,
+          "groupPath": string[] (optional — nested checklist group names from root to leaf, max 3 levels; omit or use [] for root items),
           "required": boolean,
           "deadlineHours": number|null (optional — deadline for this checklist item in hours),
           "action": {
@@ -194,7 +213,11 @@ Return ONLY valid JSON with shape:
     }
   ]
 }
-Use Indonesian labels. WA templates must use {{nama}}, {{wa}}, {{product}}, {{tag}}, {{link}}.${phoneContext}
+The workflow structure is hierarchical: workflow > stages > checklist groups > checklist items.
+When the source is a table or image, map the top-level title to the workflow name, day/date/section rows to stages, numbered task rows to checklist items, and subheadings such as "Langkah 2" to groupPath instead of making them duplicate checklist items.
+Preserve stage order, checklist order, multiline task text, and the source language. Do not flatten separate days into one stage. If no day/section exists, use one sensible stage.
+Use Indonesian labels only when the user writes Indonesian; otherwise preserve the user's language.
+WA templates must use {{nama}}, {{wa}}, {{product}}, {{tag}}, {{link}}.${phoneContext}
 Set autoMoveOnComplete=true for stages where the customer should advance automatically once all required checklists are done (e.g. after payment confirmation, after attendance marking).
 Set deadlineHours on time-sensitive checklist items (e.g. "Kirim reminder H-1" → deadlineHours: 24).
 Include WA actions where the user mentions reminders or follow-up.
@@ -203,6 +226,19 @@ Set repeatRule based on user's description: "gaji bulanan" or "monthly" → "mon
 Set closureBy="initiator" when the task needs verification (e.g. payments need approval), "assignee" for self-managed tasks.
 Set deadlineValue when the user mentions a time frame (e.g. "selesai dalam 5 hari" → deadlineValue: 5, deadlineUnit: "days").
 Set reminderBeforeValue when the user wants advance notification (e.g. "ingatkan H-1" → reminderBeforeValue: 24, reminderBeforeUnit: "hours").`;
+
+  const userContent = images.length > 0
+    ? [
+        {
+          type: 'text',
+          text: prompt || 'Create a workflow draft from the attached image. Read its hierarchy and preserve every stage and checklist item.'
+        },
+        ...images.map((image) => ({
+          type: 'image_url',
+          image_url: { url: image.dataUrl }
+        }))
+      ]
+    : prompt;
 
   const res = await fetch(`${baseURL}/chat/completions`, {
     method: 'POST',
@@ -217,7 +253,7 @@ Set reminderBeforeValue when the user wants advance notification (e.g. "ingatkan
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
-        { role: 'user', content: prompt }
+        { role: 'user', content: userContent }
       ]
     })
   });
@@ -233,21 +269,46 @@ Set reminderBeforeValue when the user wants advance notification (e.g. "ingatkan
   return parseDraftJson(content);
 };
 
-export const generateWorkflowDraft = async (prompt: string, userPhone?: string | null): Promise<WorkflowDraft> => {
+export const generateWorkflowDraft = async (
+  prompt: string,
+  userPhone?: string | null,
+  images: WorkflowDraftImage[] = []
+): Promise<WorkflowDraft> => {
   const trimmed = prompt.trim();
-  if (!trimmed) {
+  if (!trimmed && images.length === 0) {
     return genericOnboardingDraft('Onboarding Pelanggan');
   }
 
-  const fromAi = await generateWithRouter(trimmed, userPhone);
-  if (fromAi) return fromAi;
+  const fromAi = await generateWithRouter(trimmed, userPhone, images);
+  if (fromAi) return normalizeWorkflowDraft(fromAi);
 
   const lower = trimmed.toLowerCase();
   if (lower.includes('webinar') || lower.includes('daftar') || lower.includes('reminder')) {
     return webinarDraft(trimmed);
   }
 
-  return genericOnboardingDraft(trimmed);
+  return genericOnboardingDraft(trimmed || 'Onboarding Pelanggan');
+};
+
+const flattenStageGroups = (stage: WorkflowDraftStage): WorkflowDraftChecklist[] => {
+  const checklists = [...(stage.checklists ?? [])];
+
+  const appendGroups = (groups: WorkflowDraftChecklistGroup[] | undefined, parentPath: string[]) => {
+    for (const group of groups ?? []) {
+      const name = typeof group.name === 'string' ? group.name.trim() : '';
+      const groupPath = name ? [...parentPath, name].slice(0, 3) : parentPath;
+      for (const item of group.checklists ?? []) {
+        checklists.push({
+          ...item,
+          groupPath: item.groupPath ?? groupPath
+        });
+      }
+      appendGroups(group.groups, groupPath);
+    }
+  };
+
+  appendGroups(stage.groups, []);
+  return checklists;
 };
 
 export const normalizeWorkflowDraft = (draft: WorkflowDraft): WorkflowDraft => ({
@@ -264,8 +325,11 @@ export const normalizeWorkflowDraft = (draft: WorkflowDraft): WorkflowDraft => (
     onReplyNotify: stage.onReplyNotify ?? false,
     overdueReminderHours: stage.overdueReminderHours ?? null,
     autoMoveOnComplete: stage.autoMoveOnComplete ?? false,
-    checklists: (stage.checklists ?? []).map((item) => ({
-      label: item.label.trim(),
+    checklists: flattenStageGroups(stage).map((item) => ({
+      label: typeof item.label === 'string' ? item.label.trim() : '',
+      groupPath: Array.isArray(item.groupPath)
+        ? item.groupPath.map((group) => group.trim()).filter(Boolean).slice(0, 3)
+        : [],
       required: item.required ?? true,
       deadlineHours: item.deadlineHours ?? null,
       action: item.action?.kind && item.action.kind !== 'none'

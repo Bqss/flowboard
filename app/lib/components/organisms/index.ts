@@ -28,6 +28,8 @@ import WorkflowStageEditor from './WorkflowStageEditor.svelte';
 import Dialog from './Dialog.svelte';
 import Sheet from './Sheet.svelte';
 import ConfirmDialog from './ConfirmDialog.svelte';
+import ChecklistTree from './ChecklistTree.svelte';
+import ChecklistStageBoard from './ChecklistStageBoard.svelte';
 import ChatMessageInfoDialog from './ChatMessageInfoDialog.svelte';
 import Popover from './Popover.svelte';
 import AlertBanner from './AlertBanner.svelte';
@@ -97,6 +99,8 @@ export {
 	Dialog,
 	Sheet,
 	ConfirmDialog,
+	ChecklistTree,
+	ChecklistStageBoard,
 	ChatMessageInfoDialog,
 	Popover,
 	AlertBanner,

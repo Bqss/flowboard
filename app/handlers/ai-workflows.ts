@@ -1,10 +1,13 @@
 import { type Ctx } from '@core';
-import { generateWorkflowDraft } from '@services/ai-workflow';
+import { generateWorkflowDraft, type WorkflowDraftImage } from '@services/ai-workflow';
 import { createWorkflowFromDraft, WorkflowError } from '@services/workflow';
 
 type WorkspaceParams = { workspaceId: string };
 
-type GenerateDraftBody = { prompt: string };
+type GenerateDraftBody = {
+  prompt: string;
+  images?: WorkflowDraftImage[];
+};
 
 type SaveDraftBody = {
   name: string;
@@ -17,6 +20,7 @@ type SaveDraftBody = {
     autoMoveOnComplete?: boolean;
     checklists: Array<{
       label: string;
+      groupPath?: string[];
       required?: boolean;
       deadlineHours?: number | null;
       action?: {
@@ -52,9 +56,21 @@ export async function generateDraft({
     set.status = 403;
     return { error: 'Owner access required' };
   }
+  if (body.images && body.images.length > 0 && (!process.env.BASOFI_AI_API_KEY || !process.env.BASOFI_AI_ENDPOINT)) {
+    set.status = 503;
+    return { error: 'Image-based workflow generation requires the AI provider to be configured.' };
+  }
 
-  const draft = await generateWorkflowDraft(body.prompt, user.phone);
-  return { draft, provider: process.env.BASOFI_AI_API_KEY ? 'ai' : 'heuristic' };
+  try {
+    const draft = await generateWorkflowDraft(body.prompt, user.phone, body.images ?? []);
+    return { draft, provider: process.env.BASOFI_AI_API_KEY ? 'ai' : 'heuristic' };
+  } catch (error) {
+    if (body.images && body.images.length > 0) {
+      set.status = 502;
+      return { error: 'The AI provider could not process the attached image.' };
+    }
+    throw error;
+  }
 }
 
 export async function saveDraft({

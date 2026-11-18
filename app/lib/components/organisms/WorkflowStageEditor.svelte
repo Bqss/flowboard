@@ -1,20 +1,14 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { cn } from '$lib/utils.js';
   import {
     api,
     ApiError,
-    type ApiWorkflow,
     type ApiWorkflowSetupStage
   } from '$lib/api/client';
+  import { Button, IconButton, Checkbox, Input, Badge, Textarea, Switch } from '$lib/components/atoms/index.js';
   import {
-    Button,
-    IconButton,
-    Checkbox,
-    Input,
-    Badge,
-    Textarea
-  } from '$lib/components/atoms/index.js';
-  import {
+    DropdownMenu,
     FormField,
     SelectMenu,
     toast
@@ -25,17 +19,11 @@
     Add01Icon,
     Delete02Icon,
     Edit02Icon,
-    ArrowRight01Icon,
-    ArrowLeft01Icon,
-    Clock01Icon,
-    Alert02Icon,
     Tick02Icon,
-    PlayIcon,
     WhatsappIcon,
-    FlowConnectionIcon,
     CheckmarkBadge01Icon,
-    CircleIcon,
-    DragDropVerticalIcon
+    DragDropVerticalIcon,
+    Clock01Icon
   } from '@hugeicons/core-free-icons';
   import { dashboardText } from '$lib/i18n/dashboard.js';
   import { locale } from '$lib/i18n/index.js';
@@ -47,7 +35,6 @@
     workspaceId: string;
     workflowId: string;
     stages: ApiWorkflowSetupStage[];
-    allWorkflows?: ApiWorkflow[];
     canManage?: boolean;
     openCreateStageModal?: () => void;
     onchange?: () => void | Promise<void>;
@@ -57,130 +44,20 @@
     workspaceId,
     workflowId,
     stages = $bindable([]),
-    allWorkflows = [],
     canManage = true,
     openCreateStageModal = $bindable(),
     onchange
   }: Props = $props();
 
-  // Color Definitions & Meta
-  const stageColorOptions = [
-    'indigo',
-    'amber',
-    'emerald',
-    'rose',
-    'cyan',
-    'violet',
-    'fuchsia',
-    'teal'
-  ] as const;
-
-  const stageColorMeta: Record<
-    string,
-    {
-      name: string;
-      description: string;
-      icon: any;
-      bgBadge: string;
-      textBadge: string;
-      borderBadge: string;
-      color: string;
-    }
-  > = {
-    indigo: {
-      name: 'Indigo',
-      description: tr('setup.colorIndigo'),
-      icon: Clock01Icon,
-      bgBadge: 'bg-primary-soft',
-      textBadge: 'text-primary',
-      borderBadge: 'border-primary-border/60',
-      color: '#6366f1'
-    },
-    amber: {
-      name: 'Amber',
-      description: tr('setup.colorAmber'),
-      icon: PlayIcon,
-      bgBadge: 'bg-status-progress-soft',
-      textBadge: 'text-status-progress-ink',
-      borderBadge: 'border-status-progress-border/60',
-      color: '#f59e0b'
-    },
-    emerald: {
-      name: 'Hijau',
-      description: tr('setup.colorEmerald'),
-      icon: Tick02Icon,
-      bgBadge: 'bg-status-done-soft',
-      textBadge: 'text-status-done-ink',
-      borderBadge: 'border-status-done-border/60',
-      color: '#10b981'
-    },
-    rose: {
-      name: 'Mawar',
-      description: tr('setup.colorRose'),
-      icon: Alert02Icon,
-      bgBadge: 'bg-status-urgent-soft',
-      textBadge: 'text-status-urgent-ink',
-      borderBadge: 'border-status-urgent-border/60',
-      color: '#f43f5e'
-    },
-    cyan: {
-      name: 'Cyan',
-      description: tr('setup.colorCyan'),
-      icon: CircleIcon,
-      bgBadge: 'bg-cyan-50 dark:bg-cyan-950/30',
-      textBadge: 'text-cyan-700 dark:text-cyan-300',
-      borderBadge: 'border-cyan-200 dark:border-cyan-800',
-      color: '#06b6d4'
-    },
-    violet: {
-      name: 'Ungu',
-      description: tr('setup.colorViolet'),
-      icon: CircleIcon,
-      bgBadge: 'bg-violet-50 dark:bg-violet-950/30',
-      textBadge: 'text-violet-700 dark:text-violet-300',
-      borderBadge: 'border-violet-200 dark:border-violet-800',
-      color: '#8b5cf6'
-    },
-    fuchsia: {
-      name: 'Fuchsia',
-      description: tr('setup.colorFuchsia'),
-      icon: CircleIcon,
-      bgBadge: 'bg-fuchsia-50 dark:bg-fuchsia-950/30',
-      textBadge: 'text-fuchsia-700 dark:text-fuchsia-300',
-      borderBadge: 'border-fuchsia-200 dark:border-fuchsia-800',
-      color: '#d946ef'
-    },
-    teal: {
-      name: 'Teal',
-      description: tr('setup.colorTeal'),
-      icon: CircleIcon,
-      bgBadge: 'bg-teal-50 dark:bg-teal-950/30',
-      textBadge: 'text-teal-700 dark:text-teal-300',
-      borderBadge: 'border-teal-200 dark:border-teal-800',
-      color: '#14b8a6'
-    }
-  };
-
-  const customColorPresets = [
-    '#ef4444', '#f97316', '#eab308', '#84cc16',
-    '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
-    '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
-    '#64748b', '#78716c'
-  ];
-
-  const isCustomColor = (color: string) => !stageColorOptions.includes(color as any);
-
-  const resolveColorMeta = (color: string) => {
-    if (stageColorMeta[color]) return stageColorMeta[color];
-    return {
-      name: color.startsWith('#') ? color.toUpperCase() : color,
-      description: 'Custom color',
-      icon: CircleIcon,
-      bgBadge: 'bg-lane',
-      textBadge: 'text-ink',
-      borderBadge: 'border-hairline',
-      color: color.startsWith('#') ? color : '#6366f1'
-    };
+  const stageDotClasses: Record<string, string> = {
+    indigo: 'bg-status-queued',
+    amber: 'bg-status-progress',
+    emerald: 'bg-status-done',
+    rose: 'bg-status-urgent',
+    cyan: 'bg-cyan-500',
+    violet: 'bg-violet-500',
+    fuchsia: 'bg-fuchsia-500',
+    teal: 'bg-teal-500'
   };
 
   // State: Stage draft & checklist draft
@@ -291,24 +168,12 @@
   // --- Add Stage Modal State ---
   let createStageOpen = $state(false);
   let newStageName = $state('');
-  let newStageColor = $state<string>('indigo');
-  let newStageCustomColor = $state<string | null>(null);
-  let newStageNextWorkflowId = $state<string>('');
-  let newStageAutoNextOnLastChecklist = $state(false);
-  let newStageNotifyOnReply = $state(false);
-  let newStageOverdueHours = $state('');
   let creatingStage = $state(false);
 
   // Expose openCreateStageModal to parent
   $effect(() => {
     openCreateStageModal = () => {
       newStageName = '';
-      newStageColor = 'indigo';
-      newStageCustomColor = null;
-      newStageNextWorkflowId = '';
-      newStageAutoNextOnLastChecklist = false;
-      newStageNotifyOnReply = false;
-      newStageOverdueHours = '';
       createStageOpen = true;
     };
   });
@@ -318,23 +183,9 @@
     if (!(await ensureSetupChangesSaved())) return;
     creatingStage = true;
     try {
-      const reminderHours = parseReminderHours(newStageOverdueHours);
-      if (reminderHours === undefined) {
-        toast.error(tr('setup.invalidHoursGeneric'));
-        creatingStage = false;
-        return;
-      }
-      const res = await api.createStage(workspaceId, workflowId, {
-        name: newStageName.trim(),
-        color: newStageColor
+      await api.createStage(workspaceId, workflowId, {
+        name: newStageName.trim()
       });
-      if (newStageNextWorkflowId || newStageNotifyOnReply || reminderHours) {
-        await api.updateStage(workspaceId, workflowId, res.stage.id, {
-          nextWorkflowId: newStageNextWorkflowId || null,
-          onReplyNotify: newStageNotifyOnReply,
-          overdueReminderHours: reminderHours
-        });
-      }
       createStageOpen = false;
       toast.success(tr('setup.stageAdded'));
       await onchange?.();
@@ -345,59 +196,58 @@
     }
   }
 
-  // --- Edit Stage Modal State ---
-  let editStageOpen = $state(false);
-  let stageToEdit = $state<ApiWorkflowSetupStage | null>(null);
-  let editStageName = $state('');
-  let editStageColor = $state<string>('indigo');
-  let editStageCustomColor = $state<string | null>(null);
-  let editStageNextWorkflowId = $state<string>('');
-  let editStageAutoNextOnLastChecklist = $state(false);
-  let editNotifyOnReply = $state(false);
-  let editOverdueHours = $state('');
-  let savingEditStage = $state(false);
+  // Inline stage-name editing keeps the pipeline header as direct to edit as the taskboard list name.
+  let editingStageId = $state<string | null>(null);
+  let editingStageName = $state('');
+  let stageNameInput = $state<HTMLInputElement | null>(null);
+  let savingStageName = $state(false);
 
-  function startEditStage(stage: ApiWorkflowSetupStage) {
-    stageToEdit = stage;
-    editStageName = stage.name;
-    const draft = stageAutomationDraft[stage.id];
-    editNotifyOnReply = draft?.onReplyNotify ?? stage.onReplyNotify ?? false;
-    editOverdueHours = draft?.overdueReminderHours ?? (stage.overdueReminderHours == null ? '' : String(stage.overdueReminderHours));
-    editStageColor = stage.color || 'indigo';
-    editStageCustomColor = isCustomColor(stage.color) ? stage.color : null;
-    editStageNextWorkflowId = stage.nextWorkflowId ?? '';
-    editStageOpen = true;
+  async function startInlineStageRename(event: MouseEvent, stage: ApiWorkflowSetupStage) {
+    if (!canManage || reordering || savingStageName) return;
+    event.stopPropagation();
+    editingStageId = stage.id;
+    editingStageName = stage.name;
+    await tick();
+    stageNameInput?.focus();
+    stageNameInput?.select();
   }
 
-  function closeEditStage() {
-    editStageOpen = false;
-    stageToEdit = null;
+  function cancelInlineStageRename() {
+    if (savingStageName) return;
+    editingStageId = null;
+    editingStageName = '';
   }
 
-  async function saveEditStage() {
-    if (!stageToEdit || !editStageName.trim() || !canManage || !workspaceId || !workflowId) return;
-    if (!(await ensureSetupChangesSaved())) return;
-    const reminderHours = parseReminderHours(editOverdueHours);
-    if (reminderHours === undefined) {
-      toast.error(tr('setup.invalidHoursGeneric'));
+  function handleInlineStageRenameKeydown(event: KeyboardEvent, stage: ApiWorkflowSetupStage) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void finishInlineStageRename(stage);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelInlineStageRename();
+    }
+  }
+
+  async function finishInlineStageRename(stage: ApiWorkflowSetupStage) {
+    if (!canManage || !workspaceId || !workflowId || savingStageName || editingStageId !== stage.id) return;
+    const nextName = editingStageName.trim();
+    if (!nextName || nextName === stage.name) {
+      cancelInlineStageRename();
       return;
     }
-    savingEditStage = true;
+    if (!(await ensureSetupChangesSaved())) return;
+
+    savingStageName = true;
     try {
-      await api.updateStage(workspaceId, workflowId, stageToEdit.id, {
-        name: editStageName.trim(),
-        color: editStageColor,
-        nextWorkflowId: editStageNextWorkflowId || null,
-        onReplyNotify: editNotifyOnReply,
-        overdueReminderHours: reminderHours
-      });
-      closeEditStage();
-      toast.success(tr('setup.stageSaved'));
+      await api.updateStage(workspaceId, workflowId, stage.id, { name: nextName });
+      stage.name = nextName;
+      editingStageId = null;
+      editingStageName = '';
       await onchange?.();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : tr('setup.saveStageFailed'));
     } finally {
-      savingEditStage = false;
+      savingStageName = false;
     }
   }
 
@@ -421,31 +271,7 @@
     }
   }
 
-  // --- Move Stage (Reorder) ---
   let reordering = $state(false);
-  async function moveStage(index: number, direction: 'up' | 'down') {
-    if (!canManage || !workspaceId || !workflowId || reordering) return;
-    if (!(await ensureSetupChangesSaved())) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= stages.length) return;
-
-    reordering = true;
-    const originalStages = [...stages];
-    const newStages = [...stages];
-    const [moved] = newStages.splice(index, 1);
-    newStages.splice(targetIndex, 0, moved);
-    stages = newStages;
-
-    try {
-      await api.reorderStages(workspaceId, workflowId, { stageIds: newStages.map((s) => s.id) });
-      await onchange?.();
-    } catch (err) {
-      stages = originalStages;
-      toast.error(err instanceof ApiError ? err.message : tr('setup.reorderFailed'));
-    } finally {
-      reordering = false;
-    }
-  }
   // --- Drag and Drop Stage Reorder ---
   let draggingStageIndex = $state<number | null>(null);
   let stageDropTargetIndex = $state<number | null>(null);
@@ -518,12 +344,14 @@
   let checklistModalOpen = $state(false);
   let checklistModalMode = $state<'create' | 'edit'>('create');
   let checklistModalStageId = $state<string>('');
+  let checklistModalGroupId = $state<string | null>(null);
   let checklistModalTemplateId = $state<string | null>(null);
   let checklistModalLabel = $state('');
   let checklistModalRequired = $state(true);
   let checklistModalActionKind = $state<'none' | 'send' | 'followup'>('none');
   let checklistModalMessage = $state('');
   let checklistModalDelay = $state('0');
+  let checklistModalDeadline = $state('');
   let checklistModalFollowupIfNoReply = $state(false);
   let savingChecklistModal = $state(false);
 
@@ -533,12 +361,14 @@
     { value: 'followup', label: tr('setup.actionFollowup') }
   ];
 
-  function openCreateChecklistModal(stageId: string) {
+  function openCreateChecklistModal(stageId: string, groupId: string | null = null) {
     checklistModalStageId = stageId;
+    checklistModalGroupId = groupId;
     checklistModalTemplateId = null;
     checklistModalMode = 'create';
     checklistModalLabel = '';
     checklistModalRequired = true;
+    checklistModalDeadline = '';
     checklistModalActionKind = 'none';
     checklistModalMessage = '';
     checklistModalDelay = '0';
@@ -555,11 +385,30 @@
     checklistModalMode = 'edit';
     checklistModalLabel = template.label;
     checklistModalRequired = checklistIsRequired(template);
+    checklistModalDeadline = template.deadlineHours == null ? '' : String(template.deadlineHours);
     checklistModalActionKind = (template.action?.kind as any) || 'none';
     checklistModalMessage = template.action?.messageTemplate || '';
     checklistModalDelay = String(template.action?.delayMinutes ?? 0);
     checklistModalFollowupIfNoReply = template.action?.followupIfNoReply ?? false;
     checklistModalOpen = true;
+
+    // Older setup payloads did not include deadlineHours. Refresh only those
+    // templates so an already-open page can still hydrate the saved deadline.
+    if (!Object.hasOwn(template, 'deadlineHours') && workspaceId && workflowId) {
+      void api
+        .getWorkflowSetup(workspaceId, workflowId)
+        .then((setup) => {
+          if (checklistModalTemplateId !== template.id || !checklistModalOpen) return;
+          const latest = setup.stages
+            .flatMap((stage) => stage.templates)
+            .find((item) => item.id === template.id);
+          if (latest) {
+            checklistModalDeadline =
+              latest.deadlineHours == null ? '' : String(latest.deadlineHours);
+          }
+        })
+        .catch(() => undefined);
+    }
   }
 
   function insertVariable(variable: string) {
@@ -572,13 +421,18 @@
     const label = checklistModalLabel.trim();
     if (!label) return;
 
-    savingChecklistModal = true;
     try {
       const delay = Math.max(0, parseInt(checklistModalDelay) || 0);
+      const parsedDeadline = parseInt(checklistModalDeadline, 10);
+      const deadlineHours = Number.isFinite(parsedDeadline) && parsedDeadline > 0
+        ? Math.min(parsedDeadline, 720)
+        : null;
       if (checklistModalMode === 'create') {
         const res = await api.createChecklistTemplate(workspaceId, workflowId, checklistModalStageId, {
           label,
-          required: checklistModalRequired
+          required: checklistModalRequired,
+          deadlineHours,
+          groupId: checklistModalGroupId
         });
         if (checklistModalActionKind !== 'none') {
           await api.updateChecklistAction(workspaceId, workflowId, checklistModalStageId, res.template.id, {
@@ -597,7 +451,8 @@
           checklistModalTemplateId,
           {
             label,
-            required: checklistModalRequired
+            required: checklistModalRequired,
+            deadlineHours
           }
         );
         await api.updateChecklistAction(workspaceId, workflowId, checklistModalStageId, checklistModalTemplateId, {
@@ -621,6 +476,209 @@
   function toggleChecklistRequired(template: ApiWorkflowSetupStage['templates'][number]) {
     if (!canManage) return;
     checklistRequiredDraft[template.id] = !checklistIsRequired(template);
+  }
+
+  // --- Checklist groups (nested folders, max 3 levels) ---
+  type TemplateRow = ApiWorkflowSetupStage['templates'][number];
+  type GroupRow = NonNullable<ApiWorkflowSetupStage['groups']>[number];
+
+  const groupsOf = (stage: ApiWorkflowSetupStage): GroupRow[] => stage.groups ?? [];
+
+  const childGroupsOf = (stage: ApiWorkflowSetupStage, parentId: string | null) =>
+    groupsOf(stage)
+      .filter((group) => (group.parentId ?? null) === parentId)
+      .sort((a, b) => a.position - b.position);
+
+  const childTemplatesOf = (stage: ApiWorkflowSetupStage, groupId: string | null) =>
+    stage.templates
+      .filter((template) => (template.groupId ?? null) === groupId)
+      .sort((a, b) => a.position - b.position);
+
+
+  let groupModalOpen = $state(false);
+  let groupModalMode = $state<'create' | 'rename'>('create');
+  let groupModalStageId = $state('');
+  let groupModalGroupId = $state<string | null>(null);
+  let groupModalParentId = $state<string | null>(null);
+  let groupModalName = $state('');
+  let groupModalGate = $state(false);
+  let savingGroup = $state(false);
+
+  function openCreateGroup(stageId: string, parentId: string | null = null) {
+    groupModalStageId = stageId;
+    groupModalMode = 'create';
+    groupModalGroupId = null;
+    groupModalParentId = parentId;
+    groupModalName = '';
+    groupModalGate = false;
+    groupModalOpen = true;
+  }
+
+  function openRenameGroup(stageId: string, group: GroupRow) {
+    groupModalStageId = stageId;
+    groupModalMode = 'rename';
+    groupModalGroupId = group.id;
+    groupModalParentId = group.parentId ?? null;
+    groupModalName = group.name;
+    groupModalGate = group.requiresCompletion;
+    groupModalOpen = true;
+  }
+
+  async function saveGroupModal() {
+    if (!canManage || !workspaceId || !workflowId) return;
+    const name = groupModalName.trim();
+    if (!name) return;
+    if (!(await ensureSetupChangesSaved())) return;
+
+    savingGroup = true;
+    try {
+      if (groupModalMode === 'create') {
+        await api.createChecklistGroup(workspaceId, workflowId, groupModalStageId, {
+          name,
+          parentId: groupModalParentId,
+          requiresCompletion: groupModalGate
+        });
+      } else if (groupModalGroupId) {
+        await api.updateChecklistGroup(workspaceId, workflowId, groupModalStageId, groupModalGroupId, {
+          name,
+          requiresCompletion: groupModalGate
+        });
+      }
+      groupModalOpen = false;
+      toast.success(tr('setup.groupSaved'));
+      await onchange?.();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('setup.groupSaveFailed'));
+    } finally {
+      savingGroup = false;
+    }
+  }
+
+  let groupToDelete = $state<{ stageId: string; group: GroupRow } | null>(null);
+  let deletingGroup = $state(false);
+
+  async function deleteGroupConfirmed(mode: 'with_items' | 'move_up') {
+    if (!groupToDelete || !canManage || !workspaceId || !workflowId) return;
+    if (!(await ensureSetupChangesSaved())) return;
+
+    deletingGroup = true;
+    try {
+      await api.deleteChecklistGroup(
+        workspaceId,
+        workflowId,
+        groupToDelete.stageId,
+        groupToDelete.group.id,
+        mode
+      );
+      groupToDelete = null;
+      toast.success(tr('setup.groupDeleted'));
+      await onchange?.();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('setup.groupDeleteFailed'));
+    } finally {
+      deletingGroup = false;
+    }
+  }
+
+  // --- Drag & drop: reorder items and move them into or out of groups ---
+  let dragItem = $state<{ templateId: string; stageId: string } | null>(null);
+  let dropTarget = $state<{ stageId: string; containerId: string | null; beforeId: string | null } | null>(null);
+
+  function startItemDrag(event: DragEvent, stage: ApiWorkflowSetupStage, template: TemplateRow) {
+    if (!canManage) {
+      event.preventDefault();
+      return;
+    }
+    dragItem = { templateId: template.id, stageId: stage.id };
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', template.id);
+    }
+  }
+
+  function endItemDrag() {
+    dragItem = null;
+    dropTarget = null;
+  }
+
+  // Items can only move within the stage they belong to.
+  function acceptDrag(event: DragEvent, stageId: string) {
+    if (!dragItem || dragItem.stageId !== stageId) return false;
+    event.preventDefault();
+    return true;
+  }
+
+  function dragOverCard(event: DragEvent, stage: ApiWorkflowSetupStage, template: TemplateRow) {
+    if (!acceptDrag(event, stage.id) || !dragItem) return;
+    event.stopPropagation();
+    if (template.id === dragItem.templateId) {
+      dropTarget = null;
+      return;
+    }
+    const containerId = template.groupId ?? null;
+    const siblings = childTemplatesOf(stage, containerId).filter((row) => row.id !== dragItem?.templateId);
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const insertBefore = event.clientY < rect.top + rect.height / 2;
+    const index = siblings.findIndex((row) => row.id === template.id);
+    const beforeId = insertBefore ? template.id : (siblings[index + 1]?.id ?? null);
+    dropTarget = { stageId: stage.id, containerId, beforeId };
+  }
+
+  function dragOverContainer(event: DragEvent, stage: ApiWorkflowSetupStage, containerId: string | null) {
+    if (!acceptDrag(event, stage.id)) return;
+    event.stopPropagation();
+    dropTarget = { stageId: stage.id, containerId, beforeId: null };
+  }
+
+  function dropItem(event: DragEvent, stage: ApiWorkflowSetupStage) {
+    if (!acceptDrag(event, stage.id)) return;
+    event.stopPropagation();
+    void applyItemDrop();
+  }
+
+  /** Recomputes the whole stage layout after a drop and saves it in one request. */
+  async function applyItemDrop() {
+    const dragged = dragItem;
+    const target = dropTarget;
+    dragItem = null;
+    dropTarget = null;
+    if (!dragged || !target || !canManage || !workspaceId || !workflowId) return;
+
+    const stage = stages.find((row) => row.id === target.stageId);
+    const moving = stage?.templates.find((row) => row.id === dragged.templateId);
+    if (!stage || !moving) return;
+    if (!(await ensureSetupChangesSaved())) return;
+
+    const keyOf = (groupId: string | null) => groupId ?? 'root';
+    const lists = new Map<string, string[]>();
+    for (const groupId of [null, ...groupsOf(stage).map((group) => group.id)]) {
+      lists.set(keyOf(groupId), childTemplatesOf(stage, groupId).map((row) => row.id));
+    }
+
+    const sourceKey = keyOf(moving.groupId ?? null);
+    lists.set(sourceKey, (lists.get(sourceKey) ?? []).filter((id) => id !== moving.id));
+
+    const targetKey = keyOf(target.containerId);
+    const targetIds = lists.get(targetKey) ?? [];
+    const index = target.beforeId ? targetIds.indexOf(target.beforeId) : -1;
+    lists.set(
+      targetKey,
+      index >= 0
+        ? [...targetIds.slice(0, index), moving.id, ...targetIds.slice(index)]
+        : [...targetIds, moving.id]
+    );
+
+    const items: Array<{ id: string; groupId: string | null; position: number }> = [];
+    for (const [key, ids] of lists) {
+      ids.forEach((id, position) => items.push({ id, groupId: key === 'root' ? null : key, position }));
+    }
+
+    try {
+      await api.saveChecklistLayout(workspaceId, workflowId, stage.id, { items });
+      await onchange?.();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('setup.itemSaveFailed'));
+    }
   }
 
   // --- Delete Checklist State ---
@@ -660,11 +718,13 @@
   }
 </script>
 
+{#snippet addMenuIcon()}
+  <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={2} />
+{/snippet}
+
 <!-- Stage Setup Pipeline Board (Modern Light Design matching Flowboard tokens) -->
 <div class="flex gap-4 overflow-x-auto pb-8 pt-1 items-start">
   {#each stages as stage, index (stage.id)}
-    {@const meta = resolveColorMeta(stage.color)}
-    {@const targetWf = allWorkflows.find((w) => w.id === stage.nextWorkflowId)}
     {@const requiredCount = (stage.templates?.filter((t) => checklistIsRequired(t)).length ?? 0)}
     {@const totalItems = stage.templates?.length ?? 0}
 
@@ -685,236 +745,351 @@
       ondrop={(event) => onStageDrop(event, index)}
       data-onboarding={index === 0 ? 'stage-lane' : undefined}
     >
-      <!-- Lane Header Card -->
-      <div
+      <!-- Lane Header -->
+      <header
         role="group"
         aria-label={`Tajuk peringkat ${stage.name}`}
         class={cn(
-          "relative rounded-xl bg-card p-3.5 shadow-card space-y-2.5 overflow-hidden border border-hairline select-none",
+          "mb-1 flex items-center justify-between gap-2 select-none",
           canManage && stages.length > 1 && "cursor-grab active:cursor-grabbing"
         )}
         draggable={canManage && stages.length > 1}
         ondragstart={(e) => onStageDragStart(e, index)}
         ondragend={onStageDragEnd}
       >
-        <!-- Top Row: Stage Step, Color Badge & Controls -->
-        <div class="flex items-center justify-between gap-2 pt-0.5">
-          <div class="flex items-center gap-1.5 min-w-0">
-            {#if canManage && stages.length > 1}
-              <span class="flex size-5 shrink-0 items-center justify-center rounded text-mute/50 hover:text-mute transition-colors cursor-grab active:cursor-grabbing" title="Seret untuk mengubah urutan peringkat" aria-hidden="true">
-                <HugeiconsIcon icon={DragDropVerticalIcon} size={15} strokeWidth={1.8} />
-              </span>
-            {/if}
-            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-lane text-[13px] font-bold text-ink-soft shrink-0">
-              {index + 1}
+        <div class="flex min-w-0 items-center gap-1.5">
+          {#if canManage && stages.length > 1}
+            <span class="flex size-5 shrink-0 items-center justify-center rounded text-mute/50 hover:text-mute transition-colors cursor-grab active:cursor-grabbing" title="Seret untuk mengubah urutan peringkat" aria-hidden="true">
+              <HugeiconsIcon icon={DragDropVerticalIcon} size={15} strokeWidth={1.8} />
             </span>
-            <span
-              class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[13px] font-semibold border {meta.bgBadge} {meta.textBadge} {meta.borderBadge} shrink-0"
+          {/if}
+          <span
+            class={cn(
+              'size-2.5 shrink-0 rounded-full shadow-xs',
+              stageDotClasses[stage.color] ?? 'bg-status-idle'
+            )}
+            aria-hidden="true"
+          ></span>
+          {#if editingStageId === stage.id}
+            <input
+              bind:this={stageNameInput}
+              bind:value={editingStageName}
+              type="text"
+              maxlength="120"
+              disabled={savingStageName}
+              aria-label={`Edit nama peringkat ${stage.name}`}
+              onclick={(event) => event.stopPropagation()}
+              onpointerdown={(event) => event.stopPropagation()}
+              onkeydown={(event) => handleInlineStageRenameKeydown(event, stage)}
+              onblur={() => void finishInlineStageRename(stage)}
+              class="h-8 min-w-0 w-36 rounded-md border border-primary bg-card px-2 text-sm font-bold text-ink outline-none ring-2 ring-primary/15"
+            />
+          {:else}
+            <h3
+              class={cn(
+                'truncate tracking-tight text-sm font-bold text-ink',
+                canManage && 'cursor-text'
+              )}
+              ondblclick={(event) => void startInlineStageRename(event, stage)}
+              title={canManage ? 'Klik dua kali untuk mengubah nama peringkat' : stage.name}
             >
-              <HugeiconsIcon icon={meta.icon} size={13} strokeWidth={2} />
-              <span>{meta.name}</span>
-            </span>
-          </div>
-
-          {#if canManage}
-            <div class="flex items-center gap-0.5 shrink-0 text-mute" ondragstart={(e) => e.stopPropagation()} {...index === 0 ? { 'data-onboarding': 'stage-controls' } : {}}>
-              <IconButton
-                label={tr('setup.moveLeft')}
-                variant="ghost"
-                size="sm"
-                disabled={index === 0 || reordering}
-                onclick={() => moveStage(index, 'up')}
-                class="h-6 w-6 rounded-lg text-mute hover:text-ink hover:bg-lane disabled:opacity-20"
-              >
-                <HugeiconsIcon icon={ArrowLeft01Icon} size={13} strokeWidth={1.8} />
-              </IconButton>
-
-              <IconButton
-                label={tr('setup.moveRight')}
-                variant="ghost"
-                size="sm"
-                disabled={index === stages.length - 1 || reordering}
-                onclick={() => moveStage(index, 'down')}
-                class="h-6 w-6 rounded-lg text-mute hover:text-ink hover:bg-lane disabled:opacity-20"
-              >
-                <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={1.8} />
-              </IconButton>
-
-              <IconButton
-                label={tr('setup.editStage')}
-                variant="ghost"
-                size="sm"
-                onclick={() => startEditStage(stage)}
-                class="h-6 w-6 rounded-lg text-mute hover:text-primary hover:bg-primary-soft"
-              >
-                <HugeiconsIcon icon={Edit02Icon} size={13} strokeWidth={1.8} />
-              </IconButton>
-
-              <IconButton
-                label={tr('setup.deleteStage')}
-                variant="ghost"
-                size="sm"
-                onclick={() => (stageToDelete = stage)}
-                class="h-6 w-6 rounded-lg text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
-              >
-                <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
-              </IconButton>
-            </div>
+              {stage.name}
+            </h3>
           {/if}
         </div>
 
-        <!-- Stage Title & Counters -->
-        <div>
-          <h3 class="text-base font-bold text-ink leading-snug break-words tracking-tight">
-            {stage.name}
-          </h3>
-          <div class="mt-1 flex items-center gap-1.5 text-[12px] text-mute font-medium">
-            <span class="rounded-full bg-lane px-2 py-0.5">
-              {totalItems} {totalItems === 1 ? tr('setup.itemCountOne') : tr('setup.itemCountMany')}
-            </span>
-            {#if requiredCount > 0}
-              <span class="rounded-full bg-status-progress-soft text-status-progress-ink px-2 py-0.5 font-bold">
-                {requiredCount} {tr('setup.requiredBadge')}
-              </span>
-            {/if}
-          </div>
-        </div>
-
-        <!-- Next workflow routing indicator if configured -->
-        {#if targetWf}
-          <div class="flex items-center gap-1.5 rounded-lg bg-primary-soft/60 px-2.5 py-1.5 text-[12px] font-medium text-primary border border-primary/20">
-            <HugeiconsIcon icon={FlowConnectionIcon} size={13} strokeWidth={2} class="shrink-0" />
-            <span class="truncate">
-              {tr('setup.autoNextTo', { name: targetWf.name })}
-            </span>
-          </div>
-        {/if}
-      </div>
-
-      <!-- Checklist Items Stack -->
-      <div class="space-y-2 flex-1 min-h-[40px]">
-        {#if totalItems === 0}
-          <div class="rounded-xl bg-canvas-sunken/40 p-4 text-center">
-            <p class="text-[13px] font-medium text-mute">{tr('setup.noChecklist')}</p>
-            <p class="text-[13px] text-faint mt-0.5">{tr('setup.typeToAdd')}</p>
-          </div>
-        {:else}
-          {#each stage.templates as template, tIndex (template.id)}
-            {@const isRequired = checklistIsRequired(template)}
-            {@const hasAction = template.action?.kind && template.action.kind !== 'none'}
-
-            <div
-              class="group relative rounded-xl bg-card p-3 shadow-card border border-hairline hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 space-y-1.5"
-              data-onboarding={index === 0 && tIndex === 0 ? 'checklist-item' : undefined}
+        <div role="presentation" class="flex items-center gap-1.5 shrink-0" ondragstart={(e) => e.stopPropagation()} {...index === 0 ? { 'data-onboarding': 'stage-controls' } : {}}>
+          <span class="text-xs font-semibold text-mute px-0.5" title={`${totalItems} checklist item`}>
+            {totalItems}
+          </span>
+          {#if canManage}
+            <IconButton
+              label={tr('setup.deleteStage')}
+              variant="ghost"
+              size="sm"
+              onclick={() => (stageToDelete = stage)}
+              class="h-7 w-7 rounded-md text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
             >
-              <div class="space-y-1.5">
-                <!-- Top Row: Badges & Action Controls -->
-                <div class="flex items-center justify-between gap-1">
-                  <div class="flex flex-wrap items-center gap-1 min-w-0">
-                    {#if canManage}
-                      <button
-                        type="button"
-                        title={tr('setup.toggleRule')}
-                        onclick={() => toggleChecklistRequired(template)}
-                        class="cursor-pointer transition-transform active:scale-95 focus:outline-none"
-                      >
-                        <Badge
-                          tone={isRequired ? 'queued' : 'idle'}
-                          variant="soft"
-                          class="text-[12px] font-semibold px-2 py-0.2"
-                        >
-                          {isRequired ? tr('setup.required') : tr('common.optional')}
-                        </Badge>
-                      </button>
-                    {:else}
-                      <Badge
-                        tone={isRequired ? 'queued' : 'idle'}
-                        variant="soft"
-                        class="text-[12px] font-semibold px-2 py-0.2"
-                      >
-                        {isRequired ? tr('setup.required') : tr('common.optional')}
-                      </Badge>
-                    {/if}
+              <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
+            </IconButton>
+          {/if}
+        </div>
+      </header>
 
-                    {#if hasAction}
-                      <button
-                        type="button"
-                        onclick={() => openEditChecklistModal(stage.id, template)}
-                        class="inline-flex items-center gap-1 rounded-full bg-status-done-soft text-status-done-ink px-2 py-0.2 text-[12px] font-semibold hover:opacity-80 transition-opacity cursor-pointer"
-                        title={tr('setup.actionWa')}
-                      >
-                        <HugeiconsIcon icon={WhatsappIcon} size={11} strokeWidth={2} />
-                        <span>{template.action?.kind === 'send' ? tr('setup.sendOnce') : tr('setup.followup')}</span>
-                      </button>
-                    {/if}
-                  </div>
+      {#if requiredCount > 0}
+        <div class="flex flex-wrap items-center gap-1.5 text-badge text-mute font-medium">
+          <span class="rounded-full bg-status-progress-soft text-status-progress-ink px-2 py-0.5 font-bold">
+            {requiredCount} {tr('setup.requiredBadge')}
+          </span>
+        </div>
+      {/if}
 
-                  {#if canManage}
-                    <div class="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity ml-auto shrink-0">
-                      <IconButton
-                        label={tr('setup.actionWa')}
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => openEditChecklistModal(stage.id, template)}
-                        class="h-6 w-6 rounded-md text-mute hover:text-status-done-ink hover:bg-status-done-soft"
-                      >
-                        <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={1.8} />
-                      </IconButton>
+      {#snippet templateCard(template: TemplateRow, tIndex: number)}
+        {@const isRequired = checklistIsRequired(template)}
+        {@const hasAction = template.action?.kind && template.action.kind !== 'none'}
 
-                      <IconButton
-                        label={tr('setup.editItem')}
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => openEditChecklistModal(stage.id, template)}
-                        class="h-6 w-6 rounded-md text-mute hover:text-ink hover:bg-lane"
-                      >
-                        <HugeiconsIcon icon={Edit02Icon} size={13} strokeWidth={1.8} />
-                      </IconButton>
+        <div
+          role="group"
+          aria-label={template.label}
+          draggable={canManage}
+          ondragstart={(e) => startItemDrag(e, stage, template)}
+          ondragend={endItemDrag}
+          ondragover={(e) => dragOverCard(e, stage, template)}
+          ondrop={(e) => dropItem(e, stage)}
+          class={cn(
+            'group relative rounded-xl bg-card p-3 shadow-card border border-hairline hover:border-hairline-strong hover:shadow-card-hover transition-all duration-150 space-y-1.5',
+            canManage && 'cursor-grab active:cursor-grabbing',
+            dragItem?.templateId === template.id && 'opacity-50',
+            dropTarget?.stageId === stage.id && dropTarget.beforeId === template.id && 'ring-2 ring-primary/50'
+          )}
+          data-onboarding={index === 0 && tIndex === 0 ? 'checklist-item' : undefined}
+        >
+          <div class="space-y-1.5">
+            <!-- Top Row: Badges & Action Controls -->
+            <div class="flex items-center justify-between gap-1">
+              <div class="flex flex-wrap items-center gap-1 min-w-0">
+                {#if canManage}
+                  <button
+                    type="button"
+                    title={tr('setup.toggleRule')}
+                    onclick={() => toggleChecklistRequired(template)}
+                    class="cursor-pointer transition-transform active:scale-95 focus:outline-none"
+                  >
+                    <Badge
+                      tone={isRequired ? 'queued' : 'idle'}
+                      variant="soft"
+                      class="text-badge font-semibold px-2 py-0.5"
+                    >
+                      {isRequired ? tr('setup.required') : tr('common.optional')}
+                    </Badge>
+                  </button>
+                {:else}
+                  <Badge
+                    tone={isRequired ? 'queued' : 'idle'}
+                    variant="soft"
+                    class="text-badge font-semibold px-2 py-0.5"
+                  >
+                    {isRequired ? tr('setup.required') : tr('common.optional')}
+                  </Badge>
+                {/if}
+                {#if template.deadlineHours}
+                  <Badge tone="warning" variant="soft" class="inline-flex items-center gap-1 px-2 py-0.5 text-badge font-semibold">
+                    <HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={1.8} />
+                    {tr('setup.checklistDeadlineBadge', { hours: template.deadlineHours })}
+                  </Badge>
+                {/if}
 
-                      <IconButton
-                        label={tr('setup.deleteItem')}
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => promptDeleteChecklist(stage.id, template)}
-                        class="h-6 w-6 rounded-md text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
-                      </IconButton>
-                    </div>
-                  {/if}
-                </div>
 
-                <!-- Checklist Item Label -->
-                <p class="text-base font-semibold text-ink leading-relaxed break-words pt-0.5">
-                  {template.label}
-                </p>
-
-                <!-- Message Template Snippet Preview (if attached) -->
-                {#if hasAction && template.action?.messageTemplate}
-                  <div class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-canvas-sunken p-2 text-[13px] text-body">
-                    <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={2} class="text-status-done-ink shrink-0 mt-0.5" />
-                    <p class="line-clamp-1 italic text-[12px] leading-tight text-mute">
-                      "{template.action.messageTemplate}"
-                    </p>
-                  </div>
+                {#if hasAction}
+                  <button
+                    type="button"
+                    onclick={() => openEditChecklistModal(stage.id, template)}
+                    class="inline-flex items-center gap-1 rounded-full bg-status-done-soft text-status-done-ink px-2 py-0.5 text-badge font-semibold hover:opacity-80 transition-opacity cursor-pointer"
+                    title={tr('setup.actionWa')}
+                  >
+                    <HugeiconsIcon icon={WhatsappIcon} size={11} strokeWidth={2} />
+                    <span>{template.action?.kind === 'send' ? tr('setup.sendOnce') : tr('setup.followup')}</span>
+                  </button>
                 {/if}
               </div>
+
+              {#if canManage}
+                <div class="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity ml-auto shrink-0">
+                  <IconButton
+                    label={tr('setup.actionWa')}
+                    variant="ghost"
+                    size="sm"
+                    onclick={() => openEditChecklistModal(stage.id, template)}
+                    class="h-6 w-6 rounded-md text-mute hover:text-status-done-ink hover:bg-status-done-soft"
+                  >
+                    <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={1.8} />
+                  </IconButton>
+
+                  <IconButton
+                    label={tr('setup.editItem')}
+                    variant="ghost"
+                    size="sm"
+                    onclick={() => openEditChecklistModal(stage.id, template)}
+                    class="h-6 w-6 rounded-md text-mute hover:text-ink hover:bg-lane"
+                  >
+                    <HugeiconsIcon icon={Edit02Icon} size={13} strokeWidth={1.8} />
+                  </IconButton>
+
+                  <IconButton
+                    label={tr('setup.deleteItem')}
+                    variant="ghost"
+                    size="sm"
+                    onclick={() => promptDeleteChecklist(stage.id, template)}
+                    class="h-6 w-6 rounded-md text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
+                  </IconButton>
+                </div>
+              {/if}
             </div>
+
+            <!-- Checklist Item Label -->
+            <p class="text-base font-semibold text-ink leading-relaxed break-words pt-0.5">
+              {template.label}
+            </p>
+
+            <!-- Message Template Snippet Preview (if attached) -->
+            {#if hasAction && template.action?.messageTemplate}
+              <div class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-canvas-sunken p-2 text-meta text-body">
+                <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={2} class="text-status-done-ink shrink-0 mt-0.5" />
+                <p class="line-clamp-1 italic text-badge leading-tight text-mute">
+                  "{template.action.messageTemplate}"
+                </p>
+              </div>
+            {/if}
+
+          </div>
+        </div>
+      {/snippet}
+
+      {#snippet groupBlock(group: GroupRow, depth: number)}
+        {@const subGroups = childGroupsOf(stage, group.id)}
+        {@const items = childTemplatesOf(stage, group.id)}
+        <div
+          role="presentation"
+          ondragover={(e) => dragOverContainer(e, stage, group.id)}
+          ondrop={(e) => dropItem(e, stage)}
+          class={cn(
+            'rounded-xl border border-hairline bg-card p-2 space-y-2 transition-shadow',
+            dropTarget?.stageId === stage.id && dropTarget.containerId === group.id && dropTarget.beforeId === null && 'ring-2 ring-primary/50'
+          )}
+        >
+          <div class="flex items-center justify-between gap-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-meta font-bold text-ink truncate">{group.name}</span>
+              {#if group.requiresCompletion}
+                <Badge tone="progress" variant="soft" class="text-badge font-semibold px-2 py-0.5">
+                  {tr('setup.gateBadge')}
+                </Badge>
+              {/if}
+            </div>
+            {#if canManage}
+              <div class="flex items-center gap-0.5 shrink-0">
+                <IconButton
+                  label={tr('setup.renameGroupTitle')}
+                  variant="ghost"
+                  size="sm"
+                  onclick={() => openRenameGroup(stage.id, group)}
+                  class="h-6 w-6 rounded-md text-mute hover:text-ink hover:bg-lane"
+                >
+                  <HugeiconsIcon icon={Edit02Icon} size={13} strokeWidth={1.8} />
+                </IconButton>
+                <IconButton
+                  label={tr('setup.deleteGroup')}
+                  variant="ghost"
+                  size="sm"
+                  onclick={() => (groupToDelete = { stageId: stage.id, group })}
+                  class="h-6 w-6 rounded-md text-mute hover:text-status-urgent-ink hover:bg-status-urgent-soft"
+                >
+                  <HugeiconsIcon icon={Delete02Icon} size={13} strokeWidth={1.8} />
+                </IconButton>
+              </div>
+            {/if}
+          </div>
+
+          <div class="space-y-2 border-l-2 border-hairline pl-2">
+            {#each subGroups as subGroup (subGroup.id)}
+              {@render groupBlock(subGroup, depth + 1)}
+            {/each}
+            {#each items as template, tIndex (template.id)}
+              {@render templateCard(template, tIndex)}
+            {/each}
+            {#if subGroups.length === 0 && items.length === 0}
+              <p class="text-badge text-faint px-1">{tr('setup.emptyGroup')}</p>
+            {/if}
+          </div>
+
+          {#if canManage}
+            <DropdownMenu
+              align="start"
+              items={[
+                {
+                  label: tr('setup.addChecklistItem'),
+                  icon: addMenuIcon,
+                  onselect: () => openCreateChecklistModal(stage.id, group.id)
+                },
+                ...(depth < 3
+                  ? [
+                      {
+                        label: tr('setup.addSubgroup'),
+                        icon: addMenuIcon,
+                        onselect: () => openCreateGroup(stage.id, group.id)
+                      }
+                    ]
+                  : [])
+              ]}
+            >
+              {#snippet trigger({ toggle })}
+                <button
+                  type="button"
+                  onclick={toggle}
+                  class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-hairline bg-card px-2 py-1 text-badge font-bold text-ink-soft hover:border-primary hover:text-primary"
+                >
+                  <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={2.2} />
+                  <span>{tr('setup.addMenu')}</span>
+                </button>
+              {/snippet}
+            </DropdownMenu>
+          {/if}
+        </div>
+      {/snippet}
+
+      <!-- Checklist Items Stack -->
+      <div
+        role="presentation"
+        ondragover={(e) => dragOverContainer(e, stage, null)}
+        ondrop={(e) => dropItem(e, stage)}
+        class="space-y-2 flex-1 min-h-[40px]"
+      >
+        {#if totalItems === 0 && groupsOf(stage).length === 0}
+          <div class="rounded-xl bg-canvas-sunken/40 p-4 text-center">
+            <p class="text-meta font-medium text-mute">{tr('setup.noChecklist')}</p>
+            <p class="text-meta text-faint mt-0.5">{tr('setup.typeToAdd')}</p>
+          </div>
+        {:else}
+          {#each childGroupsOf(stage, null) as group (group.id)}
+            {@render groupBlock(group, 1)}
+          {/each}
+          {#each childTemplatesOf(stage, null) as template, tIndex (template.id)}
+            {@render templateCard(template, tIndex)}
           {/each}
         {/if}
       </div>
 
-      <!-- Add Checklist Item Action Button -->
+      <!-- Add menu: checklist item or group -->
       {#if canManage}
-        <button
-          type="button"
-          onclick={() => openCreateChecklistModal(stage.id)}
-          class="w-full flex items-center justify-center gap-1.5 rounded-xl bg-card py-2.5 px-3 text-[13px] font-bold text-ink-soft shadow-control hover:border-primary hover:bg-primary-soft hover:text-primary transition-all cursor-pointer group active:scale-[0.99] border border-hairline"
-          data-onboarding={index === 0 ? 'add-checklist-btn' : undefined}
+        <DropdownMenu
+          align="start"
+          items={[
+            {
+              label: tr('setup.addChecklistItem'),
+              icon: addMenuIcon,
+              onselect: () => openCreateChecklistModal(stage.id)
+            },
+            {
+              label: tr('setup.addGroup'),
+              icon: addMenuIcon,
+              onselect: () => openCreateGroup(stage.id, null)
+            }
+          ]}
         >
-          <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={2.2} class="text-mute group-hover:text-primary transition-colors" />
-          <span>{tr('setup.addChecklistItem')}</span>
-        </button>
+          {#snippet trigger({ toggle })}
+            <button
+              type="button"
+              onclick={toggle}
+              data-onboarding={index === 0 ? 'add-checklist-btn' : undefined}
+              class="w-full flex items-center justify-center gap-1.5 rounded-xl bg-card py-2.5 px-3 text-meta font-bold text-ink-soft shadow-control hover:border-primary hover:bg-primary-soft hover:text-primary transition-all cursor-pointer group active:scale-[0.99] border border-hairline"
+            >
+              <HugeiconsIcon icon={Add01Icon} size={15} strokeWidth={2.2} class="text-mute group-hover:text-primary transition-colors" />
+              <span>{tr('setup.addMenu')}</span>
+            </button>
+          {/snippet}
+        </DropdownMenu>
       {/if}
     </section>
   {/each}
@@ -944,10 +1119,10 @@
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-lane group-hover:bg-primary-soft group-hover:text-primary transition-colors text-mute mb-2">
         <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2} />
       </div>
-      <p class="text-[13px] font-bold text-ink group-hover:text-primary transition-colors">
+      <p class="text-meta font-bold text-ink group-hover:text-primary transition-colors">
         {tr('setup.newStage')}
       </p>
-      <p class="text-[12px] text-mute mt-0.5">
+      <p class="text-badge text-mute mt-0.5">
         {tr('setup.newStageDescription')}
       </p>
     </button>
@@ -980,70 +1155,6 @@
       {/snippet}
     </FormField>
 
-    <!-- Visual Color & Icon Badge Picker -->
-    <div class="space-y-3">
-      <div>
-        <span class="ds-label text-ink font-semibold text-[13px] block">{tr('setup.colorIcon')}</span>
-        <p class="text-[13px] text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
-      </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {#each stageColorOptions as colorKey}
-          {@const kMeta = stageColorMeta[colorKey]}
-          {@const isSelected = !newStageCustomColor && newStageColor === colorKey}
-          <button
-            type="button"
-            onclick={() => { newStageColor = colorKey; newStageCustomColor = null; }}
-            class="flex flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-all cursor-pointer {isSelected ? 'bg-primary-soft/40 ring-2 ring-primary shadow-sm' : 'bg-card hover:bg-lane ring-1 ring-hairline/30'}"
-          >
-            <span
-              class="flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm"
-              style="background-color: {kMeta.color};"
-            >
-              <HugeiconsIcon icon={kMeta.icon} size={16} strokeWidth={2} />
-            </span>
-            <span class="text-[13px] font-semibold text-ink">{kMeta.name}</span>
-            <span class="text-[12px] text-mute">{kMeta.description}</span>
-          </button>
-        {/each}
-      </div>
-
-      <!-- Custom color picker -->
-      <div class="rounded-xl bg-canvas-sunken/50 ring-1 ring-hairline/30 p-3.5 space-y-2.5">
-        <div class="flex items-center justify-between">
-          <span class="text-[13px] font-semibold text-ink">Custom color</span>
-          <div class="flex items-center gap-2">
-            <input
-              type="color"
-              value={newStageCustomColor ?? '#6366f1'}
-              oninput={(e) => { newStageCustomColor = e.currentTarget.value; newStageColor = e.currentTarget.value; }}
-              class="h-8 w-10 cursor-pointer rounded-lg border-0 bg-transparent p-0"
-              aria-label="Pick custom color"
-            />
-            {#if newStageCustomColor}
-              <span class="text-[12px] font-mono text-mute uppercase">{newStageCustomColor}</span>
-              <button
-                type="button"
-                onclick={() => { newStageCustomColor = null; newStageColor = 'indigo'; }}
-                class="text-[12px] text-mute hover:text-ink transition-colors"
-              >
-                Reset
-              </button>
-            {/if}
-          </div>
-        </div>
-        <div class="flex flex-wrap gap-1.5">
-          {#each customColorPresets as preset}
-            <button
-              type="button"
-              onclick={() => { newStageCustomColor = preset; newStageColor = preset; }}
-              class="size-6 rounded-full ring-1 ring-hairline/30 transition-transform hover:scale-110 {newStageCustomColor === preset ? 'ring-2 ring-primary ring-offset-1' : ''}"
-              style="background-color: {preset};"
-              aria-label={preset}
-            ></button>
-          {/each}
-        </div>
-      </div>
-    </div>
   </form>
   {#snippet footer()}
     <div class="flex justify-end gap-2">
@@ -1063,147 +1174,6 @@
   {/snippet}
 </Dialog>
 
-<!-- Modal: Edit Stage -->
-<Dialog
-  bind:open={editStageOpen}
-  onclose={closeEditStage}
-  title={tr('setup.editStageTitle', { name: stageToEdit?.name ?? '' })}
-  description={tr('setup.editStageDescription')}
-  size="xl"
->
-  <form
-    onsubmit={(e) => {
-      e.preventDefault();
-      saveEditStage();
-    }}
-    class="space-y-4 py-2"
-  >
-    <FormField label={tr('setup.stageName')} required>
-      {#snippet control(args)}
-        <Input
-          {...args}
-          bind:value={editStageName}
-          class="h-10 text-base"
-          autofocus
-        />
-      {/snippet}
-    </FormField>
-
-    <!-- Color Picker -->
-    <div class="space-y-3">
-      <div>
-        <span class="ds-label text-ink font-semibold text-[13px] block">{tr('setup.colorIcon')}</span>
-        <p class="text-[13px] text-mute mt-0.5">{tr('setup.colorIconDescription')}</p>
-      </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {#each stageColorOptions as colorKey}
-          {@const kMeta = stageColorMeta[colorKey]}
-          {@const isSelected = !editStageCustomColor && editStageColor === colorKey}
-          <button
-            type="button"
-            onclick={() => { editStageColor = colorKey; editStageCustomColor = null; }}
-            class="flex flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-all cursor-pointer {isSelected ? 'bg-primary-soft/40 ring-2 ring-primary shadow-sm' : 'bg-card hover:bg-lane ring-1 ring-hairline/30'}"
-          >
-            <span
-              class="flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm"
-              style="background-color: {kMeta.color};"
-            >
-              <HugeiconsIcon icon={kMeta.icon} size={16} strokeWidth={2} />
-            </span>
-            <span class="text-[13px] font-semibold text-ink">{kMeta.name}</span>
-            <span class="text-[12px] text-mute">{kMeta.description}</span>
-          </button>
-        {/each}
-      </div>
-
-      <div class="rounded-xl bg-canvas-sunken/50 ring-1 ring-hairline/30 p-3.5 space-y-2.5">
-        <div class="flex items-center justify-between">
-          <span class="text-[13px] font-semibold text-ink">Custom color</span>
-          <div class="flex items-center gap-2">
-            <input
-              type="color"
-              value={editStageCustomColor ?? '#6366f1'}
-              oninput={(e) => { editStageCustomColor = e.currentTarget.value; editStageColor = e.currentTarget.value; }}
-              class="h-8 w-10 cursor-pointer rounded-lg border-0 bg-transparent p-0"
-              aria-label="Pick custom color"
-            />
-            {#if editStageCustomColor}
-              <span class="text-[12px] font-mono text-mute uppercase">{editStageCustomColor}</span>
-              <button
-                type="button"
-                onclick={() => { editStageCustomColor = null; editStageColor = 'indigo'; }}
-                class="text-[12px] text-mute hover:text-ink transition-colors"
-              >
-                Reset
-              </button>
-            {/if}
-          </div>
-        </div>
-        <div class="flex flex-wrap gap-1.5">
-          {#each customColorPresets as preset}
-            <button
-              type="button"
-              onclick={() => { editStageCustomColor = preset; editStageColor = preset; }}
-              class="size-6 rounded-full ring-1 ring-hairline/30 transition-transform hover:scale-110 {editStageCustomColor === preset ? 'ring-2 ring-primary ring-offset-1' : ''}"
-              style="background-color: {preset};"
-              aria-label={preset}
-            ></button>
-          {/each}
-        </div>
-      </div>
-    </div>
-
-    <!-- Workflow Transition Automation -->
-    <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-4">
-      <div class="flex items-center gap-2">
-        <HugeiconsIcon icon={FlowConnectionIcon} size={16} strokeWidth={2} class="text-primary" />
-        <span class="text-[13px] font-bold text-ink">{tr('setup.autoTransitionTitle')}</span>
-      </div>
-
-      <FormField
-        label={tr('setup.autoTransition')}
-        helper={tr('setup.autoTransitionHelper')}
-      >
-        {#snippet control(args)}
-          <SelectMenu
-            {...args}
-            bind:value={editStageNextWorkflowId}
-            options={[
-              { value: '', label: tr('setup.noTransition') },
-              ...allWorkflows
-                .filter((w) => w.id !== workflowId)
-                .map((w) => ({ value: w.id, label: w.name }))
-            ]}
-          />
-        {/snippet}
-      </FormField>
-
-      {#if editStageNextWorkflowId}
-        <label class="flex items-center gap-2 text-[13px] text-ink cursor-pointer select-none pt-1">
-          <Checkbox bind:checked={editStageAutoNextOnLastChecklist} />
-          <span>{tr('setup.autoNextOnLastChecklist')}</span>
-        </label>
-      {/if}
-    </div>
-  </form>
-  {#snippet footer()}
-    <div class="flex justify-end gap-2">
-      <Button variant="secondary" onclick={closeEditStage}>
-        {tr('setup.cancel')}
-      </Button>
-      <Button
-        variant="primary"
-        onclick={saveEditStage}
-        loading={savingEditStage}
-        disabled={!editStageName.trim()}
-      >
-        <HugeiconsIcon icon={Tick02Icon} size={18} strokeWidth={1.8} />
-        <span>{tr('setup.saveChanges')}</span>
-      </Button>
-    </div>
-  {/snippet}
-</Dialog>
-
 <!-- Modal: Confirm Delete Stage -->
 <ConfirmDialog
   open={stageToDelete !== null}
@@ -1216,6 +1186,79 @@
   onconfirm={deleteStageConfirmed}
   oncancel={() => (stageToDelete = null)}
 />
+
+<!-- Modal: Create / Rename Checklist Group -->
+<Dialog
+  bind:open={groupModalOpen}
+  title={groupModalMode === 'create' ? tr('setup.newGroupTitle') : tr('setup.renameGroupTitle')}
+  description={tr('setup.groupMaxDepth')}
+  size="sm"
+>
+  <form
+    onsubmit={(e) => {
+      e.preventDefault();
+      saveGroupModal();
+    }}
+    class="space-y-4 py-2"
+  >
+    <FormField label={tr('setup.groupNameLabel')} required>
+      {#snippet control(args)}
+        <Input
+          {...args}
+          bind:value={groupModalName}
+          placeholder={tr('setup.groupNameLabel')}
+          class="h-10 text-base"
+          autofocus
+          required
+        />
+      {/snippet}
+    </FormField>
+
+    <div class="rounded-xl border border-hairline bg-canvas-sunken p-3 flex items-center justify-between gap-3">
+      <span class="text-meta font-bold text-ink">{tr('setup.groupRequiresCompletion')}</span>
+      <Switch bind:checked={groupModalGate} />
+    </div>
+  </form>
+  {#snippet footer()}
+    <div class="flex justify-end gap-2">
+      <Button variant="secondary" onclick={() => (groupModalOpen = false)}>
+        {tr('setup.cancel')}
+      </Button>
+      <Button
+        variant="primary"
+        onclick={saveGroupModal}
+        loading={savingGroup}
+        disabled={!groupModalName.trim()}
+      >
+        <span>{groupModalMode === 'create' ? tr('setup.createGroup') : tr('setup.saveGroup')}</span>
+      </Button>
+    </div>
+  {/snippet}
+</Dialog>
+
+<!-- Modal: Delete Checklist Group (choose what happens to its contents) -->
+<Dialog
+  open={groupToDelete !== null}
+  onclose={() => (groupToDelete = null)}
+  title={tr('setup.deleteGroupTitle', { label: groupToDelete?.group?.name ?? '' })}
+  description={tr('setup.deleteGroupDescription')}
+  size="sm"
+>
+  <p class="text-meta text-mute py-2">{tr('setup.deleteGroupNote')}</p>
+  {#snippet footer()}
+    <div class="flex flex-wrap justify-end gap-2">
+      <Button variant="secondary" onclick={() => (groupToDelete = null)}>
+        {tr('setup.cancel')}
+      </Button>
+      <Button variant="secondary" loading={deletingGroup} onclick={() => deleteGroupConfirmed('move_up')}>
+        {tr('setup.deleteGroupMoveUp')}
+      </Button>
+      <Button variant="destructive" loading={deletingGroup} onclick={() => deleteGroupConfirmed('with_items')}>
+        {tr('setup.deleteGroupWithItems')}
+      </Button>
+    </div>
+  {/snippet}
+</Dialog>
 
 <!-- Modal: Confirm Delete Checklist -->
 <ConfirmDialog
@@ -1258,13 +1301,27 @@
     </FormField>
 
     <!-- Requirement Switch Card -->
-    <div class="rounded-xl border border-hairline bg-canvas-sunken p-3 flex items-center justify-between gap-3">
+    <div class="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-canvas-sunken p-3">
       <div class="min-w-0">
-        <span class="text-[13px] font-bold text-ink block">{tr('setup.requiredComplete')}</span>
-        <p class="text-[12px] text-mute">{tr('setup.stageRequirement')}</p>
+        <span class="text-meta font-bold text-ink block">{tr('setup.requiredComplete')}</span>
+        <p class="text-badge text-mute">{tr('setup.stageRequirement')}</p>
       </div>
-      <Checkbox bind:checked={checklistModalRequired} />
+      <Switch bind:checked={checklistModalRequired} size="sm" aria-label={tr('setup.requiredComplete')} />
     </div>
+
+    <FormField label={tr('setup.checklistDeadline')} helper={tr('setup.checklistDeadlineHelper')}>
+      {#snippet control(args)}
+        <Input
+          {...args}
+          type="number"
+          min="1"
+          max="720"
+          bind:value={checklistModalDeadline}
+          placeholder={tr('setup.checklistDeadlinePlaceholder')}
+          class="h-10"
+        />
+      {/snippet}
+    </FormField>
 
     <!-- WhatsApp Automation Settings Box -->
     <div class="space-y-3 rounded-xl border border-hairline bg-card p-3.5 shadow-xs">
@@ -1273,8 +1330,8 @@
           <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={2} />
         </div>
         <div>
-          <span class="text-[13px] font-bold text-ink block">{tr('setup.whatsappAction')}</span>
-          <p class="text-[12px] text-mute">{tr('setup.whatsappActionDescription')}</p>
+          <span class="text-meta font-bold text-ink block">{tr('setup.whatsappAction')}</span>
+          <p class="text-badge text-mute">{tr('setup.whatsappActionDescription')}</p>
         </div>
       </div>
 
@@ -1303,12 +1360,12 @@
                 required
               />
               <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span class="text-[12px] text-mute font-medium">{tr('setup.insertVariable')}</span>
+                <span class="text-badge text-mute font-medium">{tr('setup.insertVariable')}</span>
                 {#each ['{{nama}}', '{{wa}}', '{{product}}', '{{tag}}', '{{link}}'] as v}
                   <button
                     type="button"
                     onclick={() => insertVariable(v)}
-                    class="inline-flex items-center rounded-md bg-lane px-1.5 py-0.5 text-[12px] font-mono font-semibold text-primary hover:bg-primary-soft hover:border-primary-border/60 transition-colors cursor-pointer"
+                    class="inline-flex items-center rounded-md bg-lane px-1.5 py-0.5 text-badge font-mono font-semibold text-primary hover:bg-primary-soft hover:border-primary-border/60 transition-colors cursor-pointer"
                   >
                     {v}
                   </button>
@@ -1326,14 +1383,14 @@
                 type="number"
                 min="0"
                 bind:value={checklistModalDelay}
-                class="h-9 text-[13px]"
+                class="h-9 text-meta"
               />
             {/snippet}
           </FormField>
 
           {#if checklistModalActionKind === 'followup'}
             <div class="flex items-end pb-2">
-              <label class="flex items-center gap-2 text-[13px] text-ink cursor-pointer select-none">
+              <label class="flex items-center gap-2 text-meta text-ink cursor-pointer select-none">
                 <Checkbox bind:checked={checklistModalFollowupIfNoReply} />
                 <span>{tr('setup.onlyIfNoReply')}</span>
               </label>

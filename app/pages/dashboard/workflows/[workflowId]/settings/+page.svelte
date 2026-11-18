@@ -414,7 +414,7 @@
         href="/dashboard/workflows/{workflowId}"
         variant="ghost"
         size="sm"
-        class="gap-1 text-xs sm:text-sm text-mute hover:text-ink pl-0 -ml-1 sm:ml-0"
+        class="gap-1 text-badge sm:text-sm text-mute hover:text-ink pl-0 -ml-1 sm:ml-0"
       >
         <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={2} />
         <span>Kembali</span>
@@ -428,7 +428,7 @@
             onclick={saveWorkflowSettings}
             loading={savingWorkflow}
             disabled={!workflowName.trim()}
-            class="shadow-xs font-semibold h-8 text-xs px-3"
+            class="shadow-xs font-semibold h-8 text-badge px-3"
           >
             <HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} />
             <span>Simpan</span>
@@ -442,7 +442,7 @@
         <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-ink truncate">
           {workflow?.name ?? 'Tetapan Aliran Kerja'}
         </h1>
-        <p class="text-xs sm:text-sm text-mute leading-relaxed">
+        <p class="text-badge sm:text-sm text-mute leading-relaxed">
           {tr('setup.workflowSettingsDescription')}
         </p>
       </div>
@@ -466,10 +466,10 @@
   </header>
 
   {#if loadingData}
-    <div class="rounded-2xl border border-hairline bg-card p-8 space-y-4 shadow-card">
-      <Skeleton shape="rect" class="h-8 w-48 rounded-lg" />
-      <Skeleton shape="rect" class="h-10 w-full rounded-xl" />
-      <Skeleton shape="rect" class="h-24 w-full rounded-xl" />
+    <div class="rounded-lg border border-hairline bg-card p-8 space-y-4 shadow-card">
+      <Skeleton shape="rect" class="h-8 w-48 rounded-md" />
+      <Skeleton shape="rect" class="h-10 w-full rounded-md" />
+      <Skeleton shape="rect" class="h-24 w-full rounded-md" />
     </div>
   {:else}
     <!-- Tabbed Settings Navigation (Flowboard Defrag Style) -->
@@ -479,7 +479,7 @@
           <button
             type="button"
             onclick={() => (activeTab = tabItem.value as any)}
-            class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-all whitespace-nowrap shrink-0 cursor-pointer {activeTab === tabItem.value ? 'border-primary text-primary' : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'}"
+            class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-badge sm:text-sm font-semibold border-b-2 transition-all whitespace-nowrap shrink-0 cursor-pointer {activeTab === tabItem.value ? 'border-primary text-primary' : 'border-transparent text-mute hover:text-ink hover:border-hairline-strong'}"
           >
             {#if tabItem.value === 'general'}
               <HugeiconsIcon icon={SlidersHorizontalIcon} size={15} strokeWidth={1.8} />
@@ -511,7 +511,7 @@
     >
       <!-- TAB 1: UMUM (GENERAL) -->
       {#if activeTab === 'general'}
-        <div class="rounded-2xl border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4 sm:space-y-5">
+        <div class="rounded-lg border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div class="space-y-1 pb-2 border-b border-hairline">
             <h2 class="ds-section-title text-ink">Maklumat Asas</h2>
             <p class="ds-caption text-mute">Nama dan konteks perihalan untuk aliran kerja ini.</p>
@@ -554,7 +554,7 @@
                 disabled={!canManage}
                 placeholder={tr('setup.workflowDescriptionPlaceholder')}
                 rows={4}
-                class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-base text-ink placeholder:text-mute focus:border-ink focus:outline-none disabled:opacity-50"
+                class="w-full rounded-md border border-hairline bg-card px-3 py-2 text-base text-ink placeholder:text-mute focus:border-ink focus:outline-none disabled:opacity-50"
               ></textarea>
             {/snippet}
           </FormField>
@@ -578,16 +578,16 @@
 
       <!-- TAB 2: AKSES & PIC -->
       {#if activeTab === 'access'}
-        <div class="rounded-2xl border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4 sm:space-y-5">
+        <div class="rounded-lg border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div class="space-y-1 pb-2 border-b border-hairline">
             <h2 class="ds-section-title text-ink">Hak Akses & Agihan PIC</h2>
             <p class="ds-caption text-mute">Kawal akses ahli dan tetapkan agihan tugasan pelanggan secara automatik.</p>
           </div>
 
-          <div class="space-y-3 rounded-xl border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
+          <div class="space-y-3 rounded-md border border-hairline bg-canvas-sunken/40 p-3 sm:p-4">
             <div>
-              <p class="text-xs font-semibold text-ink">Hak Akses Alur Kerja</p>
-              <p class="text-[11px] text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan mengakses alur kerja ini. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
+              <p class="text-badge font-semibold text-ink">Hak Akses Alur Kerja</p>
+              <p class="text-micro text-mute mt-0.5">Pilih departemen dan/atau pengguna khusus yang dibenarkan mengakses alur kerja ini. Kosongkan kedua-duanya untuk jadikan publik kepada semua ahli ruang kerja.</p>
             </div>
             <FormField label="Akses Grup / Departemen">
               {#snippet control()}
@@ -648,7 +648,7 @@
 
       <!-- TAB 3: HAD MASA & PERINGATAN -->
       {#if activeTab === 'schedule'}
-        <div class="rounded-2xl border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4 sm:space-y-5">
+        <div class="rounded-lg border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div class="space-y-1 pb-2 border-b border-hairline">
             <h2 class="ds-section-title text-ink">Had Masa & Peringatan Automatik</h2>
             <p class="ds-caption text-mute">Tetapkan jangka masa sasaran untuk setiap tugasan pelanggan.</p>
@@ -727,7 +727,7 @@
       <!-- TAB 4: INTEGRASI GOOGLE SHEETS -->
       {#if activeTab === 'integrations'}
         <div class="space-y-6">
-          <div class="rounded-2xl border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4">
+          <div class="rounded-lg border border-hairline bg-card shadow-card p-4 sm:p-6 space-y-4">
             <div class="space-y-1 pb-2 border-b border-hairline">
               <h2 class="ds-section-title text-ink">Google Sheets Sync</h2>
               <p class="ds-caption text-mute">Pautkan akaun Google yang bersambung untuk menyegerakkan baris hamparan ke dalam aliran kerja ini secara berterusan.</p>
@@ -739,7 +739,7 @@
               {#if sheetsAssigned.length > 0}
                 <div class="space-y-3">
                   {#each sheetsAssigned as conn (conn.id)}
-                    <div class="rounded-xl border border-hairline bg-canvas px-4 py-3">
+                    <div class="rounded-md border border-hairline bg-canvas px-4 py-3">
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <div class="min-w-0 flex-1 space-y-1">
                           <div class="flex items-center gap-2">
@@ -751,7 +751,7 @@
                           </div>
                           <p class="ds-caption text-mute">{conn.spreadsheetName} · {conn.sheetName}</p>
                           {#if conn.lastSyncedAt}
-                            <p class="text-xs text-mute">Segerak terakhir: {new Date(conn.lastSyncedAt).toLocaleString()}</p>
+                            <p class="text-badge text-mute">Segerak terakhir: {new Date(conn.lastSyncedAt).toLocaleString()}</p>
                           {/if}
                         </div>
                         {#if canManage}
@@ -775,7 +775,7 @@
                   <p class="ds-label text-ink">Sambungan Tersedia</p>
                   <div class="space-y-2">
                     {#each sheetsUnassigned as conn (conn.id)}
-                      <div class="flex items-center justify-between rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-3">
+                      <div class="flex items-center justify-between rounded-md border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-3">
                         <div class="flex items-center gap-2 min-w-0">
                           <HugeiconsIcon icon={AiSheetsIcon} size={16} strokeWidth={1.8} class="text-mute" />
                           <span class="ds-label truncate text-ink">{conn.name}</span>
@@ -793,7 +793,7 @@
               {/if}
 
               {#if sheetsAssigned.length === 0 && sheetsUnassigned.length === 0}
-                <div class="rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
+                <div class="rounded-md border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-8 text-center">
                   <HugeiconsIcon icon={AiSheetsIcon} size={28} strokeWidth={1.8} class="mx-auto text-mute" />
                   <p class="text-sm text-mute mt-2">Tiada sambungan Google Sheets tersedia. Sambungkan akaun Google dari menu Tetapan Integrasi terlebih dahulu.</p>
                 </div>
@@ -837,7 +837,7 @@
 >
   <div class="space-y-4">
     {#if configuringConn}
-      <div class="rounded-xl border border-hairline bg-canvas-sunken px-4 py-3 flex items-center gap-2">
+      <div class="rounded-md border border-hairline bg-canvas-sunken px-4 py-3 flex items-center gap-2">
         <HugeiconsIcon icon={AiSheetsIcon} size={16} strokeWidth={1.8} class="text-primary" />
         <span class="ds-label text-ink">{configuringConn.name}</span>
       </div>
@@ -846,7 +846,7 @@
     <div>
       <label class="ds-label text-ink mb-2 block">Pilih Hamparan (Spreadsheet)</label>
       {#if selectedSpreadsheetId}
-        <div class="rounded-xl border border-primary bg-primary-soft px-4 py-3 flex items-center justify-between gap-2">
+        <div class="rounded-md border border-primary bg-primary-soft px-4 py-3 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
             <HugeiconsIcon icon={AiSheetsIcon} size={16} strokeWidth={1.8} class="text-primary shrink-0" />
             <span class="ds-label text-ink truncate">{selectedSpreadsheetName}</span>
@@ -861,13 +861,13 @@
           </button>
         {/if}
 
-        <div class="rounded-xl border border-hairline bg-canvas-sunken overflow-hidden">
+        <div class="rounded-md border border-hairline bg-canvas-sunken overflow-hidden">
           {#if driveLoading}
             <div class="divide-y divide-hairline">
               {#each Array(5) as _}
                 <div class="flex items-center gap-3 px-4 py-2.5">
                   <Skeleton class="h-[18px] w-[18px] rounded-md shrink-0" />
-                  <Skeleton class="h-4 flex-1 rounded-lg" />
+                  <Skeleton class="h-4 flex-1 rounded-md" />
                   <Skeleton class="h-[14px] w-[14px] rounded shrink-0" />
                 </div>
               {/each}

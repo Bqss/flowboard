@@ -6,6 +6,7 @@
     api,
     ApiError,
     type ApiCardDetail,
+    type ApiCardChecklistBoard,
     type ApiWorkflow,
     type ApiWorkspaceMember,
     type ApiBoardColumn,
@@ -39,6 +40,8 @@
     ConfirmDialog,
     Dialog,
     KanbanBoard,
+    ChecklistTree,
+    ChecklistStageBoard,
     Sheet,
     WorkflowStageEditor
   } from '$lib/components/organisms/index.js';
@@ -47,6 +50,8 @@
     Add01Icon,
     ArrowDown01Icon,
     BubbleChatIcon,
+    GridViewIcon,
+    LeftToRightListBulletIcon,
     Upload04Icon,
     Settings02Icon,
     Edit02Icon,
@@ -79,7 +84,6 @@
   let workflow = $state<ApiWorkflow | null>(null);
   let board = $state<ApiBoardColumn[]>([]);
   let stages = $state<ApiWorkflowSetupStage[]>([]);
-  let allWorkflows = $state<ApiWorkflow[]>([]);
   let members = $state<ApiWorkspaceMember[]>([]);
   let availableTags = $state<string[]>([]);
   let loadingMoreStages = $state<Record<string, boolean>>({});
@@ -242,7 +246,6 @@
       if (requestRevision !== boardRequestRevision) return;
       board = boardRes.board?.columns ?? [];
       availableTags = boardRes.board?.tags ?? [];
-      allWorkflows = workflowsRes.workflows ?? [];
       workflow = workflowsRes.workflows?.find((w) => w.id === workflowId) ?? null;
       if (!workflow) {
         toast.error('Aliran kerja tidak dijumpai atau anda tidak mempunyai akses.');
@@ -337,6 +340,7 @@
   });
 
   async function refreshBoard() {
+    if (taskboardCardId) void loadCardBoard();
     if (!data.workspace?.id || !workflowId) return;
     const requestRevision = ++boardRequestRevision;
     loadingMoreStages = {};
@@ -426,23 +430,27 @@
   const allCards = $derived(board.flatMap((col) => col.cards));
   const totalCards = $derived(allCards.length);
 
+  const matchesBoardFilters = (card: ApiBoardColumn['cards'][number]) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesName = card.customerName.toLowerCase().includes(q);
+      const matchesWa = card.customerWa.toLowerCase().includes(q);
+      const matchesProduct = (card.product ?? '').toLowerCase().includes(q);
+      const matchesTag = (card.tag ?? '').toLowerCase().includes(q);
+      const matchesPic = (card.assigneeName ?? '').toLowerCase().includes(q);
+      if (!matchesName && !matchesWa && !matchesProduct && !matchesTag && !matchesPic) return false;
+    }
+    if (selectedMemberFilter === 'unassigned' && card.assigneeId) return false;
+    if (selectedMemberFilter !== 'all' && selectedMemberFilter !== 'unassigned' && card.assigneeId !== selectedMemberFilter) {
+      return false;
+    }
+    if (selectedTagFilter !== 'all' && card.tag !== selectedTagFilter) return false;
+    return true;
+  };
+
   const filteredColumns = $derived<KanbanColumn[]>(
     board.map((col) => {
-      const filtered = col.cards.filter((card) => {
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          const matchesName = card.customerName.toLowerCase().includes(q);
-          const matchesWa = card.customerWa.toLowerCase().includes(q);
-          const matchesProduct = (card.product ?? '').toLowerCase().includes(q);
-          const matchesTag = (card.tag ?? '').toLowerCase().includes(q);
-          const matchesPic = (card.assigneeName ?? '').toLowerCase().includes(q);
-          if (!matchesName && !matchesWa && !matchesProduct && !matchesTag && !matchesPic) return false;
-        }
-        if (selectedMemberFilter === 'unassigned' && card.assigneeId) return false;
-        if (selectedMemberFilter !== 'all' && selectedMemberFilter !== 'unassigned' && card.assigneeId !== selectedMemberFilter) return false;
-        if (selectedTagFilter !== 'all' && card.tag !== selectedTagFilter) return false;
-        return true;
-      });
+      const filtered = col.cards.filter(matchesBoardFilters);
 
       return {
         id: col.id,
@@ -523,6 +531,103 @@
   }
 
 
+
+  // --- List view: customer list, then a customer-scoped checklist board per stage ---
+  const BOARD_VIEW_STORAGE_KEY = 'flowboard:workflow-board:view-mode';
+  const readBoardViewMode = (): 'board' | 'list' => {
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(BOARD_VIEW_STORAGE_KEY) : null;
+      return saved === 'list' ? 'list' : 'board';
+    } catch {
+      return 'board';
+    }
+  };
+  let boardViewMode = $state<'board' | 'list'>(readBoardViewMode());
+
+  function setBoardViewMode(mode: 'board' | 'list') {
+    boardViewMode = mode;
+    taskboardCardId = null;
+    cardBoard = null;
+    try {
+      localStorage.setItem(BOARD_VIEW_STORAGE_KEY, mode);
+    } catch {
+      // storage unavailable: keep the in-memory choice only
+    }
+  }
+
+  /** Customer rows for the list view (same search/PIC filters as the board). */
+  const listRows = $derived(
+    board.flatMap((col) =>
+      col.cards.filter(matchesBoardFilters).map((card) => ({
+        id: card.id,
+        title: card.customerName,
+        subtitle: card.product ?? undefined,
+        assignee: card.assigneeName ?? undefined,
+        stageTitle: col.name,
+        stageColor: col.color,
+        progress:
+          card.checklistTotalOverall > 0
+            ? `${card.checklistDoneOverall}/${card.checklistTotalOverall} Selesai`
+            : undefined,
+        progressDone:
+          card.checklistTotalOverall > 0 &&
+          card.checklistDoneOverall === card.checklistTotalOverall
+      }))
+    )
+  );
+
+  const stageDotClass = (color: string | undefined) =>
+    (
+      {
+        indigo: 'bg-indigo-500',
+        amber: 'bg-status-progress',
+        emerald: 'bg-emerald-500',
+        rose: 'bg-rose-500',
+        sky: 'bg-kind-board',
+        cyan: 'bg-cyan-500',
+        violet: 'bg-violet-500',
+        fuchsia: 'bg-fuchsia-500',
+        teal: 'bg-teal-500'
+      } as Record<string, string>
+    )[color ?? ''] ?? 'bg-slate-400';
+
+  let taskboardCardId = $state<string | null>(null);
+  let cardBoard = $state<ApiCardChecklistBoard | null>(null);
+
+  async function loadCardBoard() {
+    if (!taskboardCardId || !data.workspace || !workflowId) return;
+    try {
+      const res = await api.getCardChecklistBoard(data.workspace.id, workflowId, taskboardCardId);
+      cardBoard = res.board;
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('board.loadCardError'));
+    }
+  }
+
+  async function openTaskboard(cardId: string) {
+    taskboardCardId = cardId;
+    cardBoard = null;
+    await loadCardBoard();
+  }
+
+  function closeTaskboard() {
+    taskboardCardId = null;
+    cardBoard = null;
+  }
+
+  async function setCardChecklistItemDone(itemId: string, done: boolean) {
+    if (!taskboardCardId || !data.workspace || !workflowId || !cardBoard) return;
+    if (!canManageCard({ assigneeId: cardBoard.assigneeId })) {
+      toast.error('Hanya PIC atau Admin/Owner yang dapat menandai checklist.');
+      return;
+    }
+    try {
+      await api.toggleChecklistItem(data.workspace.id, workflowId, taskboardCardId, itemId, { done });
+      await refreshBoard();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : tr('board.checklistError'));
+    }
+  }
 
   async function toggleChecklistItem(itemId: string, currentDone: boolean) {
     if (!selectedCardId || !data.workspace || !workflowId) return;
@@ -814,11 +919,11 @@
 <div class="flex h-full w-full min-h-0 flex-1 flex-col overflow-hidden">
   {#if loadingData}
     <div class="flex w-full shrink-0 items-center justify-between border-b border-hairline bg-card px-3.5 sm:px-6 py-2 sm:py-2.5 shadow-xs">
-      <Skeleton shape="rect" class="h-8 w-36 sm:w-44 rounded-lg" />
+      <Skeleton shape="rect" class="h-8 w-36 sm:w-44 rounded-md" />
       <div class="flex items-center gap-2">
         <Skeleton shape="rect" class="h-8 w-8 rounded-full hidden md:block" />
         <Skeleton shape="rect" class="h-8 w-8 rounded-full hidden md:block" />
-        <Skeleton shape="rect" class="h-8 w-20 sm:w-28 rounded-xl" />
+        <Skeleton shape="rect" class="h-8 w-20 sm:w-28 rounded-md" />
       </div>
     </div>
   {:else}
@@ -829,7 +934,7 @@
           href="/dashboard/workflows"
           variant="ghost"
           size="sm"
-          class="size-8 p-0 text-mute hover:text-ink rounded-lg shrink-0"
+          class="size-8 p-0 text-mute hover:text-ink rounded-md shrink-0"
           title="Kembali ke Senarai Aliran Kerja"
         >
           <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={2} />
@@ -843,14 +948,14 @@
             {@const wfLabels = workflow.labels && workflow.labels.length > 0 ? workflow.labels : (workflow.label ? [workflow.label] : [])}
             <div class="flex items-center gap-1 shrink-0">
               {#each wfLabels as tag (tag)}
-                <Badge tone="info" variant="soft" class="text-xs font-semibold">
+                <Badge tone="info" variant="soft" class="text-badge font-semibold">
                   {tag}
                 </Badge>
               {/each}
             </div>
           {/if}
           {#if workflow?.ownerName}
-            <span class="text-xs text-mute hidden md:inline truncate shrink-0">
+            <span class="text-badge text-mute hidden md:inline truncate shrink-0">
               · {tr('common.pic')}: <span class="font-medium text-ink-soft">{workflow.ownerName}</span>
             </span>
           {/if}
@@ -866,21 +971,46 @@
               {@render memberAvatar(member, idx)}
             {/each}
             {#if members.length > 4}
-              <div class="grid size-8 place-items-center rounded-full bg-slate-800 text-white ring-2 ring-card text-xs font-bold shadow-sm">
+              <div class="grid size-8 place-items-center rounded-full bg-slate-800 text-on-primary ring-2 ring-card text-badge font-bold shadow-sm">
                 +{members.length - 4}
               </div>
             {/if}
           </div>
         {/if}
 
+        {#if !isEditMode}
+          <div class="flex items-center gap-0.5 rounded-md border border-hairline bg-canvas-sunken/70 p-1 shadow-xs" role="group" aria-label="Paparan">
+            <button
+              type="button"
+              onclick={() => setBoardViewMode('board')}
+              aria-pressed={boardViewMode === 'board'}
+              title={tr('board.viewBoard')}
+              aria-label={tr('board.viewBoard')}
+              class={cn('flex size-8 items-center justify-center rounded-md transition-colors cursor-pointer', boardViewMode === 'board' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink')}
+            >
+              <HugeiconsIcon icon={GridViewIcon} size={18} strokeWidth={1.8} />
+            </button>
+            <button
+              type="button"
+              onclick={() => setBoardViewMode('list')}
+              aria-pressed={boardViewMode === 'list'}
+              title={tr('board.viewList')}
+              aria-label={tr('board.viewList')}
+              class={cn('flex size-8 items-center justify-center rounded-md transition-colors cursor-pointer', boardViewMode === 'list' ? 'bg-card text-ink shadow-xs' : 'text-mute hover:text-ink')}
+            >
+              <HugeiconsIcon icon={LeftToRightListBulletIcon} size={18} strokeWidth={1.8} />
+            </button>
+          </div>
+        {/if}
+
         <!-- Desktop Action Cluster -->
-        <div class="hidden sm:flex items-center gap-0.5 rounded-xl border border-hairline bg-canvas-sunken/70 p-1 shadow-xs" data-onboarding="workflow-tabs">
+        <div class="hidden sm:flex items-center gap-0.5 rounded-md border border-hairline bg-canvas-sunken/70 p-1 shadow-xs" data-onboarding="workflow-tabs">
           {#if !isEditMode}
             <Tooltip text="Chat Workflow" side="bottom">
               <button
                 type="button"
                 onclick={openWorkflowChat}
-                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
                 aria-label="Chat Workflow"
               >
                 <HugeiconsIcon icon={BubbleChatIcon} size={18} strokeWidth={1.8} />
@@ -890,7 +1020,7 @@
             <Tooltip text={tr('board.stats')} side="bottom">
               <a
                 href="/dashboard/workflows/{workflowId}/stats"
-                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
                 aria-label={tr('board.stats')}
               >
                 <HugeiconsIcon icon={DashboardSquare02Icon} size={18} strokeWidth={1.8} />
@@ -900,7 +1030,7 @@
             <Tooltip text={tr('setup.workflowSettings')} side="bottom">
               <a
                 href="/dashboard/workflows/{workflowId}/settings"
-                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
                 aria-label={tr('setup.workflowSettings')}
               >
                 <HugeiconsIcon icon={Settings02Icon} size={18} strokeWidth={1.8} />
@@ -912,7 +1042,7 @@
                 <button
                   type="button"
                   onclick={enterEditMode}
-                  class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                  class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
                   aria-label="Mode Edit"
                 >
                   <HugeiconsIcon icon={Edit02Icon} size={18} strokeWidth={1.8} />
@@ -926,7 +1056,7 @@
               <button
                 type="button"
                 onclick={() => (importOpen = true)}
-                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
                 aria-label={tr('board.importCsv')}
                 data-onboarding="import-csv-btn"
               >
@@ -934,7 +1064,7 @@
               </button>
             </Tooltip>
           {:else}
-            <Button variant="ghost" size="sm" onclick={exitEditMode} class="h-8 gap-1.5 text-xs font-semibold text-primary hover:bg-card">
+            <Button variant="ghost" size="sm" onclick={exitEditMode} class="h-8 gap-1.5 text-badge font-semibold text-primary hover:bg-card">
               <HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} />
               <span>Selesai Edit</span>
             </Button>
@@ -944,11 +1074,11 @@
         <!-- Mobile Action Cluster -->
         <div class="flex sm:hidden items-center gap-1">
           {#if !isEditMode}
-            <div class="flex items-center gap-0.5 rounded-xl border border-hairline bg-canvas-sunken/70 p-1 shadow-xs">
+            <div class="flex items-center gap-0.5 rounded-md border border-hairline bg-canvas-sunken/70 p-1 shadow-xs">
               <button
                 type="button"
                 onclick={openWorkflowChat}
-                class="flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
+                class="flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer"
                 aria-label="Chat Workflow"
               >
                 <HugeiconsIcon icon={BubbleChatIcon} size={18} strokeWidth={1.8} />
@@ -959,7 +1089,7 @@
                   <button
                     type="button"
                     class={cn(
-                      "flex size-8 items-center justify-center rounded-lg text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer",
+                      "flex size-8 items-center justify-center rounded-md text-mute hover:text-ink hover:bg-card transition-colors cursor-pointer",
                       open && "bg-card text-ink shadow-xs"
                     )}
                     onclick={toggle}
@@ -971,7 +1101,7 @@
               </DropdownMenu>
             </div>
           {:else}
-            <Button variant="primary" size="sm" onclick={exitEditMode} class="h-8 px-2.5 gap-1 text-xs font-semibold shadow-xs">
+            <Button variant="primary" size="sm" onclick={exitEditMode} class="h-8 px-2.5 gap-1 text-badge font-semibold shadow-xs">
               <HugeiconsIcon icon={Tick02Icon} size={15} strokeWidth={2} />
               <span>Selesai</span>
             </Button>
@@ -1002,7 +1132,7 @@
         <div class="relative w-full sm:w-auto">
           <select
             bind:value={selectedMemberFilter}
-            class="h-8.5 sm:h-9 w-full sm:w-auto appearance-none rounded-xl sm:rounded-full border border-hairline bg-card pl-3 pr-8 sm:pl-4 sm:pr-9 text-xs sm:text-[13px] font-medium text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all shadow-xs truncate"
+            class="h-8.5 sm:h-9 w-full sm:w-auto appearance-none rounded-md sm:rounded-full border border-hairline bg-card pl-3 pr-8 sm:pl-4 sm:pr-9 text-badge sm:text-meta font-medium text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all shadow-xs truncate"
           >
             <option value="all">Semua PIC</option>
             <option value="unassigned">{tr('board.unassigned')}</option>
@@ -1021,9 +1151,9 @@
         <div class="relative w-full sm:w-auto">
           <select
             bind:value={selectedTagFilter}
-            class="h-8.5 sm:h-9 w-full sm:w-auto appearance-none rounded-xl sm:rounded-full border border-hairline bg-card pl-3 pr-8 sm:pl-4 sm:pr-9 text-xs sm:text-[13px] font-medium text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all shadow-xs truncate"
+            class="h-8.5 sm:h-9 w-full sm:w-auto appearance-none rounded-md sm:rounded-full border border-hairline bg-card pl-3 pr-8 sm:pl-4 sm:pr-9 text-badge sm:text-meta font-medium text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all shadow-xs truncate"
           >
-            <option value="all">All status</option>
+            <option value="all">{tr('board.allStatus')}</option>
             {#each availableTags as tagOpt (tagOpt)}
               <option value={tagOpt}>{tagOpt}</option>
             {/each}
@@ -1041,7 +1171,7 @@
             variant="ghost"
             size="sm"
             onclick={resetFilters}
-            class="col-span-2 sm:col-span-1 h-7 text-xs text-mute hover:text-ink justify-center sm:justify-start"
+            class="col-span-2 sm:col-span-1 h-7 text-badge text-mute hover:text-ink justify-center sm:justify-start"
           >
             <HugeiconsIcon icon={Cancel01Icon} size={13} strokeWidth={2} class="mr-1" />
             <span>{tr('board.resetFilter')}</span>
@@ -1055,7 +1185,7 @@
   <div class="flex-1 min-h-0 w-full overflow-hidden flex flex-col p-3 sm:p-5">
     {#if isEditMode}
       <div class="h-full w-full overflow-y-auto space-y-4">
-        <div class="flex items-center gap-2.5 rounded-xl bg-primary-soft/60 px-4 py-2.5 border border-primary/20 text-ink shrink-0">
+        <div class="flex items-center gap-2.5 rounded-md bg-primary-soft/60 px-4 py-2.5 border border-primary/20 text-ink shrink-0">
           <Badge tone="progress" variant="solid" class="font-bold">Mode Edit</Badge>
           <span class="text-sm font-medium">Susun peringkat, urutan kolum dan senarai semak aliran kerja ini.</span>
         </div>
@@ -1064,7 +1194,6 @@
           workspaceId={data.workspace?.id ?? ''}
           {workflowId}
           bind:stages
-          {allWorkflows}
           {canManage}
           bind:openCreateStageModal={openCreateStage}
           onchange={loadWorkflowBoardData}
@@ -1074,10 +1203,10 @@
       {#if loadingData}
         <div class="flex gap-4 overflow-hidden h-full">
           {#each [1, 2, 3] as _i}
-            <div class="w-lane shrink-0 rounded-2xl border border-hairline bg-canvas-sunken p-3.5 space-y-3 h-full">
+            <div class="w-lane shrink-0 rounded-lg border border-hairline bg-canvas-sunken p-3.5 space-y-3 h-full">
               <Skeleton shape="rect" class="h-5 w-24 rounded-md" />
-              <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
-              <Skeleton shape="rect" class="h-28 w-full rounded-xl" />
+              <Skeleton shape="rect" class="h-28 w-full rounded-md" />
+              <Skeleton shape="rect" class="h-28 w-full rounded-md" />
             </div>
           {/each}
         </div>
@@ -1088,9 +1217,119 @@
           actionLabel={canManage ? tr('board.setupStages') : undefined}
           onaction={enterEditMode}
         />
+      {:else if boardViewMode === 'list' && taskboardCardId}
+        <div class="flex h-full min-h-0 flex-col">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-hairline bg-card px-4 py-3 sm:px-6">
+            <div class="flex min-w-0 items-center gap-3">
+              <Button variant="secondary" size="md" onclick={closeTaskboard}>
+                <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={2} />
+                <span>{tr('board.taskboardBack')}</span>
+              </Button>
+              {#if cardBoard}
+                <h2 class="truncate text-base font-bold text-ink">{cardBoard.customerName}</h2>
+              {/if}
+            </div>
+            <Button variant="secondary" size="md" onclick={() => openCard('', taskboardCardId ?? '')}>
+              {tr('board.openDetail')}
+            </Button>
+          </div>
+
+          <div class="min-h-0 flex-1">
+            {#if cardBoard}
+              <ChecklistStageBoard
+                stages={cardBoard.stages}
+                canComplete={canManageCard({ assigneeId: cardBoard.assigneeId })}
+                ontoggle={(itemId, done) => setCardChecklistItemDone(itemId, done)}
+                class="h-full"
+              />
+            {:else}
+              <div class="flex h-full gap-3 overflow-x-auto p-4 sm:p-6">
+                {#each Array(4) as _, skeletonIndex (skeletonIndex)}
+                  <div class="w-72 shrink-0 space-y-2">
+                    <Skeleton shape="rect" class="h-10 w-full rounded-md" />
+                    <Skeleton shape="rect" class="h-28 w-full rounded-md" />
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      {:else if boardViewMode === 'list'}
+        <div class="w-full px-4 pb-6 pt-4 sm:px-6">
+          <div class="mb-3 flex justify-end">
+            <Button variant="primary" size="sm" onclick={() => openCreateModal()}>
+              <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={2.2} />
+              <span>{tr('board.addCustomer')}</span>
+            </Button>
+          </div>
+          <div class="overflow-hidden rounded-lg border border-hairline bg-card shadow-card">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead class="border-b border-hairline bg-canvas-sunken text-badge font-semibold text-mute">
+                  <tr>
+                    <th scope="col" class="w-12 px-4 py-3 sm:px-6 sm:py-3.5">#</th>
+                    <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('board.colCustomer')}</th>
+                    <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('board.colStage')}</th>
+                    <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('board.colPic')}</th>
+                    <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5">{tr('board.colChecklist')}</th>
+                    <th scope="col" class="px-4 py-3 sm:px-6 sm:py-3.5 text-right">{tr('common.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-hairline">
+                  {#each listRows as row, rowIndex (row.id)}
+                    <tr class="transition-colors hover:bg-lane/40">
+                      <td class="px-4 py-3.5 sm:px-6 text-badge font-bold tabular-nums text-mute">{rowIndex + 1}</td>
+                      <td class="px-4 py-3.5 sm:px-6">
+                        <button
+                          type="button"
+                          onclick={() => openTaskboard(row.id)}
+                          class="block max-w-[320px] cursor-pointer truncate text-left font-semibold text-ink hover:text-primary"
+                        >
+                          {row.title}
+                        </button>
+                        {#if row.subtitle}
+                          <p class="max-w-[320px] truncate text-badge text-mute">{row.subtitle}</p>
+                        {/if}
+                      </td>
+                      <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-lane px-2.5 py-1 text-badge font-semibold text-ink">
+                          <span class={cn('size-2 rounded-full', stageDotClass(row.stageColor))}></span>
+                          {row.stageTitle}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3.5 sm:px-6 whitespace-nowrap">
+                        {#if row.assignee}
+                          <div class="flex items-center gap-2">
+                            <Avatar name={row.assignee} size={22} />
+                            <span class="text-badge font-medium text-ink">{row.assignee}</span>
+                          </div>
+                        {:else}
+                          <span class="text-badge font-medium text-mute">{tr('common.unassigned')}</span>
+                        {/if}
+                      </td>
+                      <td class={cn('px-4 py-3.5 sm:px-6 whitespace-nowrap text-badge font-semibold', row.progressDone ? 'text-status-done-ink' : 'text-mute')}>
+                        {row.progress ?? '—'}
+                      </td>
+                      <td class="px-4 py-3.5 sm:px-6 text-right whitespace-nowrap">
+                        <Button variant="primary" size="sm" onclick={() => openTaskboard(row.id)}>
+                          <span>{tr('board.openChecklist')}</span>
+                          <HugeiconsIcon icon={ArrowRight01Icon} size={14} strokeWidth={2} />
+                        </Button>
+                      </td>
+                    </tr>
+                  {:else}
+                    <tr>
+                      <td colspan="6" class="px-4 py-8 text-center text-badge text-mute sm:px-6">{tr('common.noResults')}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       {:else}
         {#if isFilterActive && totalFilteredCount === 0}
-          <div class="m-auto rounded-2xl border border-hairline bg-card p-12 text-center shadow-card max-w-md">
+          <div class="m-auto rounded-lg border border-hairline bg-card p-12 text-center shadow-card max-w-md">
             <p class="ds-section-title text-ink">{tr('common.noResults')}</p>
             <p class="ds-caption mt-1 text-mute">{tr('board.noFilterResults')}</p>
             <Button variant="secondary" size="sm" class="mt-4" onclick={resetFilters}>
@@ -1123,7 +1362,7 @@
       <button
         type="button"
         onclick={() => openCreateModal()}
-        class="flex items-center gap-2 rounded-full bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
+        class="flex items-center gap-2 rounded-md bg-primary px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-on-primary shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover active:scale-95 cursor-pointer"
         aria-label={tr('board.addCustomer')}
       >
         <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={2.2} />
@@ -1145,7 +1384,7 @@
       <button
         type="button"
         onclick={() => promptDeleteCard({ id: cardDetail!.card.id, name: cardDetail!.customer?.name ?? '' })}
-        class="inline-flex items-center gap-1.5 rounded-lg border border-status-urgent/30 bg-status-urgent-soft px-2.5 py-1 text-xs font-semibold text-status-urgent-ink transition hover:bg-status-urgent/20"
+        class="inline-flex items-center gap-1.5 rounded-md border border-status-urgent/30 bg-status-urgent-soft px-2.5 py-1 text-badge font-semibold text-status-urgent-ink transition hover:bg-status-urgent/20"
         title="Hapus Kad Pelanggan"
       >
         <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.8} />
@@ -1157,13 +1396,13 @@
   {#if detailLoading}
     <div class="space-y-4 py-4">
       <Skeleton shape="rect" class="h-6 w-32 rounded-md" />
-      <Skeleton shape="rect" class="h-10 w-full rounded-xl" />
-      <Skeleton shape="rect" class="h-24 w-full rounded-2xl" />
+      <Skeleton shape="rect" class="h-10 w-full rounded-md" />
+      <Skeleton shape="rect" class="h-24 w-full rounded-lg" />
     </div>
   {:else if cardDetail}
     <div class="space-y-5 pb-6">
       {#if cardDetail.waErrorFlag || cardDetail.waFollowupsStopped}
-        <div class="rounded-xl border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-[13px] space-y-1 shadow-xs">
+        <div class="rounded-md border border-status-urgent/30 bg-status-urgent-soft p-3.5 text-meta space-y-1 shadow-xs">
           <div class="flex items-center gap-1.5 font-bold text-status-urgent-ink">
             <HugeiconsIcon icon={Alert02Icon} size={15} strokeWidth={2} />
             <span>
@@ -1174,20 +1413,20 @@
               {/if}
             </span>
           </div>
-          <p class="text-status-urgent-ink/80 text-[12px] leading-relaxed pl-5">
+          <p class="text-status-urgent-ink/80 text-badge leading-relaxed pl-5">
             {tr('board.manualHint')}
           </p>
         </div>
       {/if}
 
       {#if detailError}
-        <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-[13px] font-semibold text-status-urgent-ink">
+        <div class="rounded-md border border-status-urgent/25 bg-status-urgent-soft p-3 text-meta font-semibold text-status-urgent-ink">
           {detailError}
         </div>
       {/if}
 
       <!-- Customer Information -->
-      <section class="space-y-4 rounded-2xl border border-hairline bg-card p-4 shadow-card">
+      <section class="space-y-4 rounded-lg border border-hairline bg-card p-4 shadow-card">
         <div class="flex items-start gap-3.5">
           <Avatar
             name={cardDetail.customer?.name}
@@ -1200,43 +1439,43 @@
             </h2>
             <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
               {#if cardDetail.stage?.name}
-                <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                <Badge tone="queued" variant="soft" class="px-2 py-0.5 text-micro font-semibold">
                   {cardDetail.stage.name}
                 </Badge>
               {/if}
               {#if cardDetail.card.tag}
-                <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                <Badge tone={resolveTone(cardDetail.card.tag)} variant="soft" class="px-2 py-0.5 text-micro font-semibold">
                   {cardDetail.card.tag}
                 </Badge>
               {/if}
               {#if cardDetail.card.completedAt}
-                <Badge tone="done" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                <Badge tone="done" variant="soft" class="px-2 py-0.5 text-micro font-semibold">
                   {tr('board.completed')}
                 </Badge>
               {:else if isCardOverdue(cardDetail.card)}
-                <Badge tone="urgent" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                <Badge tone="urgent" variant="soft" class="px-2 py-0.5 text-micro font-semibold">
                   {tr('board.overdue')}
                 </Badge>
               {:else if isDueSoon(cardDetail.card.dueAt, cardDetail.card.completedAt)}
-                <Badge tone="progress" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">
+                <Badge tone="progress" variant="soft" class="px-2 py-0.5 text-micro font-semibold">
                   {tr('board.dueSoon')}
                 </Badge>
               {/if}
               {#if cardDetail.waErrorFlag}
-                <Badge tone="urgent" variant="soft" class="px-2 py-0.5 text-[11px] font-semibold">Ralat WA</Badge>
+                <Badge tone="urgent" variant="soft" class="px-2 py-0.5 text-micro font-semibold">Ralat WA</Badge>
               {/if}
             </div>
           </div>
         </div>
 
-        <div class="space-y-3.5 rounded-xl border border-hairline/80 bg-lane/40 p-3.5">
+        <div class="space-y-3.5 rounded-md border border-hairline/80 bg-lane/40 p-3.5">
           <div class="flex items-center justify-between gap-3">
             <div class="flex min-w-0 items-center gap-2.5">
-              <span class="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline/70 bg-card text-mute shadow-xs">
+              <span class="grid size-7 shrink-0 place-items-center rounded-md border border-hairline/70 bg-card text-mute shadow-xs">
                 <HugeiconsIcon icon={SmartPhone01Icon} size={15} strokeWidth={1.8} />
               </span>
               <div class="min-w-0">
-                <p class="text-[11px] font-medium leading-none text-mute">No. Handphone</p>
+                <p class="text-micro font-medium leading-none text-mute">No. Handphone</p>
                 <p class="mt-0.5 truncate text-sm font-semibold text-ink">{cardDetail.customer?.wa || '-'}</p>
               </div>
             </div>
@@ -1245,7 +1484,7 @@
                 href="https://wa.me/{cleanPhone(cardDetail.customer.wa)}"
                 target="_blank"
                 rel="noreferrer"
-                class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-status-done px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-opacity hover:opacity-90"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-status-done px-3 py-1.5 text-badge font-bold text-on-primary shadow-xs transition-opacity hover:opacity-90"
                 title="Buka WhatsApp"
               >
                 <HugeiconsIcon icon={WhatsappIcon} size={13} strokeWidth={2} />
@@ -1258,23 +1497,23 @@
 
           <div class="flex items-center justify-between gap-3">
             <div class="flex min-w-0 items-center gap-2.5">
-              <span class="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline/70 bg-card text-mute shadow-xs">
+              <span class="grid size-7 shrink-0 place-items-center rounded-md border border-hairline/70 bg-card text-mute shadow-xs">
                 <HugeiconsIcon icon={PackageIcon} size={15} strokeWidth={1.8} />
               </span>
               <div class="min-w-0">
-                <p class="text-[11px] font-medium leading-none text-mute">Paket yang Dibeli</p>
+                <p class="text-micro font-medium leading-none text-mute">Paket yang Dibeli</p>
                 <p class="mt-0.5 truncate text-sm font-semibold text-ink">{cardDetail.card.product || '-'}</p>
               </div>
             </div>
             {#if cardDetail.card.product}
-              <Badge tone="queued" variant="soft" class="shrink-0 px-2 py-0.5 text-[11px] font-semibold">Paket</Badge>
+              <Badge tone="queued" variant="soft" class="shrink-0 px-2 py-0.5 text-micro font-semibold">Paket</Badge>
             {/if}
           </div>
 
           {#if cardDetail.card.completedAt || cardDetail.card.dueAt}
             <div class="h-px bg-hairline/70"></div>
             <div class="flex items-center gap-2.5">
-              <span class="grid size-7 shrink-0 place-items-center rounded-lg border border-hairline/70 bg-card text-mute shadow-xs">
+              <span class="grid size-7 shrink-0 place-items-center rounded-md border border-hairline/70 bg-card text-mute shadow-xs">
                 {#if cardDetail.card.completedAt}
                   <HugeiconsIcon icon={CheckmarkCircle02Icon} size={15} strokeWidth={1.8} class="text-status-done-ink" />
                 {:else}
@@ -1282,10 +1521,10 @@
                 {/if}
               </span>
               <div class="min-w-0">
-                <p class="text-[11px] font-medium leading-none text-mute">
+                <p class="text-micro font-medium leading-none text-mute">
                   {cardDetail.card.completedAt ? tr('board.completedOn') : tr('board.dueDate')}
                 </p>
-                <p class="mt-0.5 text-xs font-semibold text-ink">
+                <p class="mt-0.5 text-badge font-semibold text-ink">
                   {formatDueDate(cardDetail.card.completedAt ?? cardDetail.card.dueAt ?? cardDetail.card.createdAt)}
                 </p>
               </div>
@@ -1296,7 +1535,7 @@
 
       <!-- PIC Assignment -->
       <section class="space-y-2 border-b border-hairline pb-4">
-        <h3 class="text-xs font-semibold uppercase tracking-wider text-mute">{tr('common.pic')}</h3>
+        <h3 class="text-badge font-semibold text-mute">{tr('common.pic')}</h3>
         <div class="flex items-center gap-2.5">
           {#if assignedMember}
             <button
@@ -1312,7 +1551,7 @@
               <span class="text-sm font-medium text-ink transition-colors group-hover:text-primary">{assignedMember.name}</span>
             </button>
           {:else}
-            <span class="text-xs italic text-mute">{tr('home.noAssignee')}</span>
+            <span class="text-badge italic text-mute">{tr('home.noAssignee')}</span>
           {/if}
 
           {#if canManage}
@@ -1332,7 +1571,7 @@
                 <button
                   type="button"
                   class={cn(
-                    'grid size-8 place-items-center rounded-full border border-hairline bg-card text-xl leading-none text-mute transition hover:border-primary hover:text-primary',
+                    'grid size-8 place-items-center rounded-md border border-hairline bg-card text-xl leading-none text-mute transition hover:border-primary hover:text-primary',
                     open && 'border-primary text-primary'
                   )}
                   onclick={toggle}
@@ -1350,61 +1589,47 @@
       </section>
 
       <!-- Checklist -->
-      <section class="space-y-3.5 rounded-2xl border border-hairline bg-card p-4 shadow-card">
+      <section class="space-y-3.5 rounded-lg border border-hairline bg-card p-4 shadow-card">
         <div class="space-y-2">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <h3 class="ds-section-title text-ink">{tr('common.checklist')}</h3>
-              <span class="rounded-full bg-lane px-2 py-0.5 text-xs font-semibold text-mute">
+              <span class="rounded-full bg-lane px-2 py-0.5 text-badge font-semibold text-mute">
                 {sheetChecklistDone} / {sheetChecklistTotal}
               </span>
             </div>
-            <span class={cn('text-xs font-bold', sheetChecklistPct === 100 ? 'text-status-done-ink' : 'text-primary')}>
+            <span class={cn('text-badge font-bold', sheetChecklistPct === 100 ? 'text-status-done-ink' : 'text-primary')}>
               {sheetChecklistPct}%
             </span>
           </div>
           <ProgressBar value={sheetChecklistPct} max={100} class="h-2 rounded-full" />
         </div>
 
-        <div class="space-y-2 pt-1">
-          {#each cardDetail.checklist as item (item.id)}
-            <div
-              class={cn(
-                'flex items-center justify-between gap-3 rounded-xl border p-3 transition-colors',
-                item.done ? 'border-status-done/25 bg-status-done-soft/40' : 'border-hairline bg-lane/30 hover:bg-lane/60'
-              )}
-            >
-              <label class="flex min-w-0 flex-1 cursor-pointer select-none items-center gap-3">
-                <Checkbox
-                  checked={item.done}
-                  onchange={() => toggleChecklistItem(item.id, item.done)}
-                  disabled={!canManageCurrentCard}
-                />
-                <span class={cn('truncate text-sm font-medium transition-colors', item.done ? 'text-mute line-through' : 'text-ink')}>
-                  {item.label}
-                </span>
-              </label>
-              {#if item.required}
-                <Badge tone="progress" variant="soft" class="shrink-0 px-1.5 py-0.2 text-[10px] font-semibold">Wajib</Badge>
-              {/if}
-            </div>
-          {:else}
-            <div class="rounded-xl border border-dashed border-hairline p-4 text-center text-xs text-mute">
-              Tiada item senarai semak untuk peringkat ini.
-            </div>
-          {/each}
+        <div class="pt-1">
+          <ChecklistTree
+            workspaceId={data.workspace?.id ?? ''}
+            {workflowId}
+            stageId={cardDetail.stage?.id ?? ''}
+            cardId={cardDetail.card.id}
+            groups={cardDetail.groups ?? []}
+            items={cardDetail.checklist}
+            canManage={canManage}
+            canToggle={canManageCurrentCard}
+            ontoggle={(item) => toggleChecklistItem(item.id, item.done)}
+            onchange={refreshBoard}
+          />
         </div>
       </section>
 
       {#if cardDetail.nextWorkflow}
-        <section class="space-y-2.5 rounded-2xl border border-primary/30 bg-primary-soft/40 p-4">
+        <section class="space-y-2.5 rounded-lg border border-primary/30 bg-primary-soft/40 p-4">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold uppercase tracking-wider text-primary">Alur Kerja Seterusnya</span>
+            <span class="text-badge font-bold text-primary">Alur kerja seterusnya</span>
             <Button variant="primary" size="sm" onclick={relayToNextWorkflow} loading={relayLoading}>
               Hantar ke {cardDetail.nextWorkflow.name}
             </Button>
           </div>
-          <p class="text-xs leading-relaxed text-mute">
+          <p class="text-badge leading-relaxed text-mute">
             Pindahkan kad pelanggan ini ke aliran kerja seterusnya mengikut tetapan auto-relay.
           </p>
         </section>
@@ -1491,7 +1716,7 @@
     </FormField>
 
     {#if createError}
-      <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-[13px] font-semibold text-status-urgent-ink">
+      <div class="rounded-md border border-status-urgent/25 bg-status-urgent-soft p-3 text-meta font-semibold text-status-urgent-ink">
         {createError}
       </div>
     {/if}
@@ -1520,12 +1745,12 @@
   description={tr('board.importDescription')}
 >
   <div class="space-y-4">
-    <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-1.5 text-[13px] text-mute">
+    <div class="rounded-lg border border-hairline bg-canvas-sunken p-4 space-y-1.5 text-meta text-mute">
       <p class="font-semibold text-ink">{tr('board.rowFormat')}</p>
-      <code class="block rounded-lg border border-hairline bg-card p-2 font-mono text-[12px] text-ink">
+      <code class="block rounded-md border border-hairline bg-card p-2 font-mono text-badge text-ink">
         Customer, WhatsApp, Product, Tag
       </code>
-      <p class="pt-1 text-[12px]">
+      <p class="pt-1 text-badge">
         {tr('board.example')} <code>Siti Aminah, 60123456789, April webinar, VIP</code>
       </p>
     </div>
@@ -1547,25 +1772,25 @@
       {#snippet control(args)}
         <div class="space-y-2.5">
           <label
-            class="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-3 transition-all hover:border-primary hover:bg-primary-soft/30"
+            class="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-hairline-strong bg-canvas-sunken px-4 py-3 transition-all hover:border-primary hover:bg-primary-soft/30"
           >
-            <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
+            <span class="grid size-9 shrink-0 place-items-center rounded-md bg-primary-soft text-primary">
               <HugeiconsIcon icon={File02Icon} size={18} strokeWidth={1.8} />
             </span>
             <div class="min-w-0 flex-1">
               {#if importFileName}
                 <p class="truncate text-sm font-semibold text-ink">{importFileName}</p>
-                <p class="text-xs text-mute">{tr('board.fileLoaded')}</p>
+                <p class="text-badge text-mute">{tr('board.fileLoaded')}</p>
               {:else}
                 <p class="text-sm font-semibold text-ink">{tr('board.uploadFile')}</p>
-                <p class="text-xs text-mute">{tr('board.uploadFileHint')}</p>
+                <p class="text-badge text-mute">{tr('board.uploadFileHint')}</p>
               {/if}
             </div>
             {#if importFileName}
               <button
                 type="button"
                 onclick={(e) => { e.preventDefault(); clearImportFile(); }}
-                class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent cursor-pointer"
+                class="shrink-0 rounded-md px-2 py-1 text-badge font-semibold text-mute transition-colors hover:bg-status-urgent/10 hover:text-status-urgent cursor-pointer"
               >
                 {tr('common.clear')}
               </button>
@@ -1584,23 +1809,23 @@
             rows={6}
             onblur={() => { if (importCsv.trim() && importColumns.length === 0) detectColumnsFromCsv(importCsv); }}
             placeholder={`Siti Aminah, 60123456789, April webinar, VIP\nAhmad Dahlan, 601298765432, Onboarding, Urgent`}
-            class="w-full rounded-2xl border border-hairline bg-card p-3 font-mono text-[13px] text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            class="w-full rounded-lg border border-hairline bg-card p-3 font-mono text-meta text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           ></textarea>
         </div>
       {/snippet}
     </FormField>
 
     {#if importColumns.length > 0}
-      <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 space-y-3">
+      <div class="rounded-lg border border-hairline bg-canvas-sunken p-4 space-y-3">
         <div class="flex items-center gap-2">
           <HugeiconsIcon icon={Settings02Icon} size={16} strokeWidth={1.8} class="text-primary" />
           <p class="text-sm font-semibold text-ink">{tr('board.columnMapping')}</p>
         </div>
-        <p class="text-xs text-mute">{tr('board.columnMappingHint')}</p>
+        <p class="text-badge text-mute">{tr('board.columnMappingHint')}</p>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="space-y-1.5">
-            <span class="text-xs font-semibold text-ink">{tr('board.mapName')} <span class="text-status-urgent">*</span></span>
-            <select bind:value={importMapping.name} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+            <span class="text-badge font-semibold text-ink">{tr('board.mapName')} <span class="text-status-urgent">*</span></span>
+            <select bind:value={importMapping.name} class="h-9 w-full rounded-md border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
               {#each importColumns as col, idx}
                 <option value={idx}>{col || `Column ${idx + 1}`}</option>
               {/each}
@@ -1608,8 +1833,8 @@
           </label>
 
           <label class="space-y-1.5">
-            <span class="text-xs font-semibold text-ink">{tr('board.mapWa')} <span class="text-status-urgent">*</span></span>
-            <select bind:value={importMapping.wa} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+            <span class="text-badge font-semibold text-ink">{tr('board.mapWa')} <span class="text-status-urgent">*</span></span>
+            <select bind:value={importMapping.wa} class="h-9 w-full rounded-md border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
               {#each importColumns as col, idx}
                 <option value={idx}>{col || `Column ${idx + 1}`}</option>
               {/each}
@@ -1617,8 +1842,8 @@
           </label>
 
           <label class="space-y-1.5">
-            <span class="text-xs font-semibold text-ink">{tr('board.mapProduct')}</span>
-            <select bind:value={importMapping.product} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+            <span class="text-badge font-semibold text-ink">{tr('board.mapProduct')}</span>
+            <select bind:value={importMapping.product} class="h-9 w-full rounded-md border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
               <option value={-1}>{tr('board.ignoreColumn')}</option>
               {#each importColumns as col, idx}
                 <option value={idx}>{col || `Column ${idx + 1}`}</option>
@@ -1627,8 +1852,8 @@
           </label>
 
           <label class="space-y-1.5">
-            <span class="text-xs font-semibold text-ink">{tr('board.mapTag')}</span>
-            <select bind:value={importMapping.tag} class="h-9 w-full rounded-lg border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+            <span class="text-badge font-semibold text-ink">{tr('board.mapTag')}</span>
+            <select bind:value={importMapping.tag} class="h-9 w-full rounded-md border border-hairline bg-card px-3 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
               <option value={-1}>{tr('board.ignoreColumn')}</option>
               {#each importColumns as col, idx}
                 <option value={idx}>{col || `Column ${idx + 1}`}</option>
@@ -1640,34 +1865,34 @@
     {/if}
 
     {#if importError}
-      <div class="rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3 text-[13px] font-semibold text-status-urgent-ink">
+      <div class="rounded-md border border-status-urgent/25 bg-status-urgent-soft p-3 text-meta font-semibold text-status-urgent-ink">
         {importError}
       </div>
     {/if}
 
     {#if importResult}
-      <div class="rounded-2xl border border-hairline bg-canvas-sunken p-4 text-[13px] space-y-2">
+      <div class="rounded-lg border border-hairline bg-canvas-sunken p-4 text-meta space-y-2">
         <p class="font-bold text-ink">{tr('board.importResult')}</p>
-        <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-          <div class="rounded-lg bg-card p-2 border border-hairline">
+        <div class="grid grid-cols-2 gap-2 text-badge sm:grid-cols-4">
+          <div class="rounded-md bg-card p-2 border border-hairline">
             <span class="text-mute block">{tr('board.totalProcessed')}</span>
             <span class="text-sm font-bold text-ink">{importResult.total}</span>
           </div>
-          <div class="rounded-lg bg-card p-2 border border-hairline">
+          <div class="rounded-md bg-card p-2 border border-hairline">
             <span class="text-mute block">{tr('board.inserted')}</span>
             <span class="text-sm font-bold text-status-done-ink">{importResult.inserted}</span>
           </div>
-          <div class="rounded-lg bg-card p-2 border border-hairline">
+          <div class="rounded-md bg-card p-2 border border-hairline">
             <span class="text-mute block">{tr('board.updated')}</span>
             <span class="text-sm font-bold text-primary">{importResult.updated}</span>
           </div>
-          <div class="rounded-lg bg-card p-2 border border-hairline">
+          <div class="rounded-md bg-card p-2 border border-hairline">
             <span class="text-mute block">{tr('board.skipped')}</span>
             <span class="text-sm font-bold text-mute">{importResult.skipped}</span>
           </div>
         </div>
         {#if importResult.errors.length > 0}
-          <div class="mt-2 rounded-xl border border-status-urgent/25 bg-status-urgent-soft p-3">
+          <div class="mt-2 rounded-md border border-status-urgent/25 bg-status-urgent-soft p-3">
             <p class="font-semibold text-status-urgent-ink">{tr('board.rowErrors')}</p>
             <ul class="mt-1 list-disc pl-4 space-y-0.5 text-status-urgent-ink">
               {#each importResult.errors as err}
