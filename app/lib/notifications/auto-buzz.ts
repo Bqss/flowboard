@@ -11,6 +11,9 @@ const taskBuzzNotificationTypes: readonly NotificationType[] = [
 export const isAutoBuzzTaskNotification = (type: NotificationType) =>
   taskBuzzNotificationTypes.includes(type);
 
+/** Chat BUZZ messages are stored with this prefix (see `sendBuzz` in app/services/chat.ts). */
+export const isChatBuzzMessageBody = (body: string) => body.startsWith('💥 BUZZ!');
+
 export const shouldAutoBuzzIncomingMessage = (
   senderId: unknown,
   recipientUserId: string | null | undefined

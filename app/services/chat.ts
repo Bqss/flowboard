@@ -565,7 +565,7 @@ const getDirectPartner = async (conversationId: string, userId: string) => {
     })
     .from(chatParticipants)
     .innerJoin(users, eq(users.id, chatParticipants.userId))
-    .innerJoin(
+    .leftJoin(
       workspaceMembers,
       and(
         eq(workspaceMembers.workspaceId, chatParticipants.workspaceId),
@@ -580,7 +580,7 @@ const getDirectPartner = async (conversationId: string, userId: string) => {
       )
     )
     .limit(1);
-  return participant ?? null;
+  return participant ? { ...participant, role: participant.role ?? 'member' } : null;
 };
 
 /* ------------------------------------------------------- conversation list */
@@ -588,6 +588,7 @@ const getDirectPartner = async (conversationId: string, userId: string) => {
 type ConversationListItem = {
   id: string;
   kind: 'direct' | 'group' | 'taskboard' | 'workflow';
+  isGlobal: boolean;
   contextType?: 'group' | 'taskboard' | 'workflow' | null;
   category: 'personal' | 'group' | 'taskboard' | 'workflow';
   contextId: string | null;
@@ -759,6 +760,7 @@ export const listConversations = async (
     items.push({
       id: convId,
       kind: conv.kind as 'direct' | 'group' | 'taskboard' | 'workflow',
+      isGlobal: conv.isGlobal,
       contextType: conv.contextType,
       category:
         conv.kind === 'direct'
@@ -836,8 +838,6 @@ export const listAllChatConversations = async (
   search?: string
 ): Promise<{ workspaces: ChatInboxWorkspace[]; conversations: ChatInboxConversation[] }> => {
   const workspaces = await listWorkspacesForUser(userId);
-  if (workspaces.length === 0) return { workspaces: [], conversations: [] };
-
   const batches = await Promise.all(
     workspaces.map(async ({ id, name, slug }) => ({
       workspace: { id, name, slug },
@@ -845,16 +845,56 @@ export const listAllChatConversations = async (
     }))
   );
 
+  const globalAnchors = await db
+    .select({ workspaceId: chatConversations.workspaceId })
+    .from(chatConversations)
+    .innerJoin(chatParticipants, eq(chatParticipants.conversationId, chatConversations.id))
+    .where(
+      and(
+        eq(chatConversations.isGlobal, true),
+        eq(chatParticipants.userId, userId),
+        isNull(chatParticipants.leftAt),
+        isNull(chatConversations.archivedAt)
+      )
+    );
+  const anchorIds = [...new Set(globalAnchors.map((row) => row.workspaceId))];
+  const globalConversations = (
+    await Promise.all(anchorIds.map(async (id) => ({
+      workspaceId: id,
+      conversations: (await listConversations(id, userId, search)).filter((conversation) => conversation.isGlobal)
+    })))
+  ).flatMap(({ workspaceId, conversations }) => conversations.map((conversation) => ({ workspaceId, conversation })));
+  const workspaceConversations = mergeWorkspaceConversations(batches);
+  const globalInbox = globalConversations.map(({ workspaceId, conversation }) => ({
+    ...conversation,
+    workspaceId,
+    workspaceName: 'Direct messages',
+    workspaceSlug: 'direct-messages'
+  }));
+  const deduped = new Map<string, ChatInboxConversation>();
+  for (const conversation of [...workspaceConversations, ...globalInbox]) {
+    deduped.set(conversation.id, conversation);
+  }
   return {
     workspaces: workspaces.map(({ id, name, slug }) => ({ id, name, slug })),
-    conversations: mergeWorkspaceConversations(batches)
+    conversations: [...deduped.values()].sort((a, b) => {
+      const aTime = a.lastMessage?.createdAt.getTime() ?? a.updatedAt.getTime();
+      const bTime = b.lastMessage?.createdAt.getTime() ?? b.updatedAt.getTime();
+      return bTime - aTime;
+    })
   };
 };
 
 export const countAllChatUnread = async (userId: string): Promise<number> => {
   const workspaces = await listWorkspacesForUser(userId);
   const counts = await Promise.all(workspaces.map(({ id }) => countUnread(id, userId)));
-  return counts.reduce((total, count) => total + count, 0);
+  const inbox = await listAllChatConversations(userId);
+  const memberWorkspaceIds = new Set(workspaces.map(({ id }) => id));
+  const externalUnread = inbox.conversations.reduce(
+    (total, conversation) => total + (conversation.isGlobal && !memberWorkspaceIds.has(conversation.workspaceId) ? conversation.unreadCount : 0),
+    0
+  );
+  return counts.reduce((total, count) => total + count, 0) + externalUnread;
 };
 
 /* ------------------------------------------------------- direct: find-or-create */
@@ -984,6 +1024,132 @@ export const findOrCreateDirect = async (
       role: member.role
     }
   };
+};
+
+/** Start a direct message with any registered Flowboard user by email. */
+export const findOrCreateGlobalDirect = async (
+  workspaceId: string,
+  userId: string,
+  email: string
+): Promise<DirectConversationResult | null> => {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const [partner] = await db
+    .select({ id: users.id, email: users.email, name: users.name, avatarUrl: users.avatarUrl })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+    .limit(1);
+  if (!partner || partner.id === userId) return null;
+
+  const key = directKey(userId, partner.id);
+  const [existingWorkspaceDirect] = await db
+    .select({ id: chatConversations.id })
+    .from(chatConversations)
+    .innerJoin(chatParticipants, eq(chatParticipants.conversationId, chatConversations.id))
+    .where(and(
+      eq(chatConversations.workspaceId, workspaceId),
+      eq(chatConversations.kind, 'direct'),
+      eq(chatConversations.directKey, key),
+      eq(chatConversations.isGlobal, false),
+      eq(chatParticipants.userId, userId),
+      isNull(chatParticipants.leftAt),
+      isNull(chatConversations.archivedAt)
+    ))
+    .limit(1);
+  if (existingWorkspaceDirect) {
+    const [partnerParticipant] = await db
+      .select({ id: chatParticipants.id })
+      .from(chatParticipants)
+      .where(and(
+        eq(chatParticipants.conversationId, existingWorkspaceDirect.id),
+        eq(chatParticipants.userId, partner.id),
+        isNull(chatParticipants.leftAt)
+      ))
+      .limit(1);
+    if (partnerParticipant) {
+      return {
+        conversation: { id: existingWorkspaceDirect.id, kind: 'direct' },
+        partner: { ...partner, role: 'member' }
+      };
+    }
+  }
+
+  const [existing] = await db
+    .select()
+    .from(chatConversations)
+    .where(and(eq(chatConversations.isGlobal, true), eq(chatConversations.directKey, key)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .insert(chatParticipants)
+      .values([
+        { conversationId: existing.id, workspaceId: existing.workspaceId, userId, role: 'member' },
+        { conversationId: existing.id, workspaceId: existing.workspaceId, userId: partner.id, role: 'member' }
+      ])
+      .onConflictDoUpdate({
+        target: [chatParticipants.conversationId, chatParticipants.userId],
+        set: { leftAt: null }
+      });
+    return {
+      conversation: { id: existing.id, kind: 'direct' },
+      partner: { ...partner, role: 'member' }
+    };
+  }
+
+  const [created] = await db
+    .insert(chatConversations)
+    .values({ workspaceId, kind: 'direct', directKey: key, isGlobal: true, createdById: userId })
+    .onConflictDoNothing({ target: [chatConversations.directKey], where: eq(chatConversations.isGlobal, true) })
+    .returning();
+
+  const [conversation] = created
+    ? [created]
+    : await db
+        .select()
+        .from(chatConversations)
+        .where(and(eq(chatConversations.isGlobal, true), eq(chatConversations.directKey, key)))
+        .limit(1);
+  if (!conversation) throw new Error('Direct conversation could not be created');
+
+  await db
+    .insert(chatParticipants)
+    .values([
+      { conversationId: conversation.id, workspaceId: conversation.workspaceId, userId, role: 'member' },
+      { conversationId: conversation.id, workspaceId: conversation.workspaceId, userId: partner.id, role: 'member' }
+    ])
+    .onConflictDoUpdate({
+      target: [chatParticipants.conversationId, chatParticipants.userId],
+      set: { leftAt: null }
+    });
+
+  return {
+    conversation: { id: conversation.id, kind: 'direct' },
+    partner: { ...partner, role: 'member' }
+  };
+};
+
+/** Used by the route guard to grant only participants access to global DMs. */
+export const isGlobalDirectParticipant = async (
+  workspaceId: string,
+  conversationId: string,
+  userId: string
+): Promise<boolean> => {
+  const [participant] = await db
+    .select({ id: chatParticipants.id })
+    .from(chatParticipants)
+    .innerJoin(chatConversations, eq(chatConversations.id, chatParticipants.conversationId))
+    .where(and(
+      eq(chatConversations.id, conversationId),
+      eq(chatConversations.workspaceId, workspaceId),
+      eq(chatConversations.isGlobal, true),
+      eq(chatParticipants.userId, userId),
+      isNull(chatParticipants.leftAt),
+      isNull(chatConversations.archivedAt)
+    ))
+    .limit(1);
+  return Boolean(participant);
 };
 
 /* ------------------------------------------------------- group: create */
@@ -1747,8 +1913,11 @@ export const sendMessage = async (
         .filter((participantId) => participantId !== userId)
         .map(async (participantId) => {
           try {
+            const notificationWorkspaces = conversation.isGlobal
+              ? await listWorkspacesForUser(participantId)
+              : [];
             await createNotification({
-              workspaceId,
+              workspaceId: notificationWorkspaces[0]?.id ?? workspaceId,
               userId: participantId,
               conversationId,
               type: 'chat_message',

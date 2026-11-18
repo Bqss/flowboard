@@ -211,14 +211,14 @@
     {#if recentItems.length > 0 && !searchQuery}
       <div class="border-b border-hairline/60 bg-canvas-sunken/30 px-3 pt-2 pb-2.5">
         <div class="flex items-center justify-between mb-1.5 px-0.5">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-mute flex items-center gap-1">
+          <span class="text-tiny font-bold uppercase tracking-wider text-mute flex items-center gap-1">
             <span>🕒</span>
             <span>Terakhir Digunakan</span>
           </span>
           <button
             type="button"
             onclick={clearRecents}
-            class="text-[10px] font-medium text-mute hover:text-status-urgent-ink transition-colors cursor-pointer"
+            class="text-tiny font-medium text-mute hover:text-status-urgent-ink transition-colors cursor-pointer"
           >
             Hapus
           </button>
@@ -259,7 +259,7 @@
     --border-size: 0px !important;
     --background: var(--color-card, #ffffff);
     --input-border-color: var(--color-hairline, #e2e8f0);
-    --input-border-radius: 12px;
+    --input-border-radius: var(--radius-md);
     --indicator-color: var(--color-primary, #4f46e5);
     --emoji-size: 1.625rem;
     --emoji-padding: 0.35rem;

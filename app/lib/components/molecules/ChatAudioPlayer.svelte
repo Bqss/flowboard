@@ -209,7 +209,7 @@
     </div>
 
     <!-- Compact Duration -->
-    <span class="shrink-0 text-[11px] font-medium tabular-nums text-mute">
+    <span class="shrink-0 text-micro font-medium tabular-nums text-mute">
       {formatTime(currentTime)} / {formatTime(duration)}
     </span>
   </div>
@@ -286,7 +286,7 @@
       </div>
 
       <!-- Duration Times: elapsed time on left, total duration on right -->
-      <div class="flex items-center justify-between text-[11px] font-medium tabular-nums {isOwn ? 'text-white/90' : 'text-mute'}">
+      <div class="flex items-center justify-between text-micro font-medium tabular-nums {isOwn ? 'text-white/90' : 'text-mute'}">
         <span>{formatTime(currentTime)}</span>
         <span>{formatTime(duration)}</span>
       </div>

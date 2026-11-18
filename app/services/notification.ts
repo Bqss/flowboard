@@ -76,7 +76,7 @@ export const createNotification = async (input: {
     ) {
       const url =
         input.type === 'chat_message' && input.conversationId
-          ? `/dashboard/chat?workspaceId=${encodeURIComponent(input.workspaceId)}&conversationId=${encodeURIComponent(input.conversationId)}`
+          ? `/dashboard/chat?conversationId=${encodeURIComponent(input.conversationId)}`
           : input.boardId && input.taskId
             ? `/dashboard/boards/${encodeURIComponent(input.boardId)}?workspaceId=${encodeURIComponent(input.workspaceId)}&task=${encodeURIComponent(input.taskId)}`
             : '/dashboard';

@@ -1,4 +1,6 @@
 import { Elysia, t } from 'elysia';
+import { eq } from 'drizzle-orm';
+import { db, workspaces } from '@db';
 import * as chat from '@handlers/chat';
 import { createRequireAuth } from '@middlewares';
 import { resolveWorkspaceMember } from '@middlewares/workspace';
@@ -23,15 +25,36 @@ export const createChatRoutes = () => {
     .derive({ as: 'scoped' }, async ({ cookie, params, request }) =>
       resolveWorkspaceMember(cookie, params.workspaceId, request)
     )
-    .onBeforeHandle({ as: 'scoped' }, (ctx) => {
-      const { workspace, membership, set } = ctx as typeof ctx & {
-        workspace: unknown;
-        membership: unknown;
+    .onBeforeHandle({ as: 'scoped' }, async (ctx) => {
+      const scoped = ctx as unknown as {
+        workspace: typeof workspaces.$inferSelect | null;
+        membership: { role: 'owner' | 'member' } | null;
+        user: { id: string } | null;
+        params: { workspaceId?: string; conversationId?: string };
+        set: typeof ctx.set;
       };
-      if (!workspace || !membership) {
-        set.status = 403;
+      if (scoped.workspace && scoped.membership) return;
+      const { user, params } = scoped;
+      if (
+        !user?.id ||
+        !params.workspaceId ||
+        !params.conversationId ||
+        !(await chat.canAccessGlobalDirect(params.workspaceId, params.conversationId, user.id))
+      ) {
+        scoped.set.status = 403;
         return { error: 'Forbidden' };
       }
+      const [workspace] = await db
+        .select()
+        .from(workspaces)
+        .where(eq(workspaces.id, params.workspaceId))
+        .limit(1);
+      if (!workspace) {
+        scoped.set.status = 403;
+        return { error: 'Forbidden' };
+      }
+      scoped.workspace = workspace;
+      scoped.membership = { role: 'member' };
     });
 
   const inboxRoutes = new Elysia({ prefix: '/chat' })
@@ -54,6 +77,10 @@ export const createChatRoutes = () => {
     .post('/direct', chat.createDirectHandler, {
       params: WorkspaceIdParam,
       body: CreateDirectSchema
+    })
+    .post('/direct/global', chat.createGlobalDirectHandler, {
+      params: WorkspaceIdParam,
+      body: t.Object({ email: t.String({ format: 'email', maxLength: 320 }) })
     })
     .post('/rooms', chat.createGroupHandler, {
       params: WorkspaceIdParam,

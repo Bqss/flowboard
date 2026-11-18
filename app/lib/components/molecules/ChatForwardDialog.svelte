@@ -84,7 +84,7 @@
           <p class="text-ink-soft line-clamp-3 whitespace-pre-wrap">{message.body}</p>
         {/if}
         {#if message.attachments && message.attachments.length > 0}
-          <p class="mt-1 text-[11px] font-medium text-mute italic">
+          <p class="mt-1 text-micro font-medium text-mute italic">
             +{message.attachments.length} lampiran
           </p>
         {/if}
@@ -132,15 +132,15 @@
                 <div class="flex items-center gap-1.5">
                   <span class="truncate text-xs font-semibold text-ink">{title}</span>
                   {#if conv.kind === 'workflow'}
-                    <Badge tone="queued" variant="soft" class="text-[9px] py-0 px-1.5">Workflow</Badge>
+                    <Badge tone="queued" variant="soft" class="text-tiny py-0 px-1.5">Workflow</Badge>
                   {:else if conv.kind === 'taskboard'}
-                    <Badge tone="progress" variant="soft" class="text-[9px] py-0 px-1.5">Board</Badge>
+                    <Badge tone="progress" variant="soft" class="text-tiny py-0 px-1.5">Board</Badge>
                   {:else if conv.kind === 'group'}
-                    <Badge tone="idle" variant="soft" class="text-[9px] py-0 px-1.5">Grup</Badge>
+                    <Badge tone="idle" variant="soft" class="text-tiny py-0 px-1.5">Grup</Badge>
                   {/if}
                 </div>
                 {#if conv.lastMessage?.body}
-                  <p class="truncate text-[11px] text-mute">{conv.lastMessage.body}</p>
+                  <p class="truncate text-micro text-mute">{conv.lastMessage.body}</p>
                 {/if}
               </div>
             </div>

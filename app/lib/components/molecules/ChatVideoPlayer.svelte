@@ -170,7 +170,7 @@
 
   <!-- Duration Badge on bottom-left (WhatsApp style, Image #3) -->
   {#if !isPlaying}
-    <div class="pointer-events-none absolute bottom-2.5 left-2.5 flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white shadow-xs backdrop-blur-xs tabular-nums">
+    <div class="pointer-events-none absolute bottom-2.5 left-2.5 flex items-center gap-1 rounded-md bg-black/70 px-2 py-0.5 text-micro font-medium text-white shadow-xs backdrop-blur-xs tabular-nums">
       <HugeiconsIcon icon={Video01Icon} size={13} strokeWidth={2} />
       <span>{formatTime(duration)}</span>
     </div>
@@ -178,7 +178,7 @@
 
   <!-- Timestamp Overlay on bottom-right if no caption (WhatsApp style, Image #3) -->
   {#if !hasCaption && timestamp && !isPlaying}
-    <div class="pointer-events-none absolute bottom-2.5 right-2.5 rounded-md bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white shadow-xs backdrop-blur-xs tabular-nums">
+    <div class="pointer-events-none absolute bottom-2.5 right-2.5 rounded-md bg-black/70 px-2 py-0.5 text-micro font-medium text-white shadow-xs backdrop-blur-xs tabular-nums">
       <span class="inline-flex items-center gap-1">
         {timestamp}
         {#if status}<MessageTicks {status} tone="onPrimary" size={12} />{/if}
@@ -232,7 +232,7 @@
         <button
           type="button"
           onclick={cycleRate}
-          class="rounded px-1.5 py-0.5 text-[11px] font-semibold text-white/90 hover:bg-white/20 transition-colors shrink-0"
+          class="rounded px-1.5 py-0.5 text-micro font-semibold text-white/90 hover:bg-white/20 transition-colors shrink-0"
           title="Kecepatan putar"
         >
           {playbackRate}x

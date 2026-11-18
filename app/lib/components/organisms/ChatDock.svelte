@@ -18,6 +18,8 @@
   } from '$lib/components/molecules/index.js';
   import { ConfirmDialog } from '$lib/components/organisms/index.js';
   import ChatMessageInfoDialog from './ChatMessageInfoDialog.svelte';
+  import { Dialog as DialogPrimitive, DropdownMenu as MenuPrimitive } from 'bits-ui';
+  import Portal from '$lib/components/atoms/Portal.svelte';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     BubbleChatIcon,
@@ -1195,7 +1197,6 @@
   let stickerPickerOpenMobile = $state(false);
   let stickerPickerOpenDesktop = $state(false);
   let mobileActionsOpen = $state(false);
-  let mobileActionsEl = $state<HTMLDivElement | null>(null);
 
 
   async function handleSendSticker(sticker: { url: string; name: string }) {
@@ -1297,20 +1298,6 @@
     }
   });
 </script>
-<svelte:window
-  onclick={(e) => {
-    if (mobileActionsOpen && mobileActionsEl && !mobileActionsEl.contains(e.target as Node)) {
-      mobileActionsOpen = false;
-    }
-  }}
-  onkeydown={(e) => {
-    if (e.key === 'Escape' && mobileActionsOpen) {
-      mobileActionsOpen = false;
-    }
-  }}
-/>
-
-
         {#snippet groupChannelsContent()}
           <div class="min-h-0 flex-1 overflow-y-auto">
             {#if selectedGroup}
@@ -1319,13 +1306,13 @@
                 onclick={() => openConversation(selectedGroup!)}
                 class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {selectedGroup.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
               >
-                <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
+                <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary font-bold text-base">
                   #
                 </div>
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center justify-between gap-2">
                     <span class="truncate text-sm font-semibold text-ink">General</span>
-                    <span class="shrink-0 text-[11px] text-faint">
+                    <span class="shrink-0 text-micro text-faint">
                       {selectedGroup.lastMessage ? formatDate(selectedGroup.lastMessage.createdAt) : formatDate(selectedGroup.updatedAt)}
                     </span>
                   </div>
@@ -1334,7 +1321,7 @@
                       {lastMessagePreview(selectedGroup)}
                     </span>
                     {#if selectedGroup.unreadCount > 0}
-                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                      <span class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-tiny font-bold text-white">
                         {formatUnread(selectedGroup.unreadCount)}
                       </span>
                     {/if}
@@ -1350,22 +1337,22 @@
                 class="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-lane/40 {channel.unreadCount > 0 ? 'bg-primary-soft/30' : ''}"
               >
                 {#if channel.kind === 'taskboard'}
-                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-kind-board-soft text-kind-board">
                     <HugeiconsIcon icon={KanbanIcon} size={18} strokeWidth={1.8} />
                   </div>
                 {:else if channel.kind === 'workflow'}
-                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-kind-workflow-soft text-kind-workflow">
                     <HugeiconsIcon icon={WorkflowSquare01Icon} size={18} strokeWidth={1.8} />
                   </div>
                 {:else}
-                  <div class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary font-bold text-base">
+                  <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary font-bold text-base">
                     #
                   </div>
                 {/if}
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center justify-between gap-2">
                     <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(channel)}</span>
-                    <span class="shrink-0 text-[11px] text-faint">
+                    <span class="shrink-0 text-micro text-faint">
                       {channel.lastMessage ? formatDate(channel.lastMessage.createdAt) : formatDate(channel.updatedAt)}
                     </span>
                   </div>
@@ -1374,7 +1361,7 @@
                       {lastMessagePreview(channel)}
                     </span>
                     {#if channel.unreadCount > 0}
-                      <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                      <span class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-tiny font-bold text-white">
                         {formatUnread(channel.unreadCount)}
                       </span>
                     {/if}
@@ -1402,19 +1389,19 @@
         <HugeiconsIcon icon={BubbleChatIcon} size={22} strokeWidth={1.8} class="text-primary" />
         <span class="flex-1 ds-label text-ink">{tr('chat.dockTitle')}</span>
         {#if unreadTotal > 0}
-          <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">
+          <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-micro font-bold text-white">
             {formatUnread(unreadTotal)}
           </span>
         {/if}
-        <button type="button" onclick={openCompose} class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.compose')}>
+        <button type="button" onclick={openCompose} class="flex size-9 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.compose')}>
           <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={1.8} />
         </button>
-        <button type="button" onclick={collapse} class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.close')}>
+        <button type="button" onclick={collapse} class="flex size-9 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.close')}>
           <HugeiconsIcon icon={Cancel01Icon} size={20} strokeWidth={1.8} />
         </button>
       {:else}
         {#if !isContextChat}
-          <button type="button" onclick={backToList} class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.back')}>
+          <button type="button" onclick={backToList} class="flex size-9 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.back')}>
             <HugeiconsIcon icon={ArrowLeft01Icon} size={20} strokeWidth={1.8} />
           </button>
         {/if}
@@ -1423,7 +1410,7 @@
             <span class="block truncate">{threadTitle}</span>
           {:else if dockMode === 'groupChannels'}
             <span class="block truncate">{selectedGroup?.name}</span>
-            <span class="block text-[11px] font-normal text-mute">{channelsForSelectedGroup.length + 1} channels</span>
+            <span class="block text-micro font-normal text-mute">{channelsForSelectedGroup.length + 1} channels</span>
           {:else if dockMode === 'newDirect'}
             {tr('chat.newMessage')}
           {:else if dockMode === 'createGroup'}
@@ -1431,7 +1418,7 @@
           {/if}
         </span>
         {#if dockMode === 'thread' || dockMode === 'groupChannels'}
-          <button type="button" onclick={collapse} class="flex size-9 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.close')}>
+          <button type="button" onclick={collapse} class="flex size-9 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink" aria-label={tr('chat.close')}>
             <HugeiconsIcon icon={Cancel01Icon} size={20} strokeWidth={1.8} />
           </button>
         {/if}
@@ -1465,12 +1452,12 @@
                 <div class="flex flex-col items-center text-center">
                   <div class="relative mb-3">
                     <div class="absolute inset-0 rounded-full bg-status-urgent/8 blur-2xl"></div>
-                    <div class="relative flex size-14 items-center justify-center rounded-2xl bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
+                    <div class="relative flex size-14 items-center justify-center rounded-md bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
                       <HugeiconsIcon icon={AlertCircleIcon} size={24} strokeWidth={1.8} class="text-status-urgent" />
                     </div>
                   </div>
                   <p class="text-sm font-semibold text-ink">{tr('chat.loadError')}</p>
-                  <button type="button" onclick={loadConversations} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary-soft">
+                  <button type="button" onclick={loadConversations} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-micro font-medium text-primary transition-colors hover:bg-primary-soft">
                     <HugeiconsIcon icon={ArrowLeft01Icon} size={12} strokeWidth={2} class="rotate-180" />
                     {tr('chat.retry')}
                   </button>
@@ -1481,13 +1468,13 @@
                 <div class="flex flex-col items-center text-center">
                   <div class="relative mb-3">
                     <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
-                    <div class="relative flex size-14 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                    <div class="relative flex size-14 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                       <HugeiconsIcon icon={BubbleChatIcon} size={24} strokeWidth={1.8} class="text-primary" />
                     </div>
                   </div>
                   <p class="text-sm font-semibold text-ink">{tr('chat.noConversations')}</p>
                   <p class="mt-1 max-w-[220px] text-xs leading-relaxed text-mute">{tr('chat.noConversationsDesc')}</p>
-                  <button type="button" onclick={openCompose} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary-soft">
+                  <button type="button" onclick={openCompose} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-micro font-medium text-primary transition-colors hover:bg-primary-soft">
                     <HugeiconsIcon icon={Edit01Icon} size={12} strokeWidth={2} />
                     {tr('chat.newMessage')}
                   </button>
@@ -1497,9 +1484,9 @@
               {#each filteredConversations as conv (conv.id)}
                 <button type="button" onclick={() => handleConversationClick(conv)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40 {conv.unreadCount > 0 ? 'bg-primary-soft/30' : ''}">
                   {#if conv.kind === 'taskboard'}
-                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"><HugeiconsIcon icon={KanbanIcon} size={20} strokeWidth={1.8} /></div>
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-kind-board-soft text-kind-board"><HugeiconsIcon icon={KanbanIcon} size={20} strokeWidth={1.8} /></div>
                   {:else if conv.kind === 'workflow'}
-                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"><HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} /></div>
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-kind-workflow-soft text-kind-workflow"><HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} /></div>
                   {:else if conv.kind === 'group'}
                     <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary"><HugeiconsIcon icon={UserGroupIcon} size={20} strokeWidth={1.8} /></div>
                   {:else}
@@ -1508,12 +1495,12 @@
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center justify-between gap-2">
                       <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(conv)}</span>
-                      <span class="shrink-0 text-[11px] text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : formatDate(conv.updatedAt)}</span>
+                      <span class="shrink-0 text-micro text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : formatDate(conv.updatedAt)}</span>
                     </div>
                     <div class="flex items-center justify-between gap-2 mt-0.5">
                       <span class="truncate text-xs {conv.lastMessage ? 'text-mute' : 'text-faint italic'}">{lastMessagePreview(conv)}</span>
                       {#if getConversationUnread(conv) > 0}
-                        <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">{formatUnread(getConversationUnread(conv))}</span>
+                        <span class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-tiny font-bold text-white">{formatUnread(getConversationUnread(conv))}</span>
                       {/if}
                     </div>
                   </div>
@@ -1532,7 +1519,7 @@
               <h3 class="ds-label text-ink">{tr('chat.participants')}</h3>
               <div class="mt-3 space-y-2">
                 {#each roomParticipants as p (p.userId)}
-                  <div class="flex items-center gap-3 rounded-lg border border-hairline bg-card p-3">
+                  <div class="flex items-center gap-3 rounded-md border border-hairline bg-card p-3">
                     <Avatar name={p.name} src={p.avatarUrl ?? undefined} size={32} />
                     <div class="min-w-0 flex-1"><div class="truncate text-sm font-medium text-ink">{p.name}</div><div class="truncate text-xs text-mute">{p.email}</div></div>
                     {#if p.role === 'admin'}<Badge tone="queued" variant="soft">{tr('chat.admin')}</Badge>{/if}
@@ -1563,12 +1550,12 @@
                         {currentPinnedMessage.senderName}
                       </span>
                       {#if pinnedMessages.length > 1}
-                        <span class="text-[9px] font-semibold text-mute bg-canvas-sunken px-1 rounded-full tabular-nums">
+                        <span class="text-tiny font-semibold text-mute bg-canvas-sunken px-1 rounded-full tabular-nums">
                           {activePinnedIndex + 1}/{pinnedMessages.length}
                         </span>
                       {/if}
                     </div>
-                    <p class="truncate text-[11px] text-mute leading-tight">
+                    <p class="truncate text-micro text-mute leading-tight">
                       {currentPinnedMessage.body || '📎 Lampiran'}
                     </p>
                   </div>
@@ -1603,7 +1590,7 @@
                 </button>
               {/if}
               {#if showMsgSkeleton}
-                <div class="space-y-3">{#each Array(5) as _, i}<div class="flex {i % 2 === 0 ? 'justify-start' : 'justify-end'}"><div class="max-w-[70%] space-y-1"><Skeleton class="h-12 w-48 rounded-xl" /></div></div>{/each}</div>
+                <div class="space-y-3">{#each Array(5) as _, i}<div class="flex {i % 2 === 0 ? 'justify-start' : 'justify-end'}"><div class="max-w-[70%] space-y-1"><Skeleton class="h-12 w-48 rounded-md" /></div></div>{/each}</div>
               {:else if messagesLoading}
                 <div class="h-full"></div>
               {:else if messagesError}
@@ -1611,12 +1598,12 @@
                   <div class="flex flex-col items-center text-center">
                     <div class="relative mb-3">
                       <div class="absolute inset-0 rounded-full bg-status-urgent/8 blur-2xl"></div>
-                      <div class="relative flex size-14 items-center justify-center rounded-2xl bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
+                      <div class="relative flex size-14 items-center justify-center rounded-md bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
                         <HugeiconsIcon icon={AlertCircleIcon} size={24} strokeWidth={1.8} class="text-status-urgent" />
                       </div>
                     </div>
                     <p class="text-sm font-semibold text-ink">{tr('chat.loadError')}</p>
-                    <button type="button" onclick={() => loadMessages()} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary-soft">
+                    <button type="button" onclick={() => loadMessages()} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-micro font-medium text-primary transition-colors hover:bg-primary-soft">
                       <HugeiconsIcon icon={ArrowLeft01Icon} size={12} strokeWidth={2} class="rotate-180" />
                       {tr('chat.retry')}
                     </button>
@@ -1628,7 +1615,7 @@
                     <div class="relative mb-4">
                       <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
                       {#if threadIsGroup}
-                        <div class="relative flex size-16 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                        <div class="relative flex size-16 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                           <HugeiconsIcon icon={UserGroupIcon} size={28} strokeWidth={1.8} class="text-primary" />
                         </div>
                       {:else}
@@ -1641,7 +1628,7 @@
                     <p class="mt-1 max-w-[240px] text-xs leading-relaxed text-mute">{tr('chat.emptyThreadDescription', { name: threadTitle })}</p>
                     <div class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5">
                       <HugeiconsIcon icon={BubbleChatIcon} size={12} strokeWidth={2} class="text-primary" />
-                      <span class="text-[11px] font-medium text-primary">{tr('chat.emptyThreadHint')}</span>
+                      <span class="text-micro font-medium text-primary">{tr('chat.emptyThreadHint')}</span>
                     </div>
                   </div>
                 </div>
@@ -1661,7 +1648,7 @@
                             e.stopPropagation();
                             scrollToRepliedMessage(msg.replyToMessageId);
                           }}
-                          class="mb-1 w-full text-left rounded-lg border-l-[3.5px] border-primary bg-canvas-sunken/80 hover:bg-canvas-sunken p-2 text-xs transition-colors cursor-pointer select-none outline-none focus:outline-none"
+                          class="mb-1 w-full text-left rounded-md border-l-[3.5px] border-primary bg-canvas-sunken/80 hover:bg-canvas-sunken p-2 text-xs transition-colors cursor-pointer select-none outline-none focus:outline-none"
                           title="Lihat pesan asal"
                           aria-label={`Lihat pesan asal dari ${msg.replyToSenderName ?? 'pengirim'}`}
                         >
@@ -1684,14 +1671,14 @@
                         <div class="mb-1 flex flex-wrap gap-1.5 {isOwnMessage(msg) ? 'justify-end' : 'justify-start'}">
                           {#each msg.attachments as att (att.id)}
                             {#if isImageType(att.fileType)}
-                              <button type="button" onclick={() => (lightboxSrc = att.filePath)} class="group/img relative block cursor-zoom-in overflow-hidden rounded-lg border border-hairline">
+                              <button type="button" onclick={() => (lightboxSrc = att.filePath)} class="group/img relative block cursor-zoom-in overflow-hidden rounded-md border border-hairline">
                                 <img src={att.filePath} alt={att.fileName} class="max-h-32 max-w-[180px] object-cover transition-opacity group-hover/img:opacity-80" loading="lazy" />
                                 <div class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/img:opacity-100">
                                   <div class="flex size-8 items-center justify-center rounded-full bg-black/50 text-white"><HugeiconsIcon icon={ZoomIcon} size={16} strokeWidth={2} /></div>
                                 </div>
                               </button>
                             {:else if isVideoType(att.fileType)}
-                            <div class="max-h-48 max-w-[240px] overflow-hidden rounded-lg">
+                            <div class="max-h-48 max-w-[240px] overflow-hidden rounded-md">
                               <ChatVideoPlayer src={att.filePath} fileName={att.fileName} />
                             </div>
                             {:else if att.fileType.startsWith('audio/')}
@@ -1703,7 +1690,7 @@
                                 class="block h-9 w-full min-w-[200px] max-w-[260px]"
                               ></audio>
                             {:else}
-                              <div class="flex items-center gap-1.5 rounded-lg border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
+                              <div class="flex items-center gap-1.5 rounded-md border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
                                 <HugeiconsIcon icon={File02Icon} size={14} strokeWidth={1.8} />
                                 <span class="truncate max-w-[100px]">{att.fileName}</span>
                                 <span class="shrink-0 text-faint">{formatFileSize(att.fileSize)}</span>
@@ -1734,7 +1721,7 @@
                       {:else}
                       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                       <div
-                        class="group relative min-w-[96px] rounded-2xl pl-3.5 pr-3.5 sm:pr-9 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'} {editingMessageId === msg.id ? 'ring-2 ring-primary ring-offset-2' : ''}"
+                        class="group relative min-w-[96px] rounded-md pl-3.5 pr-3.5 sm:pr-9 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'} {editingMessageId === msg.id ? 'ring-2 ring-primary ring-offset-2' : ''}"
                         onclick={handleBubbleClick}
                         oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
                         onpointerdown={(event) => handleBubblePointerDown(event, msg)}
@@ -1753,7 +1740,7 @@
                               const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
                               openMessageContextMenu(msg, rect.right - 192, rect.bottom + 4);
                             }}
-                            class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-5.5 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs {isOwnMessage(msg) ? 'bg-black/20 text-white/90 hover:bg-black/35 hover:text-white' : 'bg-card/90 text-mute hover:bg-canvas-sunken hover:text-ink border border-hairline/70'}"
+                            class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-6 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs {isOwnMessage(msg) ? 'bg-black/20 text-white/90 hover:bg-black/35 hover:text-white' : 'bg-card/90 text-mute hover:bg-canvas-sunken hover:text-ink border border-hairline/70'}"
                             aria-label={tr('chat.moreOptions')}
                             title={tr('chat.moreOptions')}
                           >
@@ -1765,15 +1752,15 @@
                         {:else}
                           {#if msg.body}
                             {#if msg.body.startsWith('💥 BUZZ!')}
-                              <div class="my-0.5 flex items-center gap-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 text-xs font-bold {isOwnMessage(msg) ? 'text-white' : 'text-amber-900 dark:text-amber-200'}">
-                                <span>💥</span>
-                                <span class="whitespace-pre-wrap break-words">{msg.body}</span>
+                              <div class="my-0.5 flex items-start gap-1.5 rounded-md bg-status-progress-soft px-2.5 py-1 text-xs font-bold text-status-progress-ink">
+                                <span class="shrink-0" aria-hidden="true">💥</span>
+                                <span class="min-w-0 whitespace-pre-wrap break-words">{msg.body.replace(/^💥\s*/, '')}</span>
                               </div>
                             {:else}
                               <span class="whitespace-pre-wrap break-words">{msg.body}</span>
                             {/if}
                           {/if}
-                          {#if msg.editedAt}<span class="ml-1 text-[10px] {isOwnMessage(msg) ? 'text-white/60' : 'text-faint'}">({tr('chat.edited')})</span>{/if}
+                          {#if msg.editedAt}<span class="ml-1 text-tiny {isOwnMessage(msg) ? 'text-white/60' : 'text-faint'}">({tr('chat.edited')})</span>{/if}
                         {/if}
                       </div>
                     {/if}
@@ -1787,7 +1774,7 @@
                           {/each}
                         </div>
                       {/if}
-                      <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}{#if isOwnMessage(msg) && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="neutral" size={12} class="ml-1" />{/if}</div>
+                      <div class="mt-0.5 text-tiny text-faint">{formatTime(msg.createdAt)}{#if isOwnMessage(msg) && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="neutral" size={12} class="ml-1" />{/if}</div>
                     </div>
                   </div>
                 {/each}
@@ -1813,15 +1800,15 @@
             {#if pendingAttachments.length > 0}
               <div class="flex flex-wrap gap-2 border-t border-hairline bg-canvas-sunken/50 px-3 py-2">
                 {#each pendingAttachments as att (att.id)}
-                  <div class="group relative flex items-center gap-1.5 rounded-lg border border-hairline bg-card p-1.5">
+                  <div class="group relative flex items-center gap-1.5 rounded-md border border-hairline bg-card p-1.5">
                     {#if isImageType(att.fileType)}
                       <img src={att.filePath} alt={att.fileName} class="size-9 rounded object-cover" />
                     {:else}
                       <div class="flex size-9 items-center justify-center rounded bg-canvas-sunken text-mute"><HugeiconsIcon icon={File02Icon} size={16} strokeWidth={1.8} /></div>
                     {/if}
                     <div class="min-w-0 max-w-[90px]">
-                      <div class="truncate text-[11px] font-medium text-ink">{att.fileName}</div>
-                      <div class="text-[9px] text-faint">{formatFileSize(att.fileSize)}</div>
+                      <div class="truncate text-micro font-medium text-ink">{att.fileName}</div>
+                      <div class="text-tiny text-faint">{formatFileSize(att.fileSize)}</div>
                     </div>
                     <button type="button" onclick={() => removePendingAttachment(att.id)} class="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-card text-mute shadow-control hover:text-ink"><HugeiconsIcon icon={Cancel01Icon} size={10} strokeWidth={2} /></button>
                   </div>
@@ -1846,50 +1833,50 @@
             {/if}
             <div class="flex items-center gap-1.5 sm:gap-2 border-t border-hairline bg-card p-2 sm:p-3">
               <input bind:this={fileInput} type="file" accept={ACCEPTED_FILE_TYPES} multiple onchange={handleFileSelect} class="hidden" />
-              <div bind:this={mobileActionsEl} class="relative flex items-center shrink-0">
-                <button
-                  type="button"
-                  onclick={() => (mobileActionsOpen = !mobileActionsOpen)}
-                  class="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-full bg-canvas-sunken text-mute hover:bg-hairline hover:text-ink active:scale-95 transition-all cursor-pointer {mobileActionsOpen ? 'bg-primary-soft text-primary ring-2 ring-primary/20' : ''}"
-                  title="Tindakan lainnya"
-                  aria-label="Tindakan lainnya"
-                  disabled={uploadingAttachment}
-                >
-                  <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2.2} class="transition-transform duration-150 {mobileActionsOpen ? 'rotate-45' : ''}" />
-                </button>
-
-                {#if mobileActionsOpen}
-                  <div class="absolute bottom-full mb-3 left-0 z-50 min-w-[190px] rounded-2xl border border-hairline bg-card/95 backdrop-blur-md p-1.5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-150">
-                    <button
-                      type="button"
-                      onclick={() => {
-                        mobileActionsOpen = false;
-                        fileInput?.click();
-                      }}
-                      class="group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas-sunken active:bg-canvas-sunken/80 transition-colors cursor-pointer text-left"
+              <div class="relative flex items-center shrink-0">
+                <MenuPrimitive.Root bind:open={mobileActionsOpen}>
+                  <MenuPrimitive.Trigger>
+                    {#snippet child({ props })}
+                      <button
+                        {...props}
+                        type="button"
+                        class="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-md bg-canvas-sunken text-mute hover:bg-hairline hover:text-ink active:scale-95 transition-all cursor-pointer"
+                        title="Tindakan lainnya"
+                        aria-label="Tindakan lainnya"
+                        disabled={uploadingAttachment}
+                      >
+                        <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2.2} class="transition-transform duration-150 {mobileActionsOpen ? 'rotate-45' : ''}" />
+                      </button>
+                    {/snippet}
+                  </MenuPrimitive.Trigger>
+                  <Portal>
+                    <MenuPrimitive.Content
+                      side="top"
+                      align="start"
+                      sideOffset={12}
+                      class="z-50 min-w-[190px] rounded-md border border-hairline bg-card/95 p-1.5 shadow-2xl backdrop-blur-md"
                     >
-                      <div class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
-                        <HugeiconsIcon icon={Attachment01Icon} size={16} strokeWidth={1.8} />
-                      </div>
-                      <span>Lampirkan file</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        mobileActionsOpen = false;
-                        stickerPickerOpenMobile = true;
-                      }}
-                      class="group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas-sunken active:bg-canvas-sunken/80 transition-colors cursor-pointer text-left"
-                    >
-                      <div class="flex size-7 items-center justify-center rounded-lg bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
-                        <HugeiconsIcon icon={SmileIcon} size={16} strokeWidth={1.8} />
-                      </div>
-                      <span>Stiker & Emoji</span>
-                    </button>
-                  </div>
-                {/if}
+                      <MenuPrimitive.Item
+                        class="group flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas-sunken"
+                        onSelect={() => fileInput?.click()}
+                      >
+                        <div class="flex size-7 items-center justify-center rounded-md bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
+                          <HugeiconsIcon icon={Attachment01Icon} size={16} strokeWidth={1.8} />
+                        </div>
+                        <span>Lampirkan file</span>
+                      </MenuPrimitive.Item>
+                      <MenuPrimitive.Item
+                        class="group flex w-full cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas-sunken"
+                        onSelect={() => (stickerPickerOpenMobile = true)}
+                      >
+                        <div class="flex size-7 items-center justify-center rounded-md bg-canvas-sunken text-mute group-hover:text-ink transition-colors">
+                          <HugeiconsIcon icon={SmileIcon} size={16} strokeWidth={1.8} />
+                        </div>
+                        <span>Stiker & Emoji</span>
+                      </MenuPrimitive.Item>
+                    </MenuPrimitive.Content>
+                  </Portal>
+                </MenuPrimitive.Root>
 
                 <ChatStickerPicker
                   bind:open={stickerPickerOpenMobile}
@@ -1907,14 +1894,14 @@
                 onpaste={handlePaste}
                 rows="1"
                 placeholder="Tulis pesan…"
-                class="max-h-24 min-h-[36px] sm:min-h-[40px] flex-1 resize-none rounded-2xl border border-hairline bg-canvas-sunken/60 px-3 py-2 text-xs sm:text-sm text-ink placeholder:text-mute focus:outline-none focus:bg-card focus:ring-2 focus:ring-primary/15 transition-all"
+                class="max-h-24 min-h-[36px] sm:min-h-[40px] flex-1 resize-none rounded-md border border-hairline bg-canvas-sunken/60 px-3 py-2 text-xs sm:text-sm text-ink placeholder:text-mute focus:outline-none focus:bg-card focus:ring-2 focus:ring-primary/15 transition-all"
               ></textarea>
               {#if editingMessageId}
                 <button
                   type="button"
                   onclick={saveEdit}
                   disabled={!composerText.trim()}
-                  class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                  class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-md bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                   aria-label="Simpan editan"
                   title="Simpan editan"
                 >
@@ -1925,7 +1912,7 @@
                   type="button"
                   onclick={handleSend}
                   disabled={(!composerText.trim() && pendingAttachments.length === 0) || sendingMessage}
-                  class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                  class="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-md bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                 >
                   <HugeiconsIcon icon={SentIcon} size={16} class="translate-x-0.5 sm:size-[18px]" strokeWidth={2} />
                 </button>
@@ -1947,7 +1934,7 @@
                 <div class="flex flex-col items-center text-center">
                   <div class="relative mb-3">
                     <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
-                    <div class="relative flex size-14 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                    <div class="relative flex size-14 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                       <HugeiconsIcon icon={UserGroupIcon} size={24} strokeWidth={1.8} class="text-primary" />
                     </div>
                   </div>
@@ -1984,7 +1971,7 @@
                   <div class="flex flex-col items-center text-center">
                     <div class="relative mb-3">
                       <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
-                      <div class="relative flex size-14 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                      <div class="relative flex size-14 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                         <HugeiconsIcon icon={UserGroupIcon} size={24} strokeWidth={1.8} class="text-primary" />
                       </div>
                     </div>
@@ -2011,7 +1998,7 @@
           {:else}
             <div class="flex min-h-0 flex-1 flex-col p-4">
               <label class="ds-label text-ink" for="group-name-input">{tr('chat.groupName')}</label>
-              <input id="group-name-input" bind:value={groupName} placeholder={tr('chat.groupPlaceholder')} class="mt-2 rounded-xl border border-hairline bg-canvas px-3 py-2.5 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-[var(--focus)]" />
+              <input id="group-name-input" bind:value={groupName} placeholder={tr('chat.groupPlaceholder')} class="mt-2 rounded-md border border-hairline bg-canvas px-3 py-2.5 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-[var(--focus)]" />
               <div class="mt-4">
                 <p class="ds-caption text-mute">{tr('chat.selectMembers')} ({selectedMemberIds.length})</p>
                 <div class="mt-2 flex flex-wrap gap-2">
@@ -2042,26 +2029,26 @@
     <!-- Desktop header -->
     <div class="flex items-center gap-2 border-b border-hairline px-3 py-3">
       {#if dockMode === 'list'}
-        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
           <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
         <span class="flex-1 ds-label text-ink">{tr('chat.dockTitle')}</span>
         {#if unreadTotal > 0}
-          <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">{formatUnread(unreadTotal)}</span>
+          <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-micro font-bold text-white">{formatUnread(unreadTotal)}</span>
         {/if}
-        <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.newMessage')}>
+        <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.newMessage')}>
           <HugeiconsIcon icon={Edit01Icon} size={18} strokeWidth={1.8} />
         </button>
       {:else if dockMode === 'thread'}
         {#if !isContextChat}
-          <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
+          <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
             <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.8} />
           </button>
         {/if}
         {#if activeConversation?.kind === 'taskboard'}
-          <div class="flex size-8 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"><HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} /></div>
+          <div class="flex size-8 items-center justify-center rounded-full bg-kind-board-soft text-kind-board"><HugeiconsIcon icon={KanbanIcon} size={16} strokeWidth={1.8} /></div>
         {:else if activeConversation?.kind === 'workflow'}
-          <div class="flex size-8 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"><HugeiconsIcon icon={WorkflowSquare01Icon} size={16} strokeWidth={1.8} /></div>
+          <div class="flex size-8 items-center justify-center rounded-full bg-kind-workflow-soft text-kind-workflow"><HugeiconsIcon icon={WorkflowSquare01Icon} size={16} strokeWidth={1.8} /></div>
         {:else if threadIsGroup}
           <div class="flex size-8 items-center justify-center rounded-full bg-primary-soft text-primary"><HugeiconsIcon icon={UserGroupIcon} size={16} strokeWidth={1.8} /></div>
         {:else}
@@ -2071,15 +2058,15 @@
           <span class="block truncate text-sm font-semibold text-ink">{threadTitle}</span>
         </button>
         {#if !isContextChat}
-          <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.newMessage')}>
+          <button type="button" onclick={openCompose} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.newMessage')}>
             <HugeiconsIcon icon={Edit01Icon} size={18} strokeWidth={1.8} />
           </button>
         {/if}
-        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
           <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
       {:else if dockMode === 'groupChannels'}
-        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
+        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
           <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.8} />
         </button>
         <div class="flex size-8 items-center justify-center rounded-full bg-primary-soft text-primary">
@@ -2087,19 +2074,19 @@
         </div>
         <div class="min-w-0 flex-1 truncate text-left">
           <span class="block truncate text-sm font-semibold text-ink">{selectedGroup?.name}</span>
-          <span class="block text-[11px] text-mute">{channelsForSelectedGroup.length + 1} channels</span>
+          <span class="block text-micro text-mute">{channelsForSelectedGroup.length + 1} channels</span>
         </div>
-        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
           <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
       {:else}
-        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
+        <button type="button" onclick={backToList} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.back')}>
           <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.8} />
         </button>
         <span class="flex-1 truncate ds-label text-ink">
           {#if dockMode === 'newDirect'}{tr('chat.newMessage')}{:else if dockMode === 'createGroup'}{tr('chat.createGroup')}{/if}
         </span>
-        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-lg text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
+        <button type="button" onclick={collapse} class="flex size-8 items-center justify-center rounded-md text-mute hover:bg-canvas-sunken hover:text-ink cursor-pointer" aria-label={tr('chat.close')}>
           <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
         </button>
       {/if}
@@ -2130,12 +2117,12 @@
             <div class="flex flex-col items-center text-center">
               <div class="relative mb-3">
                 <div class="absolute inset-0 rounded-full bg-status-urgent/8 blur-2xl"></div>
-                <div class="relative flex size-14 items-center justify-center rounded-2xl bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
+                <div class="relative flex size-14 items-center justify-center rounded-md bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
                   <HugeiconsIcon icon={AlertCircleIcon} size={24} strokeWidth={1.8} class="text-status-urgent" />
                 </div>
               </div>
               <p class="text-sm font-semibold text-ink">{tr('chat.loadError')}</p>
-              <button type="button" onclick={loadConversations} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary-soft">
+              <button type="button" onclick={loadConversations} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-micro font-medium text-primary transition-colors hover:bg-primary-soft">
                 <HugeiconsIcon icon={ArrowLeft01Icon} size={12} strokeWidth={2} class="rotate-180" />
                 {tr('chat.retry')}
               </button>
@@ -2146,13 +2133,13 @@
             <div class="flex flex-col items-center text-center">
               <div class="relative mb-3">
                 <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
-                <div class="relative flex size-14 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                <div class="relative flex size-14 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                   <HugeiconsIcon icon={BubbleChatIcon} size={24} strokeWidth={1.8} class="text-primary" />
                 </div>
               </div>
               <p class="text-sm font-semibold text-ink">{tr('chat.noConversations')}</p>
               <p class="mt-1 max-w-[220px] text-xs leading-relaxed text-mute">{tr('chat.noConversationsDesc')}</p>
-              <button type="button" onclick={openCompose} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary-soft">
+              <button type="button" onclick={openCompose} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-micro font-medium text-primary transition-colors hover:bg-primary-soft">
                 <HugeiconsIcon icon={Edit01Icon} size={12} strokeWidth={2} />
                 {tr('chat.newMessage')}
               </button>
@@ -2162,9 +2149,9 @@
           {#each filteredConversations as conv (conv.id)}
             <button type="button" onclick={() => handleConversationClick(conv)} class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-lane/40 {conv.unreadCount > 0 ? 'bg-primary-soft/30' : ''}">
               {#if conv.kind === 'taskboard'}
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"><HugeiconsIcon icon={KanbanIcon} size={20} strokeWidth={1.8} /></div>
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-kind-board-soft text-kind-board"><HugeiconsIcon icon={KanbanIcon} size={20} strokeWidth={1.8} /></div>
               {:else if conv.kind === 'workflow'}
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"><HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} /></div>
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-kind-workflow-soft text-kind-workflow"><HugeiconsIcon icon={WorkflowSquare01Icon} size={20} strokeWidth={1.8} /></div>
               {:else if conv.kind === 'group'}
                 <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary"><HugeiconsIcon icon={UserGroupIcon} size={20} strokeWidth={1.8} /></div>
               {:else}
@@ -2173,12 +2160,12 @@
               <div class="min-w-0 flex-1">
                 <div class="flex items-center justify-between gap-2">
                   <span class="truncate text-sm font-semibold text-ink">{conversationDisplayName(conv)}</span>
-                  <span class="shrink-0 text-[11px] text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : formatDate(conv.updatedAt)}</span>
+                  <span class="shrink-0 text-micro text-faint">{conv.lastMessage ? formatDate(conv.lastMessage.createdAt) : formatDate(conv.updatedAt)}</span>
                 </div>
                 <div class="flex items-center justify-between gap-2 mt-0.5">
                   <span class="truncate text-xs {conv.lastMessage ? 'text-mute' : 'text-faint italic'}">{lastMessagePreview(conv)}</span>
                   {#if getConversationUnread(conv) > 0}
-                    <span class="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">{formatUnread(getConversationUnread(conv))}</span>
+                    <span class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-tiny font-bold text-white">{formatUnread(getConversationUnread(conv))}</span>
                   {/if}
                 </div>
               </div>
@@ -2194,7 +2181,7 @@
           <h3 class="ds-label text-ink">{tr('chat.participants')}</h3>
           <div class="mt-3 space-y-2">
             {#each roomParticipants as p (p.userId)}
-              <div class="flex items-center gap-3 rounded-lg border border-hairline bg-card p-3">
+              <div class="flex items-center gap-3 rounded-md border border-hairline bg-card p-3">
                 <Avatar name={p.name} src={p.avatarUrl ?? undefined} size={32} />
                 <div class="min-w-0 flex-1"><div class="truncate text-sm font-medium text-ink">{p.name}</div><div class="truncate text-xs text-mute">{p.email}</div></div>
                 {#if p.role === 'admin'}<Badge tone="queued" variant="soft">{tr('chat.admin')}</Badge>{/if}
@@ -2224,7 +2211,7 @@
             </button>
           {/if}
           {#if showMsgSkeleton}
-            <div class="space-y-3">{#each Array(5) as _, i}<div class="flex {i % 2 === 0 ? 'justify-start' : 'justify-end'}"><div class="max-w-[70%] space-y-1"><Skeleton class="h-12 w-48 rounded-xl" /></div></div>{/each}</div>
+            <div class="space-y-3">{#each Array(5) as _, i}<div class="flex {i % 2 === 0 ? 'justify-start' : 'justify-end'}"><div class="max-w-[70%] space-y-1"><Skeleton class="h-12 w-48 rounded-md" /></div></div>{/each}</div>
           {:else if messagesLoading}
             <div class="h-full"></div>
           {:else if messagesError}
@@ -2232,12 +2219,12 @@
               <div class="flex flex-col items-center text-center">
                 <div class="relative mb-3">
                   <div class="absolute inset-0 rounded-full bg-status-urgent/8 blur-2xl"></div>
-                  <div class="relative flex size-14 items-center justify-center rounded-2xl bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
+                  <div class="relative flex size-14 items-center justify-center rounded-md bg-status-urgent-soft ring-4 ring-status-urgent-soft/40">
                     <HugeiconsIcon icon={AlertCircleIcon} size={24} strokeWidth={1.8} class="text-status-urgent" />
                   </div>
                 </div>
                 <p class="text-sm font-semibold text-ink">{tr('chat.loadError')}</p>
-                <button type="button" onclick={() => loadMessages()} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary-soft">
+                <button type="button" onclick={() => loadMessages()} class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5 text-micro font-medium text-primary transition-colors hover:bg-primary-soft">
                   <HugeiconsIcon icon={ArrowLeft01Icon} size={12} strokeWidth={2} class="rotate-180" />
                   {tr('chat.retry')}
                 </button>
@@ -2249,7 +2236,7 @@
                 <div class="relative mb-4">
                   <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
                   {#if threadIsGroup}
-                    <div class="relative flex size-16 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                    <div class="relative flex size-16 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                       <HugeiconsIcon icon={UserGroupIcon} size={28} strokeWidth={1.8} class="text-primary" />
                     </div>
                   {:else}
@@ -2262,7 +2249,7 @@
                 <p class="mt-1 max-w-[240px] text-xs leading-relaxed text-mute">{tr('chat.emptyThreadDescription', { name: threadTitle })}</p>
                 <div class="mt-3 flex items-center gap-1.5 rounded-full bg-primary-soft/60 px-3 py-1.5">
                   <HugeiconsIcon icon={BubbleChatIcon} size={12} strokeWidth={2} class="text-primary" />
-                  <span class="text-[11px] font-medium text-primary">{tr('chat.emptyThreadHint')}</span>
+                  <span class="text-micro font-medium text-primary">{tr('chat.emptyThreadHint')}</span>
                 </div>
               </div>
             </div>
@@ -2282,7 +2269,7 @@
                         e.stopPropagation();
                         scrollToRepliedMessage(msg.replyToMessageId);
                       }}
-                      class="mb-1 w-full text-left rounded-lg border-l-[3.5px] border-primary bg-canvas-sunken/80 hover:bg-canvas-sunken p-2 text-xs transition-colors cursor-pointer select-none outline-none focus:outline-none"
+                      class="mb-1 w-full text-left rounded-md border-l-[3.5px] border-primary bg-canvas-sunken/80 hover:bg-canvas-sunken p-2 text-xs transition-colors cursor-pointer select-none outline-none focus:outline-none"
                       title="Lihat pesan asal"
                       aria-label={`Lihat pesan asal dari ${msg.replyToSenderName ?? 'pengirim'}`}
                     >
@@ -2305,14 +2292,14 @@
                     <div class="mb-1 flex flex-wrap gap-1.5 {isOwnMessage(msg) ? 'justify-end' : 'justify-start'}">
                       {#each msg.attachments as att (att.id)}
                         {#if isImageType(att.fileType)}
-                          <button type="button" onclick={() => (lightboxSrc = att.filePath)} class="group/img relative block cursor-zoom-in overflow-hidden rounded-lg border border-hairline">
+                          <button type="button" onclick={() => (lightboxSrc = att.filePath)} class="group/img relative block cursor-zoom-in overflow-hidden rounded-md border border-hairline">
                             <img src={att.filePath} alt={att.fileName} class="max-h-32 max-w-[180px] object-cover transition-opacity group-hover/img:opacity-80" loading="lazy" />
                             <div class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/img:opacity-100">
                               <div class="flex size-8 items-center justify-center rounded-full bg-black/50 text-white"><HugeiconsIcon icon={ZoomIcon} size={16} strokeWidth={2} /></div>
                             </div>
                           </button>
                         {:else if isVideoType(att.fileType)}
-                          <div class="max-h-48 max-w-[240px] overflow-hidden rounded-lg">
+                          <div class="max-h-48 max-w-[240px] overflow-hidden rounded-md">
                             <ChatVideoPlayer src={att.filePath} fileName={att.fileName} />
                           </div>
                         {:else if att.fileType.startsWith('audio/')}
@@ -2324,7 +2311,7 @@
                             class="block h-9 w-full min-w-[200px] max-w-[260px]"
                           ></audio>
                         {:else}
-                          <div class="flex items-center gap-1.5 rounded-lg border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
+                          <div class="flex items-center gap-1.5 rounded-md border border-hairline bg-card px-2 py-1.5 text-xs text-mute">
                             <HugeiconsIcon icon={File02Icon} size={14} strokeWidth={1.8} />
                             <span class="truncate max-w-[100px]">{att.fileName}</span>
                             <span class="shrink-0 text-faint">{formatFileSize(att.fileSize)}</span>
@@ -2355,7 +2342,7 @@
                   {:else}
                   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                   <div
-                    class="group relative min-w-[96px] rounded-2xl pl-3.5 pr-3.5 sm:pr-9 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'} {editingMessageId === msg.id ? 'ring-2 ring-primary ring-offset-2' : ''}"
+                    class="group relative min-w-[96px] rounded-md pl-3.5 pr-3.5 sm:pr-9 py-2 text-sm {isOwnMessage(msg) ? 'bg-primary text-white' : 'bg-card text-body border border-hairline shadow-control'} {isOwnMessage(msg) ? 'rounded-br-md' : 'rounded-bl-md'} {editingMessageId === msg.id ? 'ring-2 ring-primary ring-offset-2' : ''}"
                     onclick={handleBubbleClick}
                     oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
                     onpointerdown={(event) => handleBubblePointerDown(event, msg)}
@@ -2374,7 +2361,7 @@
                           const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
                           openMessageContextMenu(msg, rect.right - 192, rect.bottom + 4);
                         }}
-                        class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-5.5 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs {isOwnMessage(msg) ? 'bg-black/20 text-white/90 hover:bg-black/35 hover:text-white' : 'bg-card/90 text-mute hover:bg-canvas-sunken hover:text-ink border border-hairline/70'}"
+                        class="hidden sm:flex absolute top-1.5 right-1.5 z-10 size-6 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs {isOwnMessage(msg) ? 'bg-black/20 text-white/90 hover:bg-black/35 hover:text-white' : 'bg-card/90 text-mute hover:bg-canvas-sunken hover:text-ink border border-hairline/70'}"
                         aria-label={tr('chat.moreOptions')}
                         title={tr('chat.moreOptions')}
                       >
@@ -2386,15 +2373,15 @@
                     {:else}
                       {#if msg.body}
                         {#if msg.body.startsWith('💥 BUZZ!')}
-                          <div class="my-0.5 flex items-center gap-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 text-xs font-bold {isOwnMessage(msg) ? 'text-white' : 'text-amber-900 dark:text-amber-200'}">
-                            <span>💥</span>
-                            <span class="whitespace-pre-wrap break-words">{msg.body}</span>
+                          <div class="my-0.5 flex items-start gap-1.5 rounded-md bg-status-progress-soft px-2.5 py-1 text-xs font-bold text-status-progress-ink">
+                            <span class="shrink-0" aria-hidden="true">💥</span>
+                            <span class="min-w-0 whitespace-pre-wrap break-words">{msg.body.replace(/^💥\s*/, '')}</span>
                           </div>
                         {:else}
                           <span class="whitespace-pre-wrap break-words">{msg.body}</span>
                         {/if}
                       {/if}
-                      {#if msg.editedAt}<span class="ml-1 text-[10px] {isOwnMessage(msg) ? 'text-white/60' : 'text-faint'}">({tr('chat.edited')})</span>{/if}
+                      {#if msg.editedAt}<span class="ml-1 text-tiny {isOwnMessage(msg) ? 'text-white/60' : 'text-faint'}">({tr('chat.edited')})</span>{/if}
                     {/if}
                   </div>
                 {/if}
@@ -2407,7 +2394,7 @@
                       {/each}
                     </div>
                   {/if}
-                  <div class="mt-0.5 text-[10px] text-faint">{formatTime(msg.createdAt)}{#if isOwnMessage(msg) && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="neutral" size={12} class="ml-1" />{/if}</div>
+                  <div class="mt-0.5 text-tiny text-faint">{formatTime(msg.createdAt)}{#if isOwnMessage(msg) && !msg.deletedAt}<MessageTicks status={getMessageStatus(msg, receiptCursors)} tone="neutral" size={12} class="ml-1" />{/if}</div>
                 </div>
               </div>
             {/each}
@@ -2432,15 +2419,15 @@
         {#if pendingAttachments.length > 0}
           <div class="flex flex-wrap gap-2 border-t border-hairline bg-canvas-sunken/50 px-3 py-2">
             {#each pendingAttachments as att (att.id)}
-              <div class="group relative flex items-center gap-1.5 rounded-lg border border-hairline bg-card p-1.5">
+              <div class="group relative flex items-center gap-1.5 rounded-md border border-hairline bg-card p-1.5">
                 {#if isImageType(att.fileType)}
                   <img src={att.filePath} alt={att.fileName} class="size-9 rounded object-cover" />
                 {:else}
                   <div class="flex size-9 items-center justify-center rounded bg-canvas-sunken text-mute"><HugeiconsIcon icon={File02Icon} size={16} strokeWidth={1.8} /></div>
                 {/if}
                 <div class="min-w-0 max-w-[90px]">
-                  <div class="truncate text-[11px] font-medium text-ink">{att.fileName}</div>
-                  <div class="text-[9px] text-faint">{formatFileSize(att.fileSize)}</div>
+                  <div class="truncate text-micro font-medium text-ink">{att.fileName}</div>
+                  <div class="text-tiny text-faint">{formatFileSize(att.fileSize)}</div>
                 </div>
                 <button type="button" onclick={() => removePendingAttachment(att.id)} class="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-card text-mute shadow-control hover:text-ink"><HugeiconsIcon icon={Cancel01Icon} size={10} strokeWidth={2} /></button>
               </div>
@@ -2505,14 +2492,14 @@
             onpaste={handlePaste}
             rows="1"
             placeholder="Tulis pesan…"
-            class="max-h-24 min-h-[40px] flex-1 resize-none rounded-2xl border border-hairline bg-canvas-sunken/60 px-3.5 py-2.5 text-sm text-ink placeholder:text-mute focus:outline-none focus:bg-card focus:ring-2 focus:ring-primary/15 transition-all"
+            class="max-h-24 min-h-[40px] flex-1 resize-none rounded-md border border-hairline bg-canvas-sunken/60 px-3.5 py-2.5 text-sm text-ink placeholder:text-mute focus:outline-none focus:bg-card focus:ring-2 focus:ring-primary/15 transition-all"
           ></textarea>
           {#if editingMessageId}
             <button
               type="button"
               onclick={saveEdit}
               disabled={!composerText.trim()}
-              class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              class="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
               aria-label="Simpan editan"
               title="Simpan editan"
             >
@@ -2523,7 +2510,7 @@
               type="button"
               onclick={handleSend}
               disabled={(!composerText.trim() && pendingAttachments.length === 0) || sendingMessage}
-              class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              class="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-white shadow-xs transition-all hover:bg-primary-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
             >
               <HugeiconsIcon icon={SentIcon} size={18} class="translate-x-0.5" strokeWidth={2} />
             </button>
@@ -2542,7 +2529,7 @@
             <div class="flex flex-col items-center text-center">
               <div class="relative mb-3">
                 <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
-                <div class="relative flex size-14 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                <div class="relative flex size-14 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                   <HugeiconsIcon icon={UserGroupIcon} size={24} strokeWidth={1.8} class="text-primary" />
                 </div>
               </div>
@@ -2576,7 +2563,7 @@
               <div class="flex flex-col items-center text-center">
                 <div class="relative mb-3">
                   <div class="absolute inset-0 rounded-full bg-primary/8 blur-2xl"></div>
-                  <div class="relative flex size-14 items-center justify-center rounded-2xl bg-primary-soft ring-4 ring-primary-soft/40">
+                  <div class="relative flex size-14 items-center justify-center rounded-md bg-primary-soft ring-4 ring-primary-soft/40">
                     <HugeiconsIcon icon={UserGroupIcon} size={24} strokeWidth={1.8} class="text-primary" />
                   </div>
                 </div>
@@ -2603,7 +2590,7 @@
       {:else}
         <div class="flex min-h-0 flex-1 flex-col p-4">
           <label class="ds-label text-ink" for="group-name-input-desktop">{tr('chat.groupName')}</label>
-          <input id="group-name-input-desktop" bind:value={groupName} placeholder={tr('chat.groupPlaceholder')} class="mt-2 rounded-xl border border-hairline bg-canvas px-3 py-2.5 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-[var(--focus)]" />
+          <input id="group-name-input-desktop" bind:value={groupName} placeholder={tr('chat.groupPlaceholder')} class="mt-2 rounded-md border border-hairline bg-canvas px-3 py-2.5 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-[var(--focus)]" />
           <div class="mt-4">
             <p class="ds-caption text-mute">{tr('chat.selectMembers')} ({selectedMemberIds.length})</p>
             <div class="mt-2 flex flex-wrap gap-2">
@@ -2673,28 +2660,30 @@
 />
 
 <!-- Image lightbox -->
-{#if lightboxSrc}
-  <div
-    data-lightbox
-    class="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 p-4"
-    onclick={() => (lightboxSrc = null)}
-    role="button"
-    tabindex={0}
-    onkeydown={(e) => { if (e.key === 'Escape') lightboxSrc = null; }}
-  >
-    <div class="absolute right-4 top-4 flex gap-2">
-      <a href={lightboxSrc} download class="flex size-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Download">
-        <HugeiconsIcon icon={Download04Icon} size={22} strokeWidth={1.8} />
-      </a>
-      <button type="button" onclick={() => (lightboxSrc = null)} class="flex size-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label={tr('chat.close')}>
-        <HugeiconsIcon icon={Cancel01Icon} size={24} strokeWidth={1.8} />
-      </button>
-    </div>
-    <img
-      src={lightboxSrc}
-      alt="Preview"
-      class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
-      onclick={(e) => e.stopPropagation()}
-    />
-  </div>
-{/if}
+<!-- Image lightbox (Bits Dialog: Escape and backdrop close it; the image itself does not) -->
+<DialogPrimitive.Root open={lightboxSrc !== null} onOpenChange={(next) => { if (!next) lightboxSrc = null; }}>
+  <Portal>
+    <DialogPrimitive.Overlay class="fixed inset-0 z-[300] bg-black/80" />
+    <DialogPrimitive.Content
+      data-lightbox
+      aria-label="Preview"
+      class="pointer-events-none fixed inset-0 z-[301] flex items-center justify-center p-4"
+    >
+      <div class="absolute right-4 top-4 pointer-events-auto flex gap-2">
+        <a href={lightboxSrc} download class="flex size-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Download">
+          <HugeiconsIcon icon={Download04Icon} size={22} strokeWidth={1.8} />
+        </a>
+        <DialogPrimitive.Close aria-label={tr('chat.close')} class="flex size-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
+          <HugeiconsIcon icon={Cancel01Icon} size={24} strokeWidth={1.8} />
+        </DialogPrimitive.Close>
+      </div>
+      {#if lightboxSrc}
+        <img
+          src={lightboxSrc}
+          alt="Preview"
+          class="pointer-events-auto max-h-[90vh] max-w-[90vw] rounded-md object-contain"
+        />
+      {/if}
+    </DialogPrimitive.Content>
+  </Portal>
+</DialogPrimitive.Root>

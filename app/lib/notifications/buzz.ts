@@ -2,6 +2,12 @@ import { toast } from '$lib/components/molecules/index.js';
 import { playNotificationSound } from './sound.js';
 
 
+/** Single short pulse used for regular alerts (messages, task notifications). */
+export const DEFAULT_BUZZ_VIBRATE = 80;
+
+/** Vibration pattern for a chat BUZZ: getar-jeda-getar-jeda-getar (milliseconds). */
+export const CHAT_BUZZ_VIBRATE_PATTERN = [200, 100, 200, 100, 200];
+
 export type BuzzOptions = {
   senderName: string;
   note?: string;
@@ -9,6 +15,7 @@ export type BuzzOptions = {
   actionUrl?: string;
   onaction?: () => void;
   sound?: boolean;
+  vibrate?: number | number[];
 };
 
 /**
@@ -21,7 +28,7 @@ export const triggerBuzz = (options: BuzzOptions) => {
     document.visibilityState === 'visible' &&
     typeof navigator.vibrate === 'function'
   ) {
-    navigator.vibrate(80);
+    navigator.vibrate(options.vibrate ?? DEFAULT_BUZZ_VIBRATE);
   }
   if (options.sound !== false) playNotificationSound();
   const alertTitle = options.title || `Buzz dari ${options.senderName}`;

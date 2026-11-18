@@ -237,6 +237,7 @@ export const chatConversations = pgTable(
     groupId: uuid('group_id').references(() => workspaceMemberGroups.id, { onDelete: 'set null' }),
     name: text('name'),
     directKey: text('direct_key'),
+    isGlobal: boolean('is_global').notNull().default(false),
     createdById: uuid('created_by_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -249,6 +250,9 @@ export const chatConversations = pgTable(
       table.workspaceId,
       table.directKey
     ),
+    uniqueIndex('chat_conversations_global_direct_key_idx')
+      .on(table.directKey)
+      .where(sql`${table.isGlobal} = true`),
     uniqueIndex('chat_conversations_context_idx').on(table.workspaceId, table.contextType, table.contextId),
     index('chat_conversations_group_idx').on(table.groupId),
     index('chat_conversations_workspace_updated_idx').on(table.workspaceId, table.updatedAt),

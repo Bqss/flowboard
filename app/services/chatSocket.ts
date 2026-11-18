@@ -267,7 +267,7 @@ export async function handleClientMessage(
  * Returns the userIds that had at least one socket successfully sent to.
  */
 export function broadcastToUsers(
-  workspaceId: string,
+  _workspaceId: string,
   participantIds: string[],
   event: ChatSocketEvent,
   excludeSocket?: ChatSocket
@@ -277,7 +277,6 @@ export function broadcastToUsers(
   const payload = JSON.stringify(event);
   for (const [socket, meta] of connections) {
     if (
-      meta.workspaceId === workspaceId &&
       participantIds.includes(meta.userId) &&
       socket !== excludeSocket &&
       socket.readyState === OPEN

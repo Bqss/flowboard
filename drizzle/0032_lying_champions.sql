@@ -1,0 +1,2 @@
+ALTER TABLE "chat_conversations" ADD COLUMN "is_global" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "chat_conversations_global_direct_key_idx" ON "chat_conversations" USING btree ("direct_key") WHERE "chat_conversations"."is_global" = true;

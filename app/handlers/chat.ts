@@ -9,6 +9,8 @@ import {
   deleteMessage,
   editMessage,
   findOrCreateDirect,
+  findOrCreateGlobalDirect,
+  isGlobalDirectParticipant,
   forwardMessage,
   getConversationDetail,
   getOrCreateContextConversation,
@@ -121,6 +123,32 @@ export async function createDirectHandler(ctx: Ctx<CreateDirectBody, WorkspacePa
     return { error: 'Workspace member not found' };
   }
   return result;
+}
+
+export async function createGlobalDirectHandler(ctx: Ctx<{ email: string }, WorkspaceParams>) {
+  if (!hasWorkspaceAccess(ctx)) {
+    ctx.set.status = 403;
+    return { error: 'Forbidden' };
+  }
+  const email = ctx.body.email?.trim();
+  if (!email || !email.includes('@')) {
+    ctx.set.status = 400;
+    return { error: 'Enter a valid email address' };
+  }
+  const result = await findOrCreateGlobalDirect(ctx.workspace.id, ctx.user.id, email);
+  if (!result) {
+    ctx.set.status = 404;
+    return { error: 'No Flowboard account was found for that email' };
+  }
+  return result;
+}
+
+export async function canAccessGlobalDirect(
+  workspaceId: string,
+  conversationId: string,
+  userId: string
+) {
+  return isGlobalDirectParticipant(workspaceId, conversationId, userId);
 }
 
 export async function createGroupHandler(ctx: Ctx<CreateGroupBody, WorkspaceParams>) {

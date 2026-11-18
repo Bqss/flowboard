@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'bun:test';
 import {
   isAutoBuzzTaskNotification,
+  isChatBuzzMessageBody,
   shouldAutoBuzzIncomingMessage
 } from '../app/lib/notifications/auto-buzz';
+
+describe('chat buzz message detection', () => {
+  it('recognises BUZZ messages sent from personal and group chats', () => {
+    expect(isChatBuzzMessageBody('💥 BUZZ! Perhatian!')).toBe(true);
+    expect(isChatBuzzMessageBody('💥 BUZZ! ')).toBe(true);
+  });
+
+  it('does not treat ordinary messages as BUZZ', () => {
+    expect(isChatBuzzMessageBody('Hai, apa khabar?')).toBe(false);
+    expect(isChatBuzzMessageBody('buzz saya tadi')).toBe(false);
+    expect(isChatBuzzMessageBody('')).toBe(false);
+  });
+});
 
 describe('automatic buzz policy', () => {
   it('buzzes incoming chat messages, but not the current user’s own messages', () => {

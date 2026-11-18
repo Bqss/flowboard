@@ -246,7 +246,7 @@
             <HugeiconsIcon icon={Edit02Icon} size={15} strokeWidth={1.8} class="text-faint" />
             <span>Edit Pesan</span>
           </div>
-          <span class="text-[10px] text-mute">&gt;3 jam</span>
+          <span class="text-tiny text-mute">&gt;3 jam</span>
         </div>
       {/if}
 

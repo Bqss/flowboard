@@ -697,6 +697,7 @@ export type ApiChatConversation = {
 
 export type ApiChatInboxWorkspace = { id: string; name: string; slug: string };
 export type ApiChatInboxConversation = ApiChatConversation & {
+  isGlobal: boolean;
   workspaceId: string;
   workspaceName: string;
   workspaceSlug: string;
@@ -1025,6 +1026,12 @@ export const api = {
     request<{ conversation: { id: string; kind: 'direct' }; partner: { id: string; name: string; email: string; avatarUrl: string | null; role: string } }>(
       `/workspaces/${workspaceId}/chat/direct`,
       { method: 'POST', body: JSON.stringify({ memberId }), fetch: fetchFn }
+    ),
+
+  createGlobalDirectChat: (workspaceId: string, email: string, fetchFn?: FetchLike) =>
+    request<{ conversation: { id: string; kind: 'direct' }; partner: { id: string; name: string; email: string; avatarUrl: string | null; role: string } }>(
+      `/workspaces/${workspaceId}/chat/direct/global`,
+      { method: 'POST', body: JSON.stringify({ email }), fetch: fetchFn }
     ),
 
   createGroupRoom: (workspaceId: string, name: string, memberIds: string[], fetchFn?: FetchLike) =>
